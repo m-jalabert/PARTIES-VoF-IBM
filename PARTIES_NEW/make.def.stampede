@@ -1,0 +1,43 @@
+# -*- mode: makefile -*-
+# Machine: stampede.tacc.utexas.edu
+
+# Compiler executable
+compiler_cmd := mpicc
+# Compiler flags
+#   cflags - flags to give the compiler
+#   optmz  - optimization (default)
+#   debug  - debugging
+#   libs   - libraries needed to be linked to executable
+cflags      +=
+optmz_flags :=
+debug_flags :=
+libs        += -fp-model precise -lfftw3 -lz
+
+# Location of packages
+fftw_dir := /home1/02277/ebiegert/software/fftw-3.3.4
+hdf5_dir := /home1/02277/ebiegert/software/hdf5-1.8.15-patch1
+mpi_dir  :=
+
+# FFTW
+ifneq ($(strip $(fftw_dir)),) # If not empty
+  lflags   += -L$(fftw_dir)/lib
+  libs     += -Wl,-rpath=$(fftw_dir)/lib
+  includes += -I$(fftw_dir)/include
+endif
+
+# HDF5
+ifneq ($(strip $(hdf5_dir)),) # If not empty
+  lflags   += $(hdf5_dir)/lib/libhdf5_hl.a
+  libs     += $(hdf5_dir)/lib/libhdf5.a
+  includes += -I$(hdf5_dir)/include
+endif
+
+# MPI
+ifneq ($(strip $(mpi_dir)),) # If not empty
+  lflags   += -L$(mpi_dir)/lib
+  libs     += -Wl,-rpath=$(mpi_dir)/lib/openmpi
+  includes += -I$(mpi_dir)/include
+  compiler := $(mpi_dir)/bin/$(compiler_cmd)
+else
+  compiler := $(compiler_cmd)
+endif

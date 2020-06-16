@@ -1,0 +1,97 @@
+[geometry]
+xmin = 0
+xmax = 2
+ymin = 0
+ymax = 2
+zmin = 0
+zmax = 2
+
+
+[grid]
+NXM = 84
+NYM = 84
+NZM = 84
+
+
+[flow]
+Re = 1
+dp_dx = 0  # constant volume force
+
+
+
+# Initialization types:
+# 0 - zero flow
+# 1 - uniform flow profile
+# 2 - linear flow profile
+# 3 - Poiseuille (parabolic) flow profile
+# 4 - rotational shear flow profile
+# 5 - precursor simulation
+vel_init_type = 0
+vel_init_y0 = 0  ## over this coordinate velocity is set
+ubulk_target = 0  #  constant mass flux enables this
+
+
+[simulation]
+time_max = 1
+output_time_interval = 0.25
+cfl = 0.75
+default_dt = 0.01
+constant_dt = 1 #  if 0 = CFL condition if 1== default timestep
+resume = 0  	# if 0 =  start from t=0
+
+
+
+[particle]
+grav = {0, -9.81, 0}  # {a,b,c,..} notion for a list
+rho_s = 8.342
+e_dry_wall = 0.97
+e_dry_particles = 0.97
+Ndt_coll = 10
+N_forcing_loops = 1  # Extra loops for enforcing no-slip
+N_heating_loops = 0 # Extra loops for enforcing conc BC
+
+
+
+[conc]
+NConc = 1   ## should be smaller than 50!!! 
+Conc_alpha = {0}  ## compressibility factor 
+V_s0   = {0.0}
+conc_type = {1}
+conc_init_type= {0} ##Initialization types: 0 == c=0; 1 == Lock exchange; 2 == half triple cos; 3 == half triple sin; 4 == double sin 
+					## 5 == sin in x direction; 6== linear RB 1 at bottom 0 at the top
+Pe = {1}
+					
+BC_AN = {0}      
+BC_AS = {0}     
+BC_AE = {0}      
+BC_AW = {0}
+BC_AB = {0}
+BC_AF = {0}      
+
+BC_BN = {1}      
+BC_BS = {1}     
+BC_BE = {1}      
+BC_BW = {1}
+BC_BF = {1}      
+BC_BB = {1}
+
+BC_CN = {1}      
+BC_CS = {1}     
+BC_CE = {1}      
+BC_CW = {1}
+BC_CF = {1}      
+BC_CB = {1}
+
+
+
+
+ 
+
+[lock]  ## lock exchange
+x_fr = 0.
+y_fr = 0.
+z_fr = 0.
+
+[output] // something for lock exchange
+front_location_output = 0
+ave_height_output     = 0
