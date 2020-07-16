@@ -1,0 +1,65 @@
+[geometry]
+xmin = 0.0
+xmax = 4.0
+ymin = 0.0
+ymax = 8.0
+zmin = 0.0
+zmax = 2.0
+
+[grid]
+NXM = 60
+NYM = 120
+NZM = 30
+
+
+[flow]
+Re = 1.0
+dp_dx = 0  # constant volume force
+
+# Initialization types:
+# 0 - zero flow
+# 1 - uniform flow profile
+# 2 - linear flow profile
+# 3 - Poiseuille (parabolic) flow profile
+# 4 - rotational shear flow profile
+# 5 - precursor simulation
+vel_init_type = 0
+vel_init_y0 = 0  ## over this coordinate velocity is set
+
+[particle]
+rho_s = 3.0
+grav = {0, -1.0, 0}
+e_dry_wall = 0.97
+e_dry_particles = 0.97
+Ndt_coll = 5
+roughness = 0.1
+
+
+[simulation]
+time_max = 50.0
+output_time_interval = 1.0
+output_time_interval_2d = 1.0
+cfl = 0.5
+default_dt = 0.0001
+constant_dt = 0 #  if 0 = CFL condition if 1== default timestep
+resume = 0	# if 0 =  start from t=0
+
+[conc]
+NConc = 1
+conc_init_type = {9}
+Pe = {100.0}
+richardson ={1.0}
+V_s0 ={0.0}
+sig_profile = 0.01
+cbd0 = 1.0
+cbd1 = 0.0
+
+[output]
+
+##lock exchange
+front_location_output 	= 0
+ave_height_output     	= 0
+output_vfu			  	= 1
+output_vfv			  	= 1
+output_vfw			  	= 1
+output_vfc			  	= 1
