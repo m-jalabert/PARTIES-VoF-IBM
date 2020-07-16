@@ -1,0 +1,7 @@
+
+gfortran particle_arrangement_BV.f90 -o printpacking
+
+./printpacking
+wc -l < particle_data_test.dat  > numbert
+cat numbert particle_data_test.dat > p_fixed.inp
+rm particle_data_test.dat numbert printpacking
