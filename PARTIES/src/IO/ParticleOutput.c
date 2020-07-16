@@ -102,13 +102,13 @@ void ParticleOutput_dat(Particle_list *p_list, MAC_grid *grid, Parameters *param
 // 						"% .10g,% .10g,% .10g,"
 // 						"% .10g,% .10g,% .10g,"
 // 						"% .10g,% .10g,% .10g,"
-						"%.10g\n",
+						"%.20g,%.10g,%.10g,%.10g,%.10g,%.10g\n",
 						params->time, p->ID,
 // 						p -> X[0],      p -> X[1],      p -> X[2],
 // 						p -> U[0],      p -> U[1],      p -> U[2],
 // 						p -> Omega[0],  p -> Omega[1],  p -> Omega[2],
 // 						p -> Fc[0],     p -> Fc[1],     p -> Fc[2],
-						p -> X[1] );
+						p -> X[0], p -> X[1], p -> X[2], p -> U[0], p -> U[1], p -> U[2] );
 			p = p -> next;
 		}
 		fclose(fptr);

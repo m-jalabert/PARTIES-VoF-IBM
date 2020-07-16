@@ -290,6 +290,10 @@ struct parameters {
 
 	// Pressure gradient
 	double dp_dx, dp_dx_old;
+    double amplitude;
+	double tref;
+	double startup_time;    // starting time to release the particle (in STARTUP flag)
+	double phase_shift_factor;     // phase shift of the oscillating force= phase_shift_factor * Pi
 
 	// Streamwise bulk velocity
 	double ubulk, ubulk_old;

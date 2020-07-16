@@ -192,10 +192,10 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 
 		// This is done to avoid sharp jump in time steps.
 
-		if ( dt > 1.1 * dt_old )
-			dt = 1.1 * dt_old;
-		if ( dt < 0.9 * dt_old )
-			dt = 0.9 * dt_old;
+		if ( dt > 1.05 * dt_old )
+			dt = 1.05 * dt_old;
+		if ( dt < 0.95 * dt_old )
+			dt = 0.95 * dt_old;
 
 		else
 

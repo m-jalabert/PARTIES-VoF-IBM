@@ -61,6 +61,10 @@ CFG(flow, Kf, 2.3, atof)     			 // maximum forced wave number
 CFG(flow, Ds, 1e7, atof)     			 // Characteristic dissipation value for the random turbulent process
 CFG(flow, t_release, -2.0, atof)
 CFG(flow, per_fr, 1.5, atof)
+CFG(flow, amplitude, 0.0, atof)			// Amplitude for oscillation due to ISS vibration
+CFG(flow, tref, 0.0, atof)			// reference time for sinus function of oscillation (ISS)
+CFG(flow, startup_time, 0.0, atof)		// starting time to release the particle (in STARTUP flag)
+CFG(flow, phase_shift_factor, 0.0, atof)	// phase shift of the oscillating force = phase_shift_factor * Pi
 
 //------------------------------------------------------------------------------
 // Initialization types:
