@@ -1,0 +1,80 @@
+/******************************************************************************/
+/*                                 PARAMETERS                                 */
+/*----------------------------------------------------------------------------*/
+/*    Selects printing and time step options                                  */
+/******************************************************************************/
+
+//------------------------------------------------------------------------------
+// Select starting and ending indices of output files, inclusive
+//
+// A value of -1 for 'iter_end' will include all output times.
+//------------------------------------------------------------------------------
+CFG(params, iter_start, 0, atoi)  // Starting time index
+CFG(params, iter_step,  1, atoi)  // Time index step interval
+CFG(params, iter_end,  -1, atoi)  // Ending time index (inclusive)
+
+CFG(params, iter_count, -1, atoi)  // For printing purposes only
+
+//------------------------------------------------------------------------------
+// Flags to print each variable to file
+//------------------------------------------------------------------------------
+CFG(params, print_u,    0, atoi)  // u velocity
+CFG(params, print_v,    0, atoi)  // v velocity
+CFG(params, print_w,    0, atoi)  // w velocity
+CFG(params, print_uc,   0, atoi)  // cell-centered u velocity
+CFG(params, print_vc,   0, atoi)  // cell-centered v velocity
+CFG(params, print_wc,   0, atoi)  // cell-centered w velocity
+CFG(params, print_p,    0, atoi)  // pressure
+CFG(params, print_conc, 0, atoi)  // concentration
+
+CFG(params, print_vf,   0, atoi)  // particle volume fraction
+
+CFG(params, print_nut, 0, atoi)          // SGS eddy viscosity
+CFG(params, print_conc_alphat, 0, atoi)  // SGS eddy diffusivity
+
+CFG(params, print_ilm, 0, atoi)  // numerator of dynamic model coefficient
+CFG(params, print_imm, 0, atoi)  // denominator of dynamic model coefficient
+CFG(params, print_conc_itt, 0, atoi)  // numerator of dynamic model coefficient
+CFG(params, print_conc_ikt, 0, atoi)  // denominator of dynamic model coefficient
+
+//------------------------------------------------------------------------------
+// Number of concentration fields
+//------------------------------------------------------------------------------
+CFG(params, NConc, 0, atoi)
+
+//------------------------------------------------------------------------------
+// Name of file to read
+//------------------------------------------------------------------------------
+CFG_STRING(params, otherData_name, "")
+
+
+/******************************************************************************/
+/*                                 HYPERSLAB                                  */
+/*----------------------------------------------------------------------------*/
+/*    Selects a subset of the domain                                          */
+/******************************************************************************/
+
+//------------------------------------------------------------------------------
+// Starting index of hyperslab (zero starts from far lower edge).
+//------------------------------------------------------------------------------
+CFG(hyperslab, Is_HS, 0, atoi)  // x-direction
+CFG(hyperslab, Js_HS, 0, atoi)  // y-direction
+CFG(hyperslab, Ks_HS, 0, atoi)  // z-direction
+
+//------------------------------------------------------------------------------
+// Stride of hyperslab (e.g. value of two will take every other point)
+//------------------------------------------------------------------------------
+CFG(hyperslab, dI_HS, 1, atoi)  // x-direction
+CFG(hyperslab, dJ_HS, 1, atoi)  // y-direction
+CFG(hyperslab, dK_HS, 1, atoi)  // z-direction
+
+//------------------------------------------------------------------------------
+// Number of hyperslab elements to take.
+// Note that the ending index in the physical domain is given by
+//     Ie_HS = Is_HS + di_HS * (NI_HS - 1)
+//
+// A value of -1 will ask the program to include the entire domain
+//------------------------------------------------------------------------------
+CFG(hyperslab, NI_HS, -1, atoi)  // x-direction
+CFG(hyperslab, NJ_HS, -1, atoi)  // y-direction
+CFG(hyperslab, NK_HS, -1, atoi)  // z-direction

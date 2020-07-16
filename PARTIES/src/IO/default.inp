@@ -1,0 +1,241 @@
+/******************************************************************************/
+/*                                  GEOMETRY                                  */
+/*----------------------------------------------------------------------------*/
+/*    Mesh and physical properties of the domain                              */
+/******************************************************************************/
+CFG(geometry, xmin, 0.0, atof) // x: left position
+CFG(geometry, xmax, 1.0, atof) // x: right position
+CFG(geometry, ymin, 0.0, atof) // y: bottom position
+CFG(geometry, ymax, 1.0, atof) // y: top position
+CFG(geometry, zmin, 0.0, atof) // z: back position
+CFG(geometry, zmax, 1.0, atof) // z: front position
+
+
+/******************************************************************************/
+/*                                    GRID                                    */
+/*----------------------------------------------------------------------------*/
+/*    Grid properties                                                         */
+/******************************************************************************/
+CFG(grid, NXM, 64, atoi)              // number of grid points in x direction
+CFG(grid, NYM, 64, atoi)               // number of grid points in y direction
+CFG(grid, NZM, 64, atoi)               // number of grid points in z direction
+CFG(grid, ImportGridFromFile, 0, atoi) // Import grid from file? (YES/NO -> 1/0)
+
+
+/******************************************************************************/
+/*                                 SIMULATION                                 */
+/*----------------------------------------------------------------------------*/
+/*    Simulation and Run properties                                           */
+/******************************************************************************/
+CFG(simulation, time_max, 25.0, atof)        // Maximum time
+CFG(simulation, output_time_interval, 0.5, atof) // Time interval between output files
+CFG(simulation, output_time_interval_2d, 0.5, atof) // Time interval between output files
+CFG(simulation, default_dt, 0.001, atof)     // Initial timestep
+CFG(simulation, max_dt, 0.05, atof)           // Maximum allowable dt
+CFG(simulation, constant_dt, 0, atoi)        // Use constant time step?
+CFG(simulation, cfl, 0.5, atof)              // CFL number
+CFG(simulation, ghost_nodes, 3, atoi)        // Ghost nodes
+CFG(simulation, resume, 0, atoi)             // Resume simulation flag
+
+
+/******************************************************************************/
+/*                                    FLOW                                    */
+/*----------------------------------------------------------------------------*/
+/*    Flow input properties                                                   */
+/******************************************************************************/
+CFG(flow, Re, 100.0, atof)   // Reynolds number
+CFG(flow, G,  1.0, atof)     // Shear parameter
+CFG(flow, dp_dx, 0.0, atof)  // Pressure gradient
+CFG(flow, ubulk_target, 1.0, atof)      // Desired streamwise bulk velocity
+CFG(flow, u_in_left, 1.0, atof)      //
+CFG(flow, u_in_right, 1.0, atof)      //
+CFG(flow, shear_sigma_u, 1.0, atof)      // Desired shear velocity jump
+CFG(flow, shear_sigma_conc, 1.0, atof)      // Desired shear density jump
+CFG(flow, delta_jet, 0.1, atof)
+CFG(flow, F_jet, 1.0, atof)
+CFG(flow, V_swarm, 1.0, atof)
+CFG(flow, y_swarm_start, 1.0, atof)
+CFG(flow, swarm_rand, 0.001, atof)
+CFG(flow, voutflow, 1.0, atof)
+CFG(flow, Kf, 2.3, atof)     			 // maximum forced wave number
+CFG(flow, Ds, 1e7, atof)     			 // Characteristic dissipation value for the random turbulent process
+CFG(flow, t_release, -2.0, atof)
+CFG(flow, per_fr, 1.5, atof)
+CFG(flow, amplitude, 0.0, atof)			// Amplitude for oscillation due to ISS vibration
+CFG(flow, tref, 0.0, atof)			// reference time for sinus function of oscillation (ISS)
+CFG(flow, startup_time, 0.0, atof)		// starting time to release the particle (in STARTUP flag)
+CFG(flow, phase_shift_factor, 0.0, atof)	// phase shift of the oscillating force = phase_shift_factor * Pi
+
+//------------------------------------------------------------------------------
+// Initialization types:
+// 0 - zero flow
+// 1 - uniform flow profile
+// 2 - linear flow profile
+// 3 - Poiseuille (parabolic) flow profile
+// 4 - rotational shear flow profile
+//------------------------------------------------------------------------------
+CFG(flow, vel_init_type, 0, atoi)  // Type of initial velocity profile
+CFG(flow, vel_init_y0, 0.0, atof)  // y-coordinate to start velocity profile
+
+
+/******************************************************************************/
+/*                                    CONC                                    */
+/*----------------------------------------------------------------------------*/
+/*    Concentration properties                                                */
+/******************************************************************************/
+CFG(conc, NConc, 1, atoi)  // Number of concentration fields
+CFG(conc, Nbin, 1000, atoi) // Number of bins for histograms
+CFGArray(conc, Pe, "{1,1}", GVG_DOUBLE)      // Peclet Number(s)
+CFGArray(conc, richardson, "{1,0}", GVG_DOUBLE)   // Initial Maximum Volume Fraction of Each Concentration Field(>0)
+CFGArray(conc, V_s0, "{0,0}", GVG_DOUBLE)    // Particle Settling Velocity(ies)(in y-direction):[The 1st one is important. The others will be recalculated]
+CFGArray(conc, vol_heat_cap_s, "{1,1}", GVG_DOUBLE)  // vol heat capacity of teh particle normalized by fluid
+CFGArray(conc, conductivity_s, "{0,0}", GVG_DOUBLE)  // particle conductivity (diffusivity respectively)
+CFGArray(conc, layer_height, "{0.5, 0.2}", GVG_DOUBLE)  // initial height of conc layer
+CFG(conc, sig_profile, 0.1, atof)  // erf profile for init conc
+CFG(conc, cbd0, 1.0, atof)  //
+CFG(conc, cbd1, 0.0, atof)  //
+CFG(conc, cbd2, 0.5, atof)  //
+CFG(conc, cbd3, 1.0, atof)  //
+CFG(conc, cbd4, 0.0, atof)  //
+CFG(conc, cbd5, 0.5, atof)  //
+
+
+//Initialization types:
+// 0  c=0
+// 1 Lock exchange
+// 2 triple cos
+// 3 triple sin
+CFGArray(conc, conc_init_type, "{0,0}" , GVG_INT)		// Initial condition for scalars
+
+
+/*********************Mixed boundary conditions for the scalar fields****************************/
+CFGArray(conc, BC_AN, "{1,1}", GVG_DOUBLE)
+CFGArray(conc, BC_AS, "{1,1}", GVG_DOUBLE)
+CFGArray(conc, BC_AE, "{1,1}", GVG_DOUBLE)
+CFGArray(conc, BC_AW, "{1,1}", GVG_DOUBLE)
+CFGArray(conc, BC_AF, "{1,1}", GVG_DOUBLE)
+CFGArray(conc, BC_AB, "{1,1}", GVG_DOUBLE)
+
+CFGArray(conc, BC_BN, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_BS, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_BE, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_BW, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_BF, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_BB, "{0,0}", GVG_DOUBLE)
+
+CFGArray(conc, BC_CN, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_CS, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_CE, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_CW, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_CF, "{0,0}", GVG_DOUBLE)
+CFGArray(conc, BC_CB, "{0,0}", GVG_DOUBLE)
+
+
+
+/******************************************************************************/
+/*                                    LOCK                                    */
+/*----------------------------------------------------------------------------*/
+/*    Lock (initial separator of the two fluids) properties                   */
+/******************************************************************************/
+CFG(lock, x_fr, 1, atof) // x: initial location of separating sheet: lock
+CFG(lock, y_fr, 3.0, atof) // y: initial location of separating sheet: lock
+CFG(lock, z_fr, 2.0, atof) // z: initial location of separating sheet: lock
+CFG(lock, hlock, 1.0, atof) // x: initial location of separating sheet: lock
+
+CFG(lock, lock_smooth, YES, atoi) // initial condition of the lock ??????
+
+
+/******************************************************************************/
+/*                                  PARTICLE                                  */
+/*----------------------------------------------------------------------------*/
+/*    Lagrangian Particles                                                    */
+/******************************************************************************/
+
+
+CFG(particle, rho_s, 2.5, atof)  // Particle density (relative to fluid)
+CFGArray(particle, grav, "{0,-1,0}", GVG_DOUBLE)  // Gravitational acceleration
+CFG(particle, e_dry_wall, 0.97, atof)  // Coefficient of restitution of wall
+CFG(particle, e_dry_particles, 0.97, atof)  // Coeff. of restitution of particles
+CFG(particle, Ndt_coll, 10, atoi)     // Number of fluid timesteps per collision
+CFG(particle, mu_k, 0.15, atof)       // Kinetic coefficient of friction
+CFG(particle, mu_s, 0.8, atof)        // Static coefficient of friction
+CFG(particle, PoissonsRatio, 0.22, atof)  // Poisson's ratio
+CFG(particle, Psi_crit, 1.0, atof)    // Critical non-dim angle for sliding
+CFG(particle, roughness, 3e-3, atof)  // Fraction of radius to limit lubrication
+CFG(particle, lub_range, 2.0, atof)  // Range of lubrication force divided by grid cell size
+CFG(particle, erm_range, 4.0, atof)  // Range of electrostatic force divided by grid cell size
+CFG(particle, F_erm, 3.1415926536, atof)  // Electrostatic repulsion coefficient
+CFG(particle, B1, 1.5, atof)  // Squirmer model velocity constant 1
+CFG(particle, B2, 0.0, atof)  // Squirmer model velocity constant 2
+CFGArray(particle, target_coord, "{0,0,0}", GVG_DOUBLE)  // Coordinate of swimming target
+CFG(particle, target_on, 0, atoi)  // Swimming towards target (0 or 1)
+CFG(particle, y_cut, 1.0,atof) // Vertical position where swimmer is turned off
+CFG(particle, coefA, 0.0, atof)  // z coordinate of swimming target
+CFG(particle, coh_range, 1.0, atof)  // Range of cohesive force divided by grid cell size
+CFG(particle, D50, 1.0      ,atof)   //Median grain size diameter
+CFG(particle, Co, 0.0,atof)          //Cohesive Number
+CFG(particle, bl_thick, 0.0,atof)          //Thickness of smoothing bl around swimmers
+
+
+CFG(particle, N_forcing_loops, 2, atoi)  // Extra loops for enforcing no-slip
+// modeling of the scalar fields
+CFG(particle, N_heating_loops, 0, atoi)  // Extra loops for enforcing conc BC
+CFG(particle, N_impheating_loops, 1, atoi)  // Implicit loops for enforcing conc BC
+
+
+
+
+
+
+
+/******************************************************************************/
+/*                                   LSOLVE                                   */
+/*----------------------------------------------------------------------------*/
+/*    Linear system of equation-solver properties                             */
+/******************************************************************************/
+CFG(lsolve, CG_ETOL, 1e-9, atof) // Error tolerance for conjugate-gradient solver
+CFG(lsolve, CG_MAXIT, 120, atoi)  // Max iterations for conjugate-gradient solver
+
+
+/******************************************************************************/
+/*                                   OUTPUT                                   */
+/*----------------------------------------------------------------------------*/
+/*    Flags indicating flow properties to be saved to file   (YES/NO -> 1/0)  */
+/******************************************************************************/
+CFG(output, avg_dir, 1, atoi)  // covar calculation direction
+CFG(output, ave_height_output, NO, atoi)     // Average height
+CFG(output, front_location_output, NO, atoi) // front location
+CFG(output, front_speed_output, NO, atoi)    // front speed
+CFG(output, susp_mass_output, NO, atoi)      // Suspended mass
+CFG(output, sedim_rate_output, NO, atoi)     // Sedimentation Rate
+CFG(output, energies_output, NO, atoi)
+CFG(output, shear_stress_output, NO, atoi)
+
+
+CFGArray(output, conc_output_deposit_height , "{0}" , GVG_INT)		// Switch for Output
+CFGArray(output, conc_output_dump, "{0}" , GVG_INT)		// Switch for Output
+CFGArray(output, conc_output_stokes_diss_rate, "{0}" , GVG_INT)		// Switch for Output
+CFGArray(output, conc_output_integral, "{0}" , GVG_INT)
+CFGArray(output, conc_output_Q_int, "{0}" , GVG_INT)
+
+CFG(output, output_vfu, NO, atoi)     // particle indicator function
+CFG(output, output_vfv, NO, atoi)     // particle indicator function
+CFG(output, output_vfw, NO, atoi)     // particle indicator function
+CFG(output, output_vfc, NO, atoi)     // particle indicator function
+
+/*  For statistics2d  */
+
+
+
+CFG(output, front_position_switch, YES, atoi)     // height of a gravity current
+CFG(output, current_height_switch, YES, atoi)     // height of a gravity current
+CFG(output, nusselt_switch, YES, atoi)     // height of a gravity current
+CFG(output, turbulent_terms_switch, YES, atoi)
+CFG(output, post_processing_switch, NO, atoi)
+CFG(output, near_wall_slice_switch, YES, atoi)
+
+/******************************************************************************/
+/*          Miscellaneous                                                     */
+/******************************************************************************/
+/* Flag indicating if the bottom interface should be imported from file */
+CFG(misc, ImportBottomInterface, NO, atoi)
