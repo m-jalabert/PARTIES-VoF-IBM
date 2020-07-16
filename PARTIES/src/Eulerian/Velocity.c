@@ -1091,6 +1091,18 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 	double *idx_c = grid -> idx_c;
 
 	double dp_dx_source = -params -> dp_dx;
+
+#ifdef FLUID_OSCILLATION
+// Oscillation due to ISS vibration
+
+	double amplitude = params -> amplitude;
+	double tref = params -> tref;
+	double phase_shift_factor = params -> phase_shift_factor;
+
+	dp_dx_source = amplitude * sin(time / tref * 2 * PI + (phase_shift_factor * PI));
+
+#endif // FLUID_OSCILLATION
+
 #ifdef PRESSURE_PULSE
 	double ts, te;
 	double Tmax  =  0.9;
@@ -1129,6 +1141,8 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 	double a_dt = 1.0 / (params -> dt * BET[rk]);
 
 	T1 = MPI_Wtime();
+
+
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
@@ -1145,6 +1159,7 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 #if defined XPERIODIC && !defined BOUSSINESQ
 
 				rhs[k][j][i] += 2.0 * dp_dx_source;
+
 #endif
 #ifdef SWIMMERS_JET
 				double r1 = 0.5;
@@ -3085,8 +3100,8 @@ void Velocity_calculate_dpdx(Velocity *uvel, Cart3d_bag *data_bag) {
 	                      - (params->ubulk_old - params->ubulk_target) / params -> dt_old;
 	if (params -> rank == 0) {
 		fid = fopen("dpdx_history.dat","a");
-		fprintf(fid, "%8d %e %20.12e %20.12e %20.12e %20.12e\n", params->ntime,
-				dt, params->dp_dx, params->dp_dx_old, params->ubulk, params->ubulk_old);
+		fprintf(fid, "%8d %e %e %20.12e %20.12e %20.12e %20.12e\n", params->ntime,
+				params->time,dt, params->dp_dx, params->dp_dx_old, params->ubulk, params->ubulk_old);
 		fclose(fid);
 	}
 

@@ -164,6 +164,7 @@
 /******************************************************************************/
 
 #undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
+#define FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE
 #undef  BICG_SOLVE // nouniform mesh
@@ -180,7 +181,7 @@
 /*                               Concentration                                */
 /******************************************************************************/
 #undef CONC             // Turn on Concentration
-#define BOUSSINESQ       // Boussinesq approximation
+#undef BOUSSINESQ       // Boussinesq approximation
 #undef IBM_SCALAR
 #define VOF_SCALAR
 #define VOF_VELOCITY
@@ -235,12 +236,14 @@
 #undef  PARTICLE_TRN           // Save Particle_*.h5 files for every timestep in
                                //     subfolder './trn'
 #define  SUBSTEP                // Resolve particle collisions with sub-timesteps
-#undef STARTUP                // Prescribe velocity for particle
+#define STARTUP                // Prescribe velocity for particle
 #undef  FORCES_DAT             // Print out 'forces.dat' - F acting on particle // error here
 #define  DRY_COLLISION          // Turn off fluid forces for large St collisions
-#define  ROUGH_COLLISION        // Start collision at surface roughness
+#undef ROUGH_COLLISION        // Start collision at surface roughness
 #undef  LAG_MARKER_FLAG        // Turn off all competing Lag markers
-#define  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
+#undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
+
+#undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
 
 #undef ONE_WAY					// Turns on one-way coupling, i.e. no feedback from the particles on the fluid
 #undef TURB_FORCING			// Turns on the EP turbulent forcing
@@ -306,6 +309,18 @@
 /******************************************************************************/
 /*                                Logic checks                                */
 /******************************************************************************/
+
+//------------------------------------------------------------------------------
+// Oscillation
+//------------------------------------------------------------------------------
+
+#if defined FLUID_OSCILLATION || defined PARTICLE_OSCILLATION
+
+	#if defined FLUID_OSCILLATION && defined PARTICLE_OSCILLATION
+        #error Both oscillations (acting on fluid and on particle) are specified
+	#endif // defined
+
+#endif
 
 
 //------------------------------------------------------------------------------

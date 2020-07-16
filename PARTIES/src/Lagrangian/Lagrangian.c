@@ -441,10 +441,38 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
     F[2] += -6.0 * PI * p->R * (p->U[2]-w[kp][jp][ip])/ params->Re;
 
 	#endif
+
+    double time = params -> time;
+
+	#ifdef PARTICLE_OSCILLATION
+    // Oscillation force acting on particle due to ISS vibration
+
+	double amplitude = params -> amplitude;
+	double tref = params -> tref;
+	double phase_shift_factor = params -> phase_shift_factor;
+
+	double oscillation = amplitude * sin(time / tref * 2 * PI + (phase_shift_factor * PI));
+
+	F[0] += p->M * (1.0 - 1.0 / p->rho_s) * oscillation;
+
+	F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+	F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+
+	// Print values to check if this part is reached
+    	//printf("Particle Vibration: time - force in x, y, z = %g %g %g %g \n", time, F[0], F[1], F[2]);
+
+    #else
+
 	// Reduced gravity for submerged particles
 	F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
 	F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
 	F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+
+	// Print values to check if this part is reached
+    //printf("Particle_Oscillation is not defined, time = %g \n", time);
+
+    #endif // PARTICLE_OSCILLATION
+
 
 	// TO REMOVE, JUST TEST
 	#ifdef ONE_WAY
@@ -545,6 +573,8 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 	double zet = ZET[params -> which_stage];
 
 	double dt  = params -> dt;
+	double time = params -> time;
+	double startup_time = params -> startup_time;
 
 	Particle_list *p_mobile_list = data_bag -> lag -> p_mobile_list;
 	Particle_list *p_fixed_list  = data_bag -> lag -> p_fixed_list;
@@ -622,14 +652,14 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		Tc_old[2] = Tc[2];
 
 #ifdef STARTUP
-		//if (X[1] <= 2*p->R) {
-		//	params->startup_flag = 0;
-		//}
-		//if (params->startup_flag) {
+		if (time >= startup_time) {
+			params->startup_flag = 0;
+		}
+		if (params->startup_flag) {
 			DSET_ZERO(U, 3);
 			DSET_ZERO(Omega, 3);
-			U[1]=1;
-			Omega[2]=0;
+//			U[1]=1;
+//			Omega[2]=0;
 //			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
 //			U[1] = 10.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
 //			U[1] = 0.385 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=20
@@ -637,7 +667,7 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 //			U[1] = 0.192 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=10
 //			U[1] = 0.096 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=5
 //			U[1] = 0.020 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=1
-//		}
+		}
 #endif
 
 		X[0] = X_old[0] + dt * bet * ( U[0] + U_old[0] );
@@ -746,22 +776,22 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 #endif
 
 #ifdef STARTUP
-//		if (X[1] <= 2*p->R) {
-//			params->startup_flag = 0;
-//		}
-//		if (params->startup_flag) {
+		if (time >= startup_time) {
+			params->startup_flag = 0;
+		}
+		if (params->startup_flag) {
 			DSET_ZERO(U, 3);
 			DSET_ZERO(Omega, 3);
-			U[1]=1;
-			Omega[2]=0.;
+//			U[1]=1;
+//			Omega[2]=0;
 //			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
-//			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
+//			U[1] = 10.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
 //			U[1] = 0.385 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=20
 //			U[1] = 0.288 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=15
 //			U[1] = 0.192 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=10
 //			U[1] = 0.096 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=5
 //			U[1] = 0.020 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=1
-//		}
+		}
 #endif
 
 		X[0] = X_old[0] + dt * bet * ( U[0] + U_old[0] );

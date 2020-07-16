@@ -380,8 +380,7 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		T2 = MPI_Wtime();
 		timer->Wtime_intEOM += T2 - T1;
 
-
-#ifdef CONSTANT_MASSFLUX
+#if defined CONSTANT_MASSFLUX || defined FLUID_OSCILLATION || defined PARTICLE_OSCILLATION
 		Velocity_calculate_dpdx(u, data_bag);
 #endif
 #ifdef LES
