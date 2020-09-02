@@ -365,7 +365,7 @@ void ParticleOutput_h5_data(Particle_list *p_list, hid_t file_id,
 	OUTPUT_ELEMENT("T_rigid", 3);
 	OUTPUT_ELEMENT("F_coll", 3);
 	OUTPUT_ELEMENT("T_coll", 3);
-	//OUTPUT_ELEMENT("Int_U_old", 3);
+	OUTPUT_ELEMENT("Int_U_old", 3);
 	OUTPUT_ELEMENT("Int_Omega_old", 3);
 
 #ifdef POST_PROCESS
