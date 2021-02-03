@@ -164,7 +164,7 @@
 /******************************************************************************/
 
 #undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
-#define FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
+#undef FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE
 #undef  BICG_SOLVE // nouniform mesh
