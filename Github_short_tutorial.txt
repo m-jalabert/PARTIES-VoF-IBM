@@ -1,0 +1,40 @@
+##################################################################################################################
+#Getting Git on this system:
+
+#Download the master branch:
+git clone <URL>.git
+git clone https://github.com/vowinckel/PARTIES.git
+
+#Creat a new branch:
+git checkout -b <branchname>
+
+#Switch between branches:
+git checkout <branchname>
+
+#To check/find out my current branch:
+git branch -a
+--> Gives all branches, and current one in green and an asterix(*) beside it.
+
+git status
+--> General status of the branch on local system
+
+#Manually copy-paste/remove files to be modified, using file explorer.
+
+git add <file_name>
+
+#To commit the code to the branch:
+git commit -m "<commit msg>"
+
+#Push to server:
+git push
+
+#Creating a Pull Request:
+Head over to the website and creat new pull request:
+"New pull request" button --> Left side, top of the page.
+Select the branch to be merged into the master.
+Select review collaborators. (Left hand side, top. Add the required members)
+"Creat Pull Request"
+
+#Pester team mates to review and approve changes.
+
+##################################################################################################################
