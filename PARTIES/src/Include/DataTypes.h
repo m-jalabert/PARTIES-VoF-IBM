@@ -1233,14 +1233,6 @@ struct particle {
 	double Fc_norm_cum[3], Fc_tan_cum[3], Fl_norm_cum[3], Fl_tan_cum[3];
 #endif
 
-#ifdef POST_PROCESS
-	// Normal and tangential collision forces, normal and tangential lubrication
-	// forces
-	double Fc_norm[3], Fc_tan[3], Fl_norm[3], Fl_tan[3];
-	double Fc_norm_old[3], Fc_tan_old[3], Fl_norm_old[3], Fl_tan_old[3];
-	// Cumulative forces (over entire timestep)
-	double Fc_norm_cum[3], Fc_tan_cum[3], Fl_norm_cum[3], Fl_tan_cum[3];
-#endif
 
 	// Radius
 	double R;
