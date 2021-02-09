@@ -328,6 +328,10 @@ void Output_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	if (verbose) Display_progress(params,"Output.c: write pressure\n");
 	Output_h5_flow_variable(p->p_data, file_id, "/p", grid, params, DTRACE("Output_h5_flow_variable"));
 
+	#ifdef POST_PROCESS
+		if (verbose) Display_progress(params,"Output.c: write pressure\n");
+		Output_h5_flow_variable(p->p_data_avg, file_id, "/p_avg", grid, params, DTRACE("Output_h5_flow_variable"));
+	#endif
 
 	#ifdef TURB_FORCING
 	// Write u-turbulent focing
