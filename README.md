@@ -29,6 +29,6 @@ Links to other related applications - e.g. non-dimensionalization calculators, p
 # Structure of the documentation
 readme.md - main file with links to the main chapters
 
-folder with different .md documents and figures
-folder with related papers and other (preferably published) documents/manuscripts
-other files (presentations, schematis ...)
+folder with different .md documents and figures <br>
+folder with related papers and other (preferably published) documents/manuscripts <br>
+other files (presentations, schematis ...) 
