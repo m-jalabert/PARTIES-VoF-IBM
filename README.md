@@ -25,3 +25,10 @@ Paralleliztion of the code <br>
 ## Other
 The main description of code structure <br>
 Links to other related applications - e.g. non-dimensionalization calculators, pre- and post-processing scripts. 
+
+# Structure of the documentation
+readme.md - main file with links to the main chapters
+
+folder with different .md documents and figures
+folder with related papers and other (preferably published) documents/manuscripts
+other files (presentations, schematis ...)
