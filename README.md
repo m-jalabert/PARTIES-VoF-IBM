@@ -3,7 +3,7 @@
 ## Main Instructions
 Download and Install the code <br>
 Setup and run different simulations (maybe connected with test cases) <br>
-Post-process reults <br>
+Post-process results <br>
 
 ## Guidlines
 Writing the code - comments, description of functions <br>
