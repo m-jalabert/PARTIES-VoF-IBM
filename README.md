@@ -5,15 +5,17 @@ Download and Install the code <br>
 Setup and run different simulations (maybe connected with test cases) <br>
 Post-process results <br>
 
-## Guidlines
+## Guidelines
 Writing the code - comments, description of functions <br>
-How to merge the code - for example, performing test cases, documentations of new parts of the code, create your own test case
+How to merge the code - for example, pull requests, performing test cases, documentations of new parts of the code, create your own test case
 
 ## Fluid Dynamic Theory
 Non-dimensionalization of code <br>
-Eulerian solver <br>
-Lagrangian solver <br>
-Immeresed Boundary Method (IBM) <br>
+Eulerian fluid solver <br>
+Lagrangian particle solver <br>
+Concentration field and single-phase flow solver <br>
+Immersed Boundary Method (IBM) <br>
+Momo's IBM <br>
 
 ## Numerical 
 Finite difference <br>
