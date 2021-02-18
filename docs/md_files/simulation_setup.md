@@ -62,9 +62,77 @@ ADD DATA HERE
 ADD DATA HERE
 
 
+## [Boundary.h][7]
+
+The Boundary.h file is the main setup file for the control volume. It contains
+predefined headers for selection of required boundary conditions, selection of
+flow solver, implementing particles into the fluid and their concentration and
+the selection turbulence models for flows. These options are to be selected as
+per required for a given computational run.
+
+### Boundary Conditions
+
+The setup for the control volume is primarily done with the selection of the type
+of boundary condition which is required. This is further broken down to the
+specific conditions required along the 3 coordinate axes as well as the four/six
+faces of the control volume in question.
+
+
+### Implemented Boundary Conditions
+
+These sets of boundary conditions are predefined in the code and are for the
+various faces of the control volume. An option to manually setup the individual
+conditions for faces of the control volume is provided as well.
+1. PERIODIC NOSLIP BOX
+2. PERIODIC FREESLIP BOX
+3. XPERIODIC FREESLIP BOX
+4. PERIODIC SHEAR FLOW
+5. PERIODIC DOUBLE SHEAR FLOW
+6. PERIODIC DOUBLE SHEAR FLOW
+7. NOSLIP BOX
+8. FREESLIP DUCT
+9. NOSLIP DUCT
+10. GRAVITY CURRENT
+11. GRAVITY CURRENT PERIODIC
+12. TRIPLE PERIODIC
+13. TRIPLE PERIODIC SHEAR
+14. LEFT RIGHT INFLOW TOP OUTFLOW
+
+Reminder:
+- No-slip boundary condition: At the interface between a moving fluid
+and a stationary wall, both the normal and tangential components of the
+fluid velocity field are equal to zero.
+
+- Free-slip boundary condition: At the interface between a moving fluid
+and a stationary wall, the normal component of the fluid velocity field is
+equal to zero, but the tangential component is unrestricted. This condition
+is also know as the no-penetration condition.
+
+- Periodic boundary conditions: The flows across two opposite planes
+of the control volume model are identical
+
+### Flow Solver
+
+The numerical methods to solve the given fluid flow are to be selected. Conju-
+gate gradient and Bi-Conjugate gradient, are the main methods, implemented
+for uniform and non uniform grid sizes.
+The code for the solvers is present at [src/Eulerian/lsolver][8]
+
+### Particle solver
+ADD DATA HERE
+
+### Turbulence models
+ADD DATA HERE
+
+### Concentrations Methods
+ADD DATA HERE
+
+
 [1]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/src/IO/default.inp
 [2]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/parties.inp
 [3]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/stop.inp
 [4]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/p_fixed.inp
 [5]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/p_mobile.inp
 [6]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/xdmfWriter.inp
+[7]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/src/Include/Boundary.h
+[8]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/src/Eulerian/lsolver/
