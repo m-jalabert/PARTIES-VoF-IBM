@@ -2,7 +2,7 @@
 
 ## Main Instructions
 Download and Install the code <br>
-Setup and run different simulations (maybe connected with test cases) <br>
+[Simulation setup](https://github.com/vowinckel/PARTIES/blob/master/docs/md_files/simulation_setup.md)  <br>
 Post-process results <br>
 
 ## Guidelines
