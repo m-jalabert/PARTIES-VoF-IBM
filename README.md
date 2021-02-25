@@ -27,6 +27,8 @@ Eulerian & Lagrangian solvers <br>
 Paralleliztion of the code <br>
 
 ## Other
+[h5ToVTK](https://github.com/metialex/h5ToVTK) - this tool converts PARTIES Eulerian and Lagrangian output .h5 files into .vtk files.
+
 The main description of code structure <br>
 Links to other related applications - e.g. non-dimensionalization calculators, pre- and post-processing scripts. 
 
