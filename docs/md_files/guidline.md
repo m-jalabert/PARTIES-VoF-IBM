@@ -1,4 +1,4 @@
-# Workflow
+# Workflow and Branching
 The workflow is orginized in the following way:
 There is a  `master` branch - this is the main branch with features which have been developed and tested. This branch is considered as the most stable
  branch and recomended to be used for simulations.
@@ -22,6 +22,4 @@ and add it to the list of test cases. The guideline of how to add new test cases
 in the corresponding chapter of documentation.
 
 If all the steps are completed the new branch should be merged with the master branch via **Pull Request**.
-
-# Writing a code
 
