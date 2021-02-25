@@ -52,11 +52,21 @@ This file is check before the start of every main loop iteration of the flow sol
 0 --> continue <br>
 1 --> stop
 
-## [p_fixed.inp][4]
-ADD DATA HERE
+## [p_fixed.inp][4] and [p_mobile.inp][5]
+These input files describe the initial conditions of fixed and mobile particles.
 
-## [p_mobile.inp][5]
-ADD DATA HERE
+Both files are structured in the following way:
+```
+n
+x1 y1 z1 R1
+x2 y2 z2 R2
+...
+xn yn zn Rn
+```
+where `n` is a total number of particle, `x y z` correspond to the cartesian coordinates of a particle and `R` represents the radius of a particle <br>
+
+The total number of particles `n` defines how many lines must be red in the `p_fixed.inp` and `p_mobile.inp` files. This means that if `n` is more than the number of lines which contain the particle information, then code will throw an error. If `n` is less than the number of lines which contain the particle information, only `n` particles will be considered.
+
 
 ## [xdmfWriter.inp][6]
 ADD DATA HERE
@@ -111,21 +121,6 @@ is also know as the no-penetration condition.
 - Periodic boundary conditions: The flows across two opposite planes
 of the control volume model are identical
 
-### Flow Solver
-
-The numerical methods to solve the given fluid flow are to be selected. Conju-
-gate gradient and Bi-Conjugate gradient, are the main methods, implemented
-for uniform and non uniform grid sizes.
-The code for the solvers is present at [src/Eulerian/lsolver][8]
-
-### Particle solver
-ADD DATA HERE
-
-### Turbulence models
-ADD DATA HERE
-
-### Concentrations Methods
-ADD DATA HERE
 
 
 [1]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/src/IO/default.inp
@@ -135,4 +130,4 @@ ADD DATA HERE
 [5]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/p_mobile.inp
 [6]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/xdmfWriter.inp
 [7]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/src/Include/Boundary.h
-[8]: https://github.com/vowinckel/PARTIES/blob/master/PARTIES/src/Eulerian/lsolver/
+
