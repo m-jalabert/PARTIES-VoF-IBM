@@ -23,7 +23,7 @@ xdmfWriter.inp
 ###########################################################################
 #                                  Usage                                  #
 ###########################################################################
-Folder 'Poiseuilli_Testcase', with the files mentioned above to be placed in testcases/<Flow Type> in working directory.
+Folder 'Couette_Testcase', with the files mentioned above to be placed in testcases/<Flow Type> in working directory.
 
 Analytical solution:
 <flowname>_analytical_soln.m to be executed beforehand, to obtain the 'analytical_velo.dat' file
