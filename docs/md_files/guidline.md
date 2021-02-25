@@ -3,7 +3,7 @@ The workflow is orginized in the following way:
 There is a  `master` branch - this is the main branch with features which have been developed and tested. This branch is considered as the most stable
  branch and recomended to be used for simulations.
  
-# Code development
+## Code development
 Each contributor of the repository is able to develop a new functionality by creating a new branch. It is preferably that this branch originates 
 from the latest version of the master branch.
 
@@ -11,7 +11,7 @@ The new branch also should be named with the following way:<br>
 Last name of a creator + underscore + short flag
 which indicates the purpose of the branch, for example `metelkin_develop` or `metelkin_postproc`. 
 
-# Merging your branch with the master branch
+## Merging your branch with the master branch
 In order to minimize number of bugs in the master branch the following steps have to be made to merge a new branch with the master branch:
 
  1. **Pass testcases**. <br> When the implemented code from a new branch is finished, it has to be tested using the collection of test cases to be sure that
