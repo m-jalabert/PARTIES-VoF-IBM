@@ -6,8 +6,9 @@ Download and Install the code <br>
 Post-process results <br>
 
 ## Guidelines
+
+[Workflow and branching](https://github.com/vowinckel/PARTIES/blob/master/docs/md_files/guidline.md) <br>
 Writing the code - comments, description of functions <br>
-How to merge the code - for example, pull requests, performing test cases, documentations of new parts of the code, create your own test case
 
 ## Fluid Dynamic Theory
 Non-dimensionalization of code <br>
