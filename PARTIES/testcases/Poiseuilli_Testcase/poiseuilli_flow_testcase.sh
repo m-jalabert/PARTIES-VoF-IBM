@@ -72,8 +72,8 @@ h5dump -d "/u" -s "0,0,150" -c "1,101,1" -w 0 Data_10.h5 > velo.dat
 
 # File manipulation: Velocities placed in a file !!Omitted the last entry!!
 header_line_no=`grep -n "\<DATA\>" velo.dat | gawk '{print $1}' FS=":"`
-echo '      U(y)' > numerical_velo_PF.dat
-awk "NR==$((header_line_no+1)), NR==$((header_line_no+100))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo_PF.dat
+echo '      U(y)' > numerical_velo.dat
+awk "NR==$((header_line_no+1)), NR==$((header_line_no+100))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo.dat
 
 ###########################################################################
 #                              Comparision                                #
