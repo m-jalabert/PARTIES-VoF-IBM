@@ -15,7 +15,7 @@ for i = 1:100
 end
 
 % File handling
-fileID = fopen('analytical_soln.dat','w');
+fileID = fopen('analytical_velo.dat','w');
 fprintf(fileID,'%10s\n','U(y)');
 fprintf(fileID,'%10.8f\n',velocity);
 fclose(fileID);
