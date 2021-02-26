@@ -1,9 +1,9 @@
 # PARTIES Documentation example 
 
-## Main Instructions
+## Main Information
 Download and Install the code <br>
 [Simulation setup](https://github.com/vowinckel/PARTIES/blob/master/docs/md_files/simulation_setup.md)  <br>
-Post-process results <br>
+[Post-processing](https://github.com/metialex/PARTIES/blob/master/docs/md_files/post_proc.md) <br>
 
 ## Guidelines
 
