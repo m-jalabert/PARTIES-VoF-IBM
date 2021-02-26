@@ -1,1 +1,63 @@
-<mxfile host="app.diagrams.net" modified="2021-02-26T13:00:54.737Z" agent="5.0 (X11)" version="14.4.3" etag="VuHAtB1fJeBDwjlcAqs1" type="github"><diagram id="GweIwImRXYFYWG-pri2H">UzV2zq1wL0osyPDNT0nNUTV2VTV2LsrPL4GwciucU3NyVI0MMlNUjV1UjYwMgFjVyA2HrCFY1qAgsSg1rwSLBiADYTaQg2Y1AA==</diagram></mxfile>
+<mxfile host="app.diagrams.net" modified="2021-02-26T13:06:03.071Z" agent="5.0 (X11)" etag="GcholmcF3CrPvI-EjfI0" version="14.4.3" type="github">
+  <diagram id="GweIwImRXYFYWG-pri2H" name="Page-1">
+    <mxGraphModel dx="1355" dy="799" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-1" value="Particle.h5" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="10" width="90" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-2" value="domain" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="260" y="70" width="60" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-3" value="time" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="70" width="60" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-4" value="fixed" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="70" width="70" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-8" value="periodic" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="160" y="110" width="60" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-10" value="xmax" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="110" width="40" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-11" value="xmin" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="110" width="40" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-12" value="ymax" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="140" width="40" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-13" value="ymin" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="140" width="40" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-14" value="zmax" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="170" width="40" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-15" value="zmin" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="170" width="40" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-17" value="mobile" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="70" width="70" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-18" value="Particle data" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="440" y="110" width="160" height="120" as="geometry">
+            <mxRectangle x="440" y="110" width="120" height="26" as="alternateBounds" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-19" value="F" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" vertex="1" parent="L5LOps11OwV6dGC0v1Wk-18">
+          <mxGeometry y="26" width="160" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-20" value="X" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" vertex="1" parent="L5LOps11OwV6dGC0v1Wk-18">
+          <mxGeometry y="50" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-21" value="U" style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" vertex="1" parent="L5LOps11OwV6dGC0v1Wk-18">
+          <mxGeometry y="80" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="L5LOps11OwV6dGC0v1Wk-22" value="..." style="text;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" vertex="1" parent="L5LOps11OwV6dGC0v1Wk-18">
+          <mxGeometry y="100" width="160" height="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
