@@ -10,7 +10,7 @@ The libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be un
 
 <pre>
 tar -xf <em>*.tar*</em> -C <em>your_directory</em>
-
-mkdir PARTIES_Libs
+cd <em>your_directory</em>
+mkdir <em>PARTIES_Libs</em>
 </pre>
 
