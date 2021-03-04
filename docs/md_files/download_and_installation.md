@@ -6,7 +6,7 @@
 git clone <em>URL</em>
 </pre>
 
-The libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be unpacked. Unpack the files to a local directory, which we will call <b>your_directory</b>, and create an additional file, e.g. <em>PARTIES_Libs</em>, in the same directory. Please be aware that you have to insert the path of your directory for <b>your_directory</b> in all following commands.
+The libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be unpacked. Unpack the files to a local directory, which we will call <b>your_directory</b>, and create an additional file, e.g. <em>PARTIES_Libs</em>, in the same directory. Please note that you have to specify the path of your directory in all following commands for <b>your_directory</b>.
 
 <pre>
 tar -xf <em>*.tar*</em> -C <b>your_directory</b>
@@ -38,7 +38,7 @@ source ~/.bashrc
 
 ## HDF5
 
-Change into the unpacked <em>HDF5</em> file and run the commands below. Please double check that you have replaced all <b>your_directory</b> references with your path.
+Change into the unpacked <em>HDF5</em> file and run the commands below. Please double check that you have specified all <b>your_directory</b> references with your path.
 
 <pre>
 ./configure --prefix=$HOME/<b>your_directory</b>/PARTIES_Libs/ --enable-parallel CC="$HOME/<b>your_directory</b>/PARTIES_Libs/bin/mpicc" CXX="$HOME/<b>your_directory</b>/PARTIES_Libs/bin/mpicxx" LDFLAGS="-L$HOME/<b>your_directory</b>/PARTIES_Libs/lib -fPIC" CPPFLAGS="-I$HOME/<b>your_directory</b>/PARTIES_Libs/include"
@@ -50,7 +50,7 @@ make check-install
 
 ## FFTW
 
-Change into the unpacked <em>FFTW</em> file and run the commands below. Similar to the installation of <em>HDF5</em>, please double check that you have replaced all <b>your_directory</b> references with your path.
+Change into the unpacked <em>FFTW</em> file and run the commands below. Similar to the installation of <em>HDF5</em>, please double check that you have specified all <b>your_directory</b> references with your path.
 
 <pre>
 ./configure --prefix=$HOME/<b>your_directory</b>/PARTIES_Libs/ --enable-mpi CFLAGS="-O3" MPICC="$HOME/<b>your_directory</b>/PARTIES_Libs/bin/mpicc" LDFLAGS="-L$HOME/<b>your_directory</b>/PARTIES_Libs/lib/openmpi -Wl,-rpath=$HOME/<b>your_directory</b>/PARTIES_Libs/lib/openmpi -fPIC" CPPFLAGS="-I $HOME/<b>your_directory</b>/PARTIES_Libs/include"
