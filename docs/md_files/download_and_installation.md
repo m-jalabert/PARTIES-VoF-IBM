@@ -1,6 +1,6 @@
-# Downloading the Code
+# Downloading and Unpacking the Code
 
-[PARTIES_Install](https://github.com/metialex/PARTIES/tree/master/PARTIES_Install) is included in the repository and contains the required libraries for installing or compiling, respectively, the PARTIES code. Therefore, you should firstly clone the repository to your local machine.
+[PARTIES_Install](https://github.com/metialex/PARTIES/tree/master/PARTIES_Install) is included in the repository and contains the required libraries (<em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em>) for installing or compiling, respectively, the PARTIES code. Therefore, you should firstly clone the repository to your local machine.
 
 <pre>
 git clone <em>URL</em>
@@ -12,5 +12,18 @@ The libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be un
 tar -xf <em>*.tar*</em> -C <em>your_directory</em>
 cd <em>your_directory</em>
 mkdir <em>PARTIES_Libs</em>
+</pre>
+
+# Installation
+
+The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to be installed successively.
+
+## OpenMPI
+
+Go into the unpacked <em>OpenMPI</em>-file within <em>your_directory</em> and run the following commands one after the other. Please insert the path to your directory for <em>your_directory</em>.
+
+<pre>
+./configure --prefix=$HOME/<em>your_directory</em>/PARTIES_Libs/
+make all install
 </pre>
 
