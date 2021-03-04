@@ -9,5 +9,5 @@ git clone <em>URL</em>
 The mentioned libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be unpacked. Unpack the files to a local directory, which we will call <b>your_directory</b> in the following commands.
 
 <pre>
-tar -xf <em>tar-file</em> -C <b>your_directory</b>
+tar -xf <em>*.tar*</em> -C <b>your_directory</b>
 </pre>
