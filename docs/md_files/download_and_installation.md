@@ -69,4 +69,4 @@ make clean
 make
 </pre>
 
-In case of a successful compilation, you are now able to a simulation as shown in [Simulation setup](https://github.com/metialex/PARTIES/blob/master/docs/md_files/simulation_setup.md).
+In case of a successful compilation, you are now able to run a simulation as shown in [Simulation setup](https://github.com/metialex/PARTIES/blob/master/docs/md_files/simulation_setup.md).
