@@ -40,4 +40,10 @@ source ~/.bashrc
 
 Change into the unpacked <em>HDF5</em>-file and run the commands below. Please double check that you have replaced all <em>your_directory</em> references with  your path.
 
-
+<pre>
+./configure --prefix=$HOME/<em>your_directory</em>/PARTIES_Libs/ --enable-parallel CC="$HOME/<em>your_directory</em>/PARTIES_Libs/bin/mpicc" CXX="$HOME/<em>your_directory</em>/PARTIES_Libs/bin/mpicxx" LDFLAGS="-L$HOME/<em>your_directory</em>/PARTIES_Libs/lib -fPIC" CPPFLAGS="-I$HOME/<em>your_directory</em>/PARTIES_Libs/include"
+make
+make check
+make install
+make check-install
+</pre>
