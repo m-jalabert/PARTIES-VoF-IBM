@@ -36,4 +36,8 @@ nano ~/.bashrc
 source ~/.bashrc
 </pre>
 
+## HDF5
+
+Change into the unpacked <em>HDF5</em>-file and run commands below. Please double check that you have replaced your path with all <em>your_directory</em> references.
+
 
