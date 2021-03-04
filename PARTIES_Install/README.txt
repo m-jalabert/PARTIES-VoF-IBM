@@ -5,7 +5,7 @@
 	=>   './install_script.sh'
 
 3.	add the following line into ~/.bashrc
-	=>   export PATH=$PATH:$HOME/Software/PARTIES_Libs/bin
+	=>   export PATH=$HOME/Software/PARTIES_Libs/bin:$PATH
 
 4.	source bashrc
 	=>   'source ~/.bashrc'
