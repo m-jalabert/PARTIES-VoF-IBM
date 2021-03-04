@@ -20,7 +20,7 @@ The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to b
 
 ## OpenMPI
 
-Go into the unpacked <em>OpenMPI</em>-file within <b>your_directory</b> and run the following commands one after the other. 
+Go into the unpacked <em>OpenMPI</em> file within <b>your_directory</b> and run the following commands one after the other. 
 
 <pre>
 ./configure --prefix=$HOME/<b>your_directory</b>/PARTIES_Libs/
@@ -38,7 +38,7 @@ source ~/.bashrc
 
 ## HDF5
 
-Change into the unpacked <em>HDF5</em>-file and run the commands below. Please double check that you have replaced all <b>your_directory</b> references with your path.
+Change into the unpacked <em>HDF5</em> file and run the commands below. Please double check that you have replaced all <b>your_directory</b> references with your path.
 
 <pre>
 ./configure --prefix=$HOME/<b>your_directory</b>/PARTIES_Libs/ --enable-parallel CC="$HOME/<b>your_directory</b>/PARTIES_Libs/bin/mpicc" CXX="$HOME/<b>your_directory</b>/PARTIES_Libs/bin/mpicxx" LDFLAGS="-L$HOME/<b>your_directory</b>/PARTIES_Libs/lib -fPIC" CPPFLAGS="-I$HOME/<b>your_directory</b>/PARTIES_Libs/include"
@@ -50,7 +50,7 @@ make check-install
 
 ## FFTW
 
-Change into the unpacked <em>FFTW</em>-file and run the commands below. Similar to the installation of <em>HDF5</em>, please double check that you have replaced all <b>your_directory</b> references with your path.
+Change into the unpacked <em>FFTW</em> file and run the commands below. Similar to the installation of <em>HDF5</em>, please double check that you have replaced all <b>your_directory</b> references with your path.
 
 <pre>
 ./configure --prefix=$HOME/<b>your_directory</b>/PARTIES_Libs/ --enable-mpi CFLAGS="-O3" MPICC="$HOME/<b>your_directory</b>/PARTIES_Libs/bin/mpicc" LDFLAGS="-L$HOME/<b>your_directory</b>/PARTIES_Libs/lib/openmpi -Wl,-rpath=$HOME/<b>your_directory</b>/PARTIES_Libs/lib/openmpi -fPIC" CPPFLAGS="-I $HOME/<b>your_directory</b>/PARTIES_Libs/include"
@@ -62,7 +62,7 @@ make installcheck
 
 # Compilation
 
-The installation is now completed, so that you can exemplary compile the PARTIES code to control if it works. Therefore, please go into the <em>PARTIES</em>-file within your local github repository and run the following:
+The installation is now completed, so you can compile the PARTIES code as an example to check if it works. To do this, please go to the <em>PARTIES</em> file in your local Github repository and execute the following:
 
 <pre>
 make clean
