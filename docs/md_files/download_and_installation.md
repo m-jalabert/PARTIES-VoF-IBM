@@ -5,3 +5,5 @@
 <pre>
 git clone <em>URL</em>
 </pre>
+
+The mentioned libraries are in <em>.tar</em> and <em>.tar.gz</em> and need to be unpacked.
