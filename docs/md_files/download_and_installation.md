@@ -58,3 +58,15 @@ make
 make install
 make installcheck
 </pre>
+
+
+# Compilation
+
+The installation is now completed, so that you can exemplary compile the PARTIES code to control if it works. Therefore, please go into the <em>PARTIES</em>-file within your local github repository and run the following:
+
+<pre>
+make clean
+make
+</pre>
+
+In case of a successful compilation, you are now able to a simulation as shown in [Simulation setup](https://github.com/metialex/PARTIES/blob/master/docs/md_files/simulation_setup.md).
