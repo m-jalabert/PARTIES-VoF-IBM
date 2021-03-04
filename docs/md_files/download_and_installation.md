@@ -6,7 +6,7 @@
 git clone <em>URL</em>
 </pre>
 
-The libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be unpacked. Unpack the files to a local directory, which we will call <em>your_directory</em> in the following commands, and create an additional file, e.g. <em>PARTIES_Libs</em>, in the same directory.
+The libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be unpacked. Unpack the files to a local directory, which we will call <em>your_directory</em>, and create an additional file, e.g. <em>PARTIES_Libs</em>, in the same directory. Please be aware that you have to insert the path of your directory for <em>your_directory</em> in all following commands.
 
 <pre>
 tar -xf <em>*.tar*</em> -C <em>your_directory</em>
@@ -20,7 +20,7 @@ The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to b
 
 ## OpenMPI
 
-Go into the unpacked <em>OpenMPI</em>-file within <em>your_directory</em> and run the following commands one after the other. Please insert the path of your directory for <em>your_directory</em>.
+Go into the unpacked <em>OpenMPI</em>-file within <em>your_directory</em> and run the following commands one after the other. 
 
 <pre>
 ./configure --prefix=$HOME/<em>your_directory</em>/PARTIES_Libs/
@@ -31,8 +31,8 @@ After the installation, you have to add the BUILTIN command "export..." to your 
 
 <pre>
 nano ~/.bashrc
--add the line:   export PATH=$HOME/Software/PARTIES_Libs/bin:$PATH
--save and close
+<em>add</em> the line:   export PATH=$HOME/<em>your_directory</em>/PARTIES_Libs/bin:$PATH
+<em>save</em> and close
 source ~/.bashrc
 </pre>
 
