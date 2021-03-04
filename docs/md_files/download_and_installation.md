@@ -27,6 +27,13 @@ Go into the unpacked <em>OpenMPI</em>-file within <em>your_directory</em> and ru
 make all install
 </pre>
 
-After the installation, you have to add the BUILTIN command "export..." to your bash script, which will refer to the previously installed /bin-file of <em>OpenMPI</em>. Therefore, open the bash script, add the cited line, save the document, and source the bash script as shown with the following commands.
+After the installation, you have to add the BUILTIN command "export..." to your bash script, which will refer to the previously installed /bin-file of <em>OpenMPI</em>. Therefore, open the bash script (e.g. with the text editor <em>nano</em>), add the cited line, save and close the document, and source the bash script as shown in the following commands:
+
+<pre>
+nano ~/.bashrc
+-add the line:   export PATH=$HOME/Software/PARTIES_Libs/bin:$PATH
+-save and close
+source ~/.bashrc
+</pre>
 
 
