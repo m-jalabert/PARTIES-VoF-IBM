@@ -20,10 +20,13 @@ The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to b
 
 ## OpenMPI
 
-Go into the unpacked <em>OpenMPI</em>-file within <em>your_directory</em> and run the following commands one after the other. Please insert the path to your directory for <em>your_directory</em>.
+Go into the unpacked <em>OpenMPI</em>-file within <em>your_directory</em> and run the following commands one after the other. Please insert the path of your directory for <em>your_directory</em>.
 
 <pre>
 ./configure --prefix=$HOME/<em>your_directory</em>/PARTIES_Libs/
 make all install
 </pre>
+
+After the installation, you have to add the BUILTIN command "export..." to your bash script, which will refer to the previously installed /bin-file of <em>OpenMPI</em>. Therefore, open the bash script, add the cited line, save the document, and source the bash script as shown with the following commands.
+
 
