@@ -13,7 +13,7 @@ default.inp, present at [src/Eulerian/IO/default.inp][1]
 - **Geometry**: The dimensions of the control volume is setup, as per required,
 using Cartesian coordinates.
 
-- **Grid**: The values for the grid is populated to keep the number of elemental
+- **Grid**: The values for the grid are populated to keep the number of elemental
 nodes per unit volume constant and a multiple of 10, along each of the 3
 coordinate axes.
 
