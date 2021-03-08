@@ -1,6 +1,6 @@
 # Post-processing
 
-The output data files from simulaation are the .h5 files. They are divided into two different groups: Eulerian and Lagrangian data.
+The output data files from simulation are the .h5 files. They are divided into two different groups: Eulerian (fluid and concentration) and Lagrangian (particles) data.
 Additionally, files with the extension .dat are used for output of table-stuructured data (e.g. mobile.dat).
 
 __Important notice__: as far as low storage Runge-Kutta scheme is used as a time integration scheme, all output variables (excluding some variables which are created if the flag "POST_PROCESS" is defined) correspond to the variables of the third iteration of RK scheme. 
@@ -22,7 +22,7 @@ Here,<br>
 
 
 ## Particle.h5
-This set of files contain the main information about the Lagrangian data - the main data corresponding to each particle.<br>
+This set of files contains the main information about the Lagrangian data - the main data corresponding to each particle.<br>
 The structure of the file is represented below and can be edited [here](https://github.com/metialex/PARTIES/blob/master/docs/other/Particle_h5_structure.drawio) using draw.io:
 
 ![](https://github.com/metialex/PARTIES/blob/master/docs/figures/Particle_h5_structure.png)
