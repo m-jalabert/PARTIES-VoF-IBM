@@ -62,7 +62,7 @@ make installcheck
 
 # Compilation
 
-The installation is now completed, so you can compile the PARTIES code as an example to check if it works. To do this, please go to the <em>PARTIES</em> file in your local Github repository and execute the following:
+The installation is now completed, so you can compile the PARTIES code as an example to check if it works. To do this, please go to the <em>PARTIES</em> folder in your local Github repository and execute the following:
 
 <pre>
 make clean
