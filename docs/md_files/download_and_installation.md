@@ -16,7 +16,7 @@ mkdir <em>PARTIES_Libs</em>
 
 # Installation
 
-The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to be installed successively.
+The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to be installed consecutively.
 
 ## OpenMPI
 
