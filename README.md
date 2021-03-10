@@ -1,7 +1,7 @@
 # PARTIES Documentation example 
 
 ## Main Information
-[Download and Install the code](https://github.com/metialex/PARTIES/blob/kleischmann_documentation/docs/md_files/download_and_installation.md) <br>
+[Download and Install the code](https://github.com/metialex/PARTIES/blob/master/docs/md_files/download_and_installation.md) <br>
 [Simulation setup](https://github.com/vowinckel/PARTIES/blob/master/docs/md_files/simulation_setup.md)  <br>
 [Post-processing](https://github.com/metialex/PARTIES/blob/master/docs/md_files/post_proc.md) <br>
 
