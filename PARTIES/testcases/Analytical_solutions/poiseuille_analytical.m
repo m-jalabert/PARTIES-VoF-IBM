@@ -4,18 +4,22 @@ clc,
 % Geometry parameters
 h = 1;
 
-% Velocity of plate
-u_0 = 8; % define this better
+% kinematic viscosity
+nue = 1; 
+
+% Pressure gradient
+delta_p = -12.037; % define this better
 
 y = linspace(0,1,100)'; % column vector
 velocity=zeros(100,1); % column vector
 
+% Calculate the velocity
 for i = 1:100
-    velocity(i) = u_0 * (y(i)/h);
+    velocity(i) = -( (delta_p)/(2*nue) ) * (h - y(i)) * y(i);
 end
 
 % File handling
-fileID = fopen('analytical_velo.dat','w');
+fileID = fopen('analytical_velo_PF.dat','w');
 fprintf(fileID,'%10s\n','U(y)');
 fprintf(fileID,'%10.8f\n',velocity);
 fclose(fileID);
