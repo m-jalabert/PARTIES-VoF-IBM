@@ -1,26 +1,26 @@
 # Testcases guideline
-Testcases are required to keep the consistency of the code and avoid undesireable changes in the base parts of the PARTIES code 
-which are responsible for numerical solvers.
+Testcases are required to keep the consistency of the code and avoid undesireable changes in the base parts of the code 
+which are responsible for output results (such as numerical solvers, discretization schemes and others).
 
-The testcases are used in case if you changed a code and want to merge it with the master branch.
-In this case before merging your code you have to perform all the testcases simulations to check 
+The testcases are used in case of a pull request which includes changed or added numerical functionality.
+Before merging your branch with a master branch you have to perform all the testcases simulations to check 
 if your additions to the code affected the results of the testcases simulations.
 
-It is also possible that the results could be different than before, but in this case you have to clearly state 
-the reason and and provide a strong motivation for your changes.
+It is also possible that the results could be different than before. In this case you have to clearly state 
+the reason and provide a strong motivation for your changes.
 
 In case if your updated code provides an additional functionality, it is highly encouraged to create a new test case,
 which would represent a simulation where your new functionality is tested. Below you can find a section which describes the exact 
-procedure how a new test case should be added.
+procedure how a new test case should be added (section __Add a testcase__).
 
 
 ## Testcases structure
 The directory `<$PARTIES_home>/testcases` is assigned for the testcases related files and folders.
 
 The following folders and files are located in `<$PARTIES_home>/testcases`:
- - The folders which correspond to a certain testcase (e.g. Poiseuille_test(link)).
- - The main script file which runs and checks all testcases.
- - The folder which contains validated results of testcases.
+ - The folders which correspond to a certain testcase (e.g. Poiseuille_Testcase(link)).
+ - The main script file which runs and checks all testcases runtestcases.sh(link).
+ - The folder which contains validated results of testcases Testcase_Results(link).
 
 The folder with a certain test case contains the following files and folders:
  - The setup files which are used to perform a certain testcase (e.g. parties.inp(link), Boundary.h(link), p_fixed.inp(link)).
@@ -33,9 +33,9 @@ The folder with a certain test case contains the following files and folders:
 To run all test cases, go to the folder testcase(add link), open terminal and run the script which includes all test cases:
 ```
 $ cd <$PARTIES_home>/testcases/
-$ ./testcases.sh > logfile.log
+$ ./runtestcases.sh > logfile.log
 ```
-The script `testcases.sh` includes the list of all test cases and executes them in a sequential manner.
+The script `runtestcases.sh` includes the list of all test cases and executes them in a sequential manner.
 The status of each test case is written in the logfile `logfile.log`.
 Therefore if the status of every test case is "passed" the code could be submitted for a pull request.
 In case if some of test cases did not passed you might think about the reasons of it.
