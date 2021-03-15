@@ -51,67 +51,59 @@ Simulations starts after the compilation the code. Finally, the ouput data is co
 The simulation results are stored in the work folder which is automatically created in `<$PARTIES_home>/testcases/ (check it)`.
 
 
-## Passing criteria
-(in progress)
-
-what data is compared (velocity profiles for example)
-Simulation data compared with previous simulation data
-Simulation is also compared with analitical solution/experiments but it is not a passing check criteria (but maybe initial criteria to add a test case)
-
 ## Add a testcase
-(in progress)
+A new testcase could be added using the following procedure:
 
-# Ralphs readme.md
-## PARTIES Testcase for standard flows
-This shell script runs the PARTIES CFD solver for a standard flow and compares the obtained numerical solution against a verified numerical solution 
-of the same flow type. 
-The initial verification is done against the analytical solution of the fluid flow.
-Eg: Poiseuille flow, Couette flow
+1. Create a folder with your testcase into `<$PARTIES_home>/testcases/`.
+2. Add all necessary files which would define the initial and boundary condition of your testcase. Use Poiseuille_Testcase and Couette_Testcase as a reference.
+3. Into your testcase folder create a local script which would compile the code, run simulation and check (and print) the passing criteria (again, use Poiseuille_Testcase and Couette_Testcase as a reference)
+4. Modify the `runtestcases.sh` in the following way:
+- Create a variable pointing to your local script file <br> `NAME_OF_YOUR_TESTCASE="$test_home_path/NAME_OF_YOUR_TESTCASE_Testcase/NAME_OF_YOUR_TESTCASE_testcase.sh"`
+- Add comands to print and execute your local script file <br>
+```
+printf '\n\n'
+cd NAME_OF_YOUR_TESTCASE_Testcase/
+. "$NAME_OF_YOUR_TESTCASE"
+```
+- Add comands to remove the working directory for your testcase <br> `rm -rf NAME_OF_YOUR_TESTCASE_run`
 
+After modifications the `runtestcases.sh` file should look like this:
+```
+#!/bin/bash
+# Shell script to run selected test flows with the PARTIES fluid solver.
+# v1
+# Ralph George: r.george@tu-braunschweig.de
 
-### Prerequisites
-Valid PARTIES installation.
+# Current directory will be <PARTIES_home>/testcases/
+echo '----------**Starting PARTIES Testcases**----------'
+test_home_path=`pwd`
 
-Files:
-<flowname>_testcase.sh
-Boundary_<flowname>.h
-p_fixed.inp
-p_mobile.inp
-parties.inp
-stop.inp
-xdmfWriter.inp
-l2norm.c
-numerical_velo_verified_<flowname>.dat
+# Path to executables
+POISEUILLE_FLOW="$test_home_path/Poiseuille_Testcase/poiseuille_flow_testcase.sh"
+COUETTE_FLOW="$test_home_path/Couette_Testcase/couette_flow_testcase.sh"
+NAME_OF_YOUR_TESTCASE="$test_home_path/NAME_OF_YOUR_TESTCASE_Testcase/NAME_OF_YOUR_TESTCASE_testcase.sh"
+###########################################################################
+#                          Testcase Execution                             #
+###########################################################################
 
+# Comment out unrequired flows
+printf '\n\n'
+cd Poiseuille_Testcase/
+. "$POISEUILLE_FLOW"
 
-### Initial Setup
-Analytical solution:
-<flowname>_analytical_soln.m to be executed beforehand, to obtain the 'analytical_velo_<flowname>.dat' file
-This is used to verify the numerical soultion, obtained through the PARTIES solver, in order to acquired the numerical_velo_verified_<flowname>.dat file.
+printf '\n\n'
+cd Couette_Testcase/
+. "$COUETTE_FLOW"
 
+printf '\n\n'
+cd NAME_OF_YOUR_TESTCASE_Testcase/
+. "$NAME_OF_YOUR_TESTCASE"
 
-### Usage
-The files mentioned above are present in <$PARTIES_home>/testcases/<flowname>_Testcase directory.
-
-In order to run multiple testcases in series, the bash "script runtestcases.sh" is present.
-Located in <$PARTIES_home>/testcases/ directory, it executes the testcases present in a sequential manner. 
-
-provide execution rights to the bash script, if needed.
-$ chmod 777 <flowname>_testcase.sh
-
-Result is the L2 Norm between the verified numerical velocities and numerical velocities along the y-direction of the control volume.
-
-
-### Output
-For passed condition, when the L2 norm is with the allowed tolerance, the numerical_velo_verified_<flowname>.dat is updated, so as to be the one from the lastest simulation.
-For an unfavourable test result, the numerical_velo_verified_<flowname>.dat is not updated.
-The ouput is place in the <$PARTIES_home>/testcases/Testcase_Results directory.
-
-
-### Contribution
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-Please make sure to update tests and README.md as appropriate.
-
-
-### License
-Add type of licens
+###########################################################################
+#                                Clean up                                 #
+###########################################################################
+cd $test_home_path
+rm -rf Poiseuille_run
+rm -rf Couette_run
+rm -rf NAME_OF_YOUR_TESTCASE_run
+```
