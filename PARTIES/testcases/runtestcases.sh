@@ -11,6 +11,9 @@ test_home_path=`pwd`
 POISEUILLE_FLOW="$test_home_path/Poiseuille_Testcase/poiseuille_flow_testcase.sh"
 COUETTE_FLOW="$test_home_path/Couette_Testcase/couette_flow_testcase.sh"
 
+# Input no of processors
+read -p 'Enter number of processors: ' nproc
+
 ###########################################################################
 #                          Testcase Execution                             #
 ###########################################################################
@@ -18,11 +21,11 @@ COUETTE_FLOW="$test_home_path/Couette_Testcase/couette_flow_testcase.sh"
 # Comment out unrequired flows
 printf '\n\n'
 cd Poiseuille_Testcase/
-. "$POISEUILLE_FLOW"
+. "$POISEUILLE_FLOW" $nproc
 
 printf '\n\n'
 cd Couette_Testcase/
-. "$COUETTE_FLOW"
+. "$COUETTE_FLOW" $nproc
 
 ###########################################################################
 #                                Clean up                                 #

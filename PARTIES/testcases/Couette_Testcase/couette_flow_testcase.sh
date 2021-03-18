@@ -8,6 +8,20 @@ echo '----------**Couette flow test**----------'
 home_path=`pwd`
 
 ###########################################################################
+#                         Set no of processors                            #
+###########################################################################
+
+if [ "$1" != "" ]; then
+    # no of processors is passed
+    echo "Executing on $1 processors"
+else
+    # no of processors is not passed
+    read -p 'Enter number of processors: ' nproc
+    set -- "$nproc"
+    echo "Executing on $1 processors"
+fi
+
+###########################################################################
 #             Placing the required files in working dir                   #
 ###########################################################################
 cd ../
@@ -44,11 +58,11 @@ mv Boundary_ORIG.h Boundary.h
 
 cd $work_path
 echo 'START: Flow simulation'
-mpirun -np 4 parties > output.log
+mpirun -np $1 parties > output.log
 echo 'END: Flow simulation'
 
 ###########################################################################
-#                           Reading Data_5.h5                             #
+#                           Reading Data_*.h5                             #
 ###########################################################################
 # Obtains the velocities at the selected plane of the grid
 h5dump -d "/u" -s "0,0,150" -c "1,101,1" -w 0 Data_1.h5 > velo.dat
@@ -56,7 +70,7 @@ h5dump -d "/u" -s "0,0,150" -c "1,101,1" -w 0 Data_1.h5 > velo.dat
 # File manipulation: Velocities placed in a file !!Omitted the last entry!!
 header_line_no=`grep -n "\<DATA\>" velo.dat | gawk '{print $1}' FS=":"`
 echo '      U(y)' > numerical_velo.dat
-awk "NR==$((header_line_no+1)), NR==$((header_line_no+100))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo.dat
+awk "NR==$((header_line_no+1)), NR==$((header_line_no+101))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo.dat
 
 ###########################################################################
 #                                L2 Norm                                  #
@@ -77,7 +91,7 @@ then
     rm -rf numerical_velo_verified.dat
     mv numerical_velo.dat numerical_velo_verified_CF.dat
     mv l2norm.dat l2norm_CF.dat
-    cp numerical_velo_verified_CF.dat l2norm_CF.dat ../Testcase_Results/
+    # cp numerical_velo_verified_CF.dat l2norm_CF.dat ../Testcase_Results/
 else
     # "Test Failed"
     # old verified numerical soln, remains as is

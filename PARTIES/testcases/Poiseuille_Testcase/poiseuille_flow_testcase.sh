@@ -8,6 +8,20 @@ echo '----------**Poiseuille flow test**----------'
 home_path=`pwd`
 
 ###########################################################################
+#                         Set no of processors                            #
+###########################################################################
+
+if [ "$1" != "" ]; then
+    # no of processors is passed
+    echo "Execution on $1 number of processors"
+else
+    # no of processors is not passed
+    read -p 'Enter number of processors: ' nproc
+    set -- "$nproc"
+    echo "Execution on $1 number of processors"
+fi
+
+###########################################################################
 #              Placing the required files in working dir                  #
 ###########################################################################
 cd ../
@@ -44,11 +58,11 @@ mv Boundary_ORIG.h Boundary.h
 
 cd $work_path
 echo 'START: Flow simulation'
-mpirun -np 4 parties > output.log
+mpirun -np $1 parties > output.log
 echo 'END: Flow simulation'
 
 ###########################################################################
-#                           Reading Data_5.h5                             #
+#                           Reading Data_*.h5                             #
 ###########################################################################
 # Obtains the velocities at the selected plane of the grid
 h5dump -d "/u" -s "0,0,150" -c "1,101,1" -w 0 Data_1.h5 > velo.dat
@@ -77,7 +91,7 @@ then
     rm -rf numerical_velo_verified.dat
     mv numerical_velo.dat numerical_velo_verified_PF.dat
     mv l2norm.dat l2norm_PF.dat
-    cp numerical_velo_verified_PF.dat l2norm_PF.dat ../Testcase_Results/
+    # cp numerical_velo_verified_PF.dat l2norm_PF.dat ../Testcase_Results/
 else
     # "Test Failed"
     # old verified numerical soln, remains as is
