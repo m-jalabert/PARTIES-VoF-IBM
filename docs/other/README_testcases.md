@@ -47,8 +47,3 @@ Please make sure to update tests and README.md as appropriate.
 
 ### License
 Add type of license
-<<<<<<< HEAD:docs/other/README_testcases.md
-
-=======
-why is this not working?
->>>>>>> 9e668d0dfebaa4b9ee3928ef68ecf34944d23748:PARTIES/testcases/README.md
