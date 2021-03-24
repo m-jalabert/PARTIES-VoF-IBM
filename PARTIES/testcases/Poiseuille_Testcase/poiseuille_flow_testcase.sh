@@ -90,7 +90,7 @@ then
     # rename the new numerical soln as the verified soln
     rm -rf numerical_velo_verified.dat
     mv numerical_velo.dat numerical_velo_verified_PF.dat
-    mv l2norm.dat l2norm_PF.dat
+    mv absolute_error.dat absolute_error_PF.dat
     # cp numerical_velo_verified_PF.dat l2norm_PF.dat ../Testcase_Results/
 else
     # "Test Failed"
@@ -98,7 +98,7 @@ else
     # new numerical soln remains as is
     mv numerical_velo_verified.dat numerical_velo_verified_PF.dat
     mv numerical_velo.dat numerical_velo_failed_PF.dat
-    mv l2norm.dat l2norm_failed_PF.dat
+    mv absolute_error.dat absolute_error_failed_PF.dat
 fi
 
 # Clean up
