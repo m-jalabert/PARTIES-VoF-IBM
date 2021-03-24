@@ -1,0 +1,5 @@
+# Compiled files
+Obj
+# Data files
+*.h5
+*.dat
