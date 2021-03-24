@@ -1,5 +1,6 @@
 # Compiled files
-Obj
+obj/
+parties
 # Data files
 *.h5
 *.dat
