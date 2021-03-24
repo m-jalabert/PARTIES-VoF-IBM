@@ -2,12 +2,14 @@
 * between two diffect vectors present in .dat files */
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 int main()
 {
     int i=0;
     int testresult = 1; // true
     int LEN = 101; // node points in y direction
+    float sum = 0.0, l2norm;
     float *y = (float *)malloc(LEN * sizeof(float));
     float *v1 = (float *)malloc(LEN * sizeof(float));
     float *v2 = (float *)malloc(LEN * sizeof(float));
@@ -70,20 +72,31 @@ int main()
         // Exception: Program exits if file pointer returns NULL.
     }
 
-    // l2 norm
+    // L2 norm
     for (i = 0; i < LEN; i++)
-        result[i] = 0.5 * ((v1[i] - v2[i]) * (v1[i] - v2[i]));
+    {
+        sum += ((v1[i] - v2[i]) * (v1[i] - v2[i]));
+    }
+    l2norm = sqrt(sum);
+    printf("The L2 norm is: %f\n", l2norm);
 
-    // writing l2nor to file
-    fptr = fopen("l2norm.dat", "w");
+    // Absolute error
+    for (i = 0; i < LEN; i++)
+    {
+        if ((v1[i] - v2[i]) < 0) 
+            result[i] = (-1 * (v1[i] - v2[i]));
+        else
+            result[i] = (1 * (v1[i] - v2[i]));
+    }
+
+    // writing absolute error into resultant file
+    fptr = fopen("absolute_error.dat", "w");
     if (fptr)
     {
-        // Save l2norm
         for (i = 0; i < LEN; i++)
         {
             if (i == 0)
                 fprintf(fptr, "%s\n", "      U(y)");
-
             fprintf(fptr, "%f\n", result[i]);
         }
     }
@@ -95,7 +108,7 @@ int main()
     }
 
     // Print result vector
-    // printf("Resultant L2 norm of vectors:\n");
+    // printf("Absolute error between vectors:\n");
     // for (i = 0; i < LEN; i++)
     //     printf("%f\n", result[i]);
     // printf("\n");
