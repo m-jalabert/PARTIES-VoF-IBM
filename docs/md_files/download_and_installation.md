@@ -16,7 +16,7 @@ mkdir <em>PARTIES_Libs</em>
 
 # Installation
 
-The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to be installed successively.
+The three libraries <em>OpenMPI</em>, <em>HDF5</em>, and <em>FFTW</em> have to be installed consecutively.
 
 ## OpenMPI
 
@@ -62,7 +62,7 @@ make installcheck
 
 # Compilation
 
-The installation is now completed, so you can compile the PARTIES code as an example to check if it works. To do this, please go to the <em>PARTIES</em> file in your local Github repository and execute the following:
+The installation is now completed, so you can compile the PARTIES code as an example to check if it works. To do this, please go to the <em>PARTIES</em> folder in your local Github repository and execute the following:
 
 <pre>
 make clean
