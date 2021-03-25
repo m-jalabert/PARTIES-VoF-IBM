@@ -17,10 +17,9 @@ using Cartesian coordinates.
 nodes per unit volume constant and a multiple of 10, along each of the 3
 coordinate axes.
 
-- **Flow**: The Reynold’s number and the target ubulk velocity is populated.
+- **Flow**: The Reynolds number and the target ubulk velocity is populated.
 
-- **Simulation**: Parameters related to time are setup here. See subsection **Simulation parameter** for infor-
-mation on the various sub parameters.
+- **Simulation**: Parameters related to time are set up here. See subsection **Simulation parameter** for information on the various sub parameters.
 
 - **Particle**: ADD DATA HERE
 - **Concentration**: ADD DATA HERE
@@ -29,11 +28,11 @@ mation on the various sub parameters.
 
 ### Simulation parameter
 
-- **time_max** is max simulation time in seconds.
+- **time_max** is maximum simulation time in seconds [Why dimensional?].
 
 - **output_time_interval** On screen time interval of output.
 
-- **cfl** the Courant–Friedrichs–Lewy condition number.
+- **cfl** the Courant–Friedrichs–Lewy condition.
 
 - **max_dt** max allowed time step with cfl active.
 
@@ -42,12 +41,12 @@ cfl active.
 
 - **constant_dt** boolean switch, cfl active or inactive.
 
-- **resume** defines start time of simulation
+- **resume** boolean to resume an existing simulation or start a new one
 
 ## [stop.inp][3]
 
-Input file, which is used as an emergency switch, to stop a run, as and if required.
-This file is check before the start of every main loop iteration of the flow solver.
+Input file, which is used as an emergency switch, to properly stop a run, if required, i.e. writing a complete set of resume files.
+This condition is check before the start of every main loop iteration of the flow solver.
 
 0 --> continue <br>
 1 --> stop
@@ -65,7 +64,7 @@ xn yn zn Rn
 ```
 where `n` is a total number of particle, `x y z` correspond to the cartesian coordinates of a particle and `R` represents the radius of a particle <br>
 
-The total number of particles `n` defines how many lines must be red in the `p_fixed.inp` and `p_mobile.inp` files. This means that if `n` is more than the number of lines which contain the particle information, then code will throw an error. If `n` is less than the number of lines which contain the particle information, only `n` particles will be considered.
+The total number of particles `n` defines how many lines must be read in the `p_fixed.inp` and `p_mobile.inp` files. This means that if `n` is more than the number of lines which contain the particle information, then code will throw an error. If `n` is less than the number of lines which contain the particle information, only `n` particles will be considered.
 
 
 ## [xdmfWriter.inp][6]
@@ -77,15 +76,15 @@ ADD DATA HERE
 The Boundary.h file is the main setup file for the control volume. It contains
 predefined headers for selection of required boundary conditions, selection of
 flow solver, implementing particles into the fluid and their concentration and
-the selection turbulence models for flows. These options are to be selected as
-per required for a given computational run.
+the selection turbulence models for flows. These options are to be selected as 
+required for a given computational run.
 
 ### Boundary Conditions
 
-The setup for the control volume is primarily done with the selection of the type
-of boundary condition which is required. This is further broken down to the
-specific conditions required along the 3 coordinate axes as well as the four/six
-faces of the control volume in question.
+The setup for the computational domain is primarily done with the selection of the type
+of boundary condition which is required. This is further broken down into the
+specific conditions required along the three coordinate axes as well as the six
+faces of the computational domain in question.
 
 
 ### Implemented Boundary Conditions
