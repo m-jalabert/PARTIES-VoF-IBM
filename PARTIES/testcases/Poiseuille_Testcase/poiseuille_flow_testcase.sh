@@ -13,12 +13,12 @@ home_path=`pwd`
 
 if [ "$1" != "" ]; then
     # no of processors is passed
-    echo "Execution on $1 number of processors"
+    echo "Executing on $1 processors"
 else
     # no of processors is not passed
     read -p 'Enter number of processors: ' nproc
     set -- "$nproc"
-    echo "Execution on $1 number of processors"
+    echo "Executing on $1 processors"
 fi
 
 ###########################################################################
@@ -83,7 +83,7 @@ g++ l2norm.c -o l2norm.sh
 #                                Post proc                                #
 ###########################################################################
 # Replace file in Results folder if passed
-if grep -Fxq PASS l2norm.dat
+if grep -Fxq PASS absolute_error.dat
 then
     # "Test Passed"
     # delete the old verified numerical soln

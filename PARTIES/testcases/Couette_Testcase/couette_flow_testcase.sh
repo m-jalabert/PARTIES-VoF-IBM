@@ -83,7 +83,7 @@ g++ l2norm.c -o l2norm.sh
 #                                Post proc                                #
 ###########################################################################
 # Replace file in Results folder if passed
-if grep -Fxq PASS l2norm.dat
+if grep -Fxq PASS absolute_error.dat
 then
     # "Test Passed"
     # delete the old verified numerical soln
