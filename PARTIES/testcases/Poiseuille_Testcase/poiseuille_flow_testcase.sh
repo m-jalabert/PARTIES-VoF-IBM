@@ -1,10 +1,10 @@
 #!/bin/bash
-# Shell script to run a test for Couette Flow with the PARTIES fluid solver.
+# Shell script to run a test for Poiseuille Flow with the PARTIES fluid solver.
 # v1
 # Ralph George: r.george@tu-braunschweig.de
 
-# Current directory will be <PARTIES_home>/testcases/Couette_Testcase/
-echo '----------**Couette flow test**----------'
+# Current directory will be <PARTIES_home>/testcases/Poiseuilli_Testcase/
+echo '----------**Poiseuille flow test**----------'
 home_path=`pwd`
 
 ###########################################################################
@@ -22,23 +22,23 @@ else
 fi
 
 ###########################################################################
-#             Placing the required files in working dir                   #
+#              Placing the required files in working dir                  #
 ###########################################################################
 cd ../
-mkdir Couette_run
-chmod 777 Couette_run
-cp $home_path/*.* Couette_run/
-cd Couette_run
+mkdir Poiseuille_run
+chmod 777 Poiseuille_run
+cp $home_path/*.* Poiseuille_run/
+cd Poiseuille_run
 work_path=`pwd`
 
 ###########################################################################
 #                        Setting the Boundary.h                           #
 ###########################################################################
-cp Boundary_CF.h ../../src/Include
+cp Boundary_PF.h ../../src/Include
 cd ../../src/Include
 boundary_path=`pwd`
 mv Boundary.h Boundary_ORIG.h
-mv Boundary_CF.h Boundary.h
+mv Boundary_PF.h Boundary.h
 
 ###########################################################################
 #                          Running parties.sh                             #
@@ -46,12 +46,12 @@ mv Boundary_CF.h Boundary.h
 cd ../../
 echo 'START: Compiling executable'
 printf 'make clean\nmake\n'
-make clean > make_couette.log
-make >> make_couette.log
+make clean > make_poiseuille.log
+make >> make_poiseuille.log
 echo 'END: Compiling executable'
 
 cp parties $work_path
-mv make_couette.log $work_path
+mv make_poiseuille.log $work_path
 cd $boundary_path
 rm -rf Boundary.h
 mv Boundary_ORIG.h Boundary.h
@@ -70,12 +70,12 @@ h5dump -d "/u" -s "0,0,150" -c "1,101,1" -w 0 Data_1.h5 > velo.dat
 # File manipulation: Velocities placed in a file !!Omitted the last entry!!
 header_line_no=`grep -n "\<DATA\>" velo.dat | gawk '{print $1}' FS=":"`
 echo '      U(y)' > numerical_velo.dat
-awk "NR==$((header_line_no+1)), NR==$((header_line_no+101))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo.dat
+awk "NR==$((header_line_no+1)), NR==$((header_line_no+100))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo.dat
 
 ###########################################################################
 #                                L2 Norm                                  #
 ###########################################################################
-mv numerical_velo_verified_CF.dat numerical_velo_verified.dat
+mv numerical_velo_verified_PF.dat numerical_velo_verified.dat
 g++ l2norm.c -o l2norm.sh
 ./l2norm.sh
 
@@ -89,16 +89,16 @@ then
     # delete the old verified numerical soln
     # rename the new numerical soln as the verified soln
     rm -rf numerical_velo_verified.dat
-    mv numerical_velo.dat numerical_velo_verified_CF.dat
-    mv absolute_error.dat absolute_error_CF.dat
-    # cp numerical_velo_verified_CF.dat l2norm_CF.dat ../Testcase_Results/
+    mv numerical_velo.dat numerical_velo_verified_PF.dat
+    mv absolute_error.dat absolute_error_PF.dat
+    # cp numerical_velo_verified_PF.dat l2norm_PF.dat ../Testcase_Results/
 else
     # "Test Failed"
     # old verified numerical soln, remains as is
     # new numerical soln remains as is
-    mv numerical_velo_verified.dat numerical_velo_verified_CF.dat
-    mv numerical_velo.dat numerical_velo_failed_CF.dat
-    mv absolute_error.dat absolute_error_failed_CF.dat
+    mv numerical_velo_verified.dat numerical_velo_verified_PF.dat
+    mv numerical_velo.dat numerical_velo_failed_PF.dat
+    mv absolute_error.dat absolute_error_failed_PF.dat
 fi
 
 # Clean up
