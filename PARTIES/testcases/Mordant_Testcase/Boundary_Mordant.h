@@ -82,7 +82,7 @@
 		#define TOP_WALL_VELOCITY
 
 #elif defined FREESLIP_DUCT
-	#define LEFT_INFLOW
+	#define LEFT_INFLOW // any function
 	#define RIGHT_OUTFLOW
 	#define BACK_WALL_VELOCITY_FREESLIP
 	#define FRONT_WALL_VELOCITY_FREESLIP
@@ -91,7 +91,7 @@
 
 
 #elif defined NOSLIP_DUCT
-	#define LEFT_INFLOW
+	#define LEFT_INFLOW // any function
 	#define RIGHT_OUTFLOW
 	#define BACK_WALL_VELOCITY_NOSLIP
 	#define FRONT_WALL_VELOCITY_NOSLIP
@@ -148,15 +148,15 @@
 /******************************************************************************/
 /*                                Y-Boundaries                                */
 /******************************************************************************/
-	#undef BOTTOM_WALL_VELOCITY_NOSLIP
-	#define  BOTTOM_WALL_VELOCITY_FREESLIP
+	#undef  BOTTOM_WALL_VELOCITY_NOSLIP
+	#define BOTTOM_WALL_VELOCITY_FREESLIP
 	#undef  BOTTOM_WALL_SCHUMANN
 	#undef  BOTTOM_WALL_VELOCITY
-	#undef TOP_WALL_VELOCITY_NOSLIP
-	#define  TOP_WALL_VELOCITY_FREESLIP
+	#undef  TOP_WALL_VELOCITY_NOSLIP
+	#define TOP_WALL_VELOCITY_FREESLIP
 	#undef  TOP_WALL_SCHUMANN
 	#undef  TOP_WALL_VELOCITY
-	#undef YPERIODIC
+	#undef  YPERIODIC
 #endif
 
 /******************************************************************************/
@@ -164,12 +164,13 @@
 /******************************************************************************/
 
 #undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
-//#undef FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
+// #define FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE
 #undef  BICG_SOLVE // nouniform mesh
 #undef  TEST
 
+#undef OSCILLATION        // Oscillation force due to ISS-vibration (acts on fluid and particle)
 
 /******************************************************************************/
 /*                                   Output                                   */
@@ -243,7 +244,7 @@
 #undef  LAG_MARKER_FLAG        // Turn off all competing Lag markers
 #undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
 
-#undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
+//#undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
 
 #undef ONE_WAY					// Turns on one-way coupling, i.e. no feedback from the particles on the fluid
 #undef TURB_FORCING			// Turns on the EP turbulent forcing

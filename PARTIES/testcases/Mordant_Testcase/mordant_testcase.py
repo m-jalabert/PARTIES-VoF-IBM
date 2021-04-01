@@ -4,7 +4,7 @@ import sys
 import csv
 
 ### Load reference data ###
-f           = open(os.path.join(sys.path[0], "reference.dat"), 'r')
+f           = open(os.path.join(sys.path[0], "reference_data.dat"), 'r')
 csv_f       = csv.reader(f, delimiter=',')
 reference   = []
 for row in csv_f:
@@ -31,8 +31,8 @@ for i in range(0, len(reference)):                              # Create list of
 
 
 ### Check for test condition ###
-result = all(ele < 1e-3 for ele in delta)                        # Check whether each element of delta list is smaller than xxx
+result = all(ele < 1e-12 for ele in delta)                        # Check whether each element of delta list is smaller than xxx
 if result == True:
     print("Mordant Testcase Passed")
 else:
-    print('Mordant Testcase not Passed')
+    print('Mordant Testcase not Passed. Difference between reference and simulation greater than e-12 atr least for one timestep.')
