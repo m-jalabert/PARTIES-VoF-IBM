@@ -82,11 +82,7 @@
 		#define TOP_WALL_VELOCITY
 
 #elif defined FREESLIP_DUCT
-<<<<<<< HEAD
 	#define LEFT_INFLOW // any function
-=======
-	#define LEFT_INFLOW
->>>>>>> thomas_testcase_mordant_2
 	#define RIGHT_OUTFLOW
 	#define BACK_WALL_VELOCITY_FREESLIP
 	#define FRONT_WALL_VELOCITY_FREESLIP
@@ -95,11 +91,7 @@
 
 
 #elif defined NOSLIP_DUCT
-<<<<<<< HEAD
 	#define LEFT_INFLOW // any function
-=======
-	#define LEFT_INFLOW
->>>>>>> thomas_testcase_mordant_2
 	#define RIGHT_OUTFLOW
 	#define BACK_WALL_VELOCITY_NOSLIP
 	#define FRONT_WALL_VELOCITY_NOSLIP
@@ -129,20 +121,12 @@
 /*                                X-Boundaries                                */
 /******************************************************************************/
 	#undef  LEFT_WALL_VELOCITY_NOSLIP
-<<<<<<< HEAD
 	#define LEFT_WALL_VELOCITY_FREESLIP
-=======
-	#undef LEFT_WALL_VELOCITY_FREESLIP
->>>>>>> thomas_testcase_mordant_2
 	#undef  LEFT_INFLOW
 	#undef  LEFT_OUTFLOW
 
 	#undef  RIGHT_WALL_VELOCITY_NOSLIP
-<<<<<<< HEAD
 	#define RIGHT_WALL_VELOCITY_FREESLIP
-=======
-	#undef RIGHT_WALL_VELOCITY_FREESLIP
->>>>>>> thomas_testcase_mordant_2
 	#undef  RIGHT_INFLOW
 	#undef  RIGHT_OUTFLOW
 
@@ -158,17 +142,12 @@
 	#undef  FRONT_WALL_VELOCITY_NOSLIP
 	#undef  FRONT_WALL_VELOCITY_FREESLIP
 
-<<<<<<< HEAD
 	#define ZPERIODIC
-=======
-	#undef ZPERIODIC
->>>>>>> thomas_testcase_mordant_2
 
 
 /******************************************************************************/
 /*                                Y-Boundaries                                */
 /******************************************************************************/
-<<<<<<< HEAD
 	#undef  BOTTOM_WALL_VELOCITY_NOSLIP
 	#define BOTTOM_WALL_VELOCITY_FREESLIP
 	#undef  BOTTOM_WALL_SCHUMANN
@@ -178,17 +157,6 @@
 	#undef  TOP_WALL_SCHUMANN
 	#undef  TOP_WALL_VELOCITY
 	#undef  YPERIODIC
-=======
-	#undef BOTTOM_WALL_VELOCITY_NOSLIP
-	#undef  BOTTOM_WALL_VELOCITY_FREESLIP
-	#undef  BOTTOM_WALL_SCHUMANN
-	#undef  BOTTOM_WALL_VELOCITY
-	#undef TOP_WALL_VELOCITY_NOSLIP
-	#undef  TOP_WALL_VELOCITY_FREESLIP
-	#undef  TOP_WALL_SCHUMANN
-	#undef  TOP_WALL_VELOCITY
-	#undef YPERIODIC
->>>>>>> thomas_testcase_mordant_2
 #endif
 
 /******************************************************************************/
@@ -196,20 +164,14 @@
 /******************************************************************************/
 
 #undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
-<<<<<<< HEAD
-// #define FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
-=======
+
 //#undef FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
->>>>>>> thomas_testcase_mordant_2
+
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE
 #undef  BICG_SOLVE // nouniform mesh
 #undef  TEST
 
-<<<<<<< HEAD
-#undef OSCILLATION        // Oscillation force due to ISS-vibration (acts on fluid and particle)
-=======
->>>>>>> thomas_testcase_mordant_2
 
 /******************************************************************************/
 /*                                   Output                                   */
@@ -283,11 +245,8 @@
 #undef  LAG_MARKER_FLAG        // Turn off all competing Lag markers
 #undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
 
-<<<<<<< HEAD
-//#undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
-=======
+
 #undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
->>>>>>> thomas_testcase_mordant_2
 
 #undef ONE_WAY					// Turns on one-way coupling, i.e. no feedback from the particles on the fluid
 #undef TURB_FORCING			// Turns on the EP turbulent forcing
