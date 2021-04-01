@@ -121,12 +121,12 @@
 /*                                X-Boundaries                                */
 /******************************************************************************/
 	#undef  LEFT_WALL_VELOCITY_NOSLIP
-	#undef LEFT_WALL_VELOCITY_FREESLIP
+	#define LEFT_WALL_VELOCITY_FREESLIP
 	#undef  LEFT_INFLOW
 	#undef  LEFT_OUTFLOW
 
 	#undef  RIGHT_WALL_VELOCITY_NOSLIP
-	#undef RIGHT_WALL_VELOCITY_FREESLIP
+	#define RIGHT_WALL_VELOCITY_FREESLIP
 	#undef  RIGHT_INFLOW
 	#undef  RIGHT_OUTFLOW
 
@@ -142,18 +142,18 @@
 	#undef  FRONT_WALL_VELOCITY_NOSLIP
 	#undef  FRONT_WALL_VELOCITY_FREESLIP
 
-	#undef ZPERIODIC
+	#define ZPERIODIC
 
 
 /******************************************************************************/
 /*                                Y-Boundaries                                */
 /******************************************************************************/
 	#undef BOTTOM_WALL_VELOCITY_NOSLIP
-	#undef  BOTTOM_WALL_VELOCITY_FREESLIP
+	#define  BOTTOM_WALL_VELOCITY_FREESLIP
 	#undef  BOTTOM_WALL_SCHUMANN
 	#undef  BOTTOM_WALL_VELOCITY
 	#undef TOP_WALL_VELOCITY_NOSLIP
-	#undef  TOP_WALL_VELOCITY_FREESLIP
+	#define  TOP_WALL_VELOCITY_FREESLIP
 	#undef  TOP_WALL_SCHUMANN
 	#undef  TOP_WALL_VELOCITY
 	#undef YPERIODIC

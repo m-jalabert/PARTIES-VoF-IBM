@@ -13,12 +13,12 @@ home_path=`pwd`
 
 if [ "$1" != "" ]; then
     # no of processors is passed
-    echo "Execution on $1 number of processors"
+    echo "Executing on $1 processors"
 else
     # no of processors is not passed
     read -p 'Enter number of processors: ' nproc
     set -- "$nproc"
-    echo "Execution on $1 number of processors"
+    echo "Executing on $1 processors"
 fi
 
 ###########################################################################
@@ -62,45 +62,9 @@ mpirun -np $1 parties > output.log
 echo 'END: Flow simulation'
 
 ###########################################################################
-#                           Reading Data_*.h5                             #
+#                           Validation                             #
 ###########################################################################
-# Obtains the velocities at the selected plane of the grid
-h5dump -d "/u" -s "0,0,150" -c "1,101,1" -w 0 Data_1.h5 > velo.dat
+#  Run the python-script
+python mordant_testcase.py
 
-# File manipulation: Velocities placed in a file !!Omitted the last entry!!
-header_line_no=`grep -n "\<DATA\>" velo.dat | gawk '{print $1}' FS=":"`
-echo '      U(y)' > numerical_velo.dat
-awk "NR==$((header_line_no+1)), NR==$((header_line_no+100))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo.dat
 
-###########################################################################
-#                                L2 Norm                                  #
-###########################################################################
-mv numerical_velo_verified_PF.dat numerical_velo_verified.dat
-g++ l2norm.c -o l2norm.sh
-./l2norm.sh
-
-###########################################################################
-#                                Post proc                                #
-###########################################################################
-# Replace file in Results folder if passed
-if grep -Fxq PASS l2norm.dat
-then
-    # "Test Passed"
-    # delete the old verified numerical soln
-    # rename the new numerical soln as the verified soln
-    rm -rf numerical_velo_verified.dat
-    mv numerical_velo.dat numerical_velo_verified_PF.dat
-    mv l2norm.dat l2norm_PF.dat
-    # cp numerical_velo_verified_PF.dat l2norm_PF.dat ../Testcase_Results/
-else
-    # "Test Failed"
-    # old verified numerical soln, remains as is
-    # new numerical soln remains as is
-    mv numerical_velo_verified.dat numerical_velo_verified_PF.dat
-    mv numerical_velo.dat numerical_velo_failed_PF.dat
-    mv l2norm.dat l2norm_failed_PF.dat
-fi
-
-# Clean up
-rm -rf velo.dat
-cd $home_path/..
