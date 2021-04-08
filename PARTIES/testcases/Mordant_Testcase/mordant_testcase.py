@@ -27,11 +27,11 @@ simulation  = [float(i) for i in flatList]                      # Convert each l
 ### Create delta list of reference and simulation data ###
 delta = []
 for i in range(0, len(reference)):                              # Create list of delta between reference and simulation values
-    delta.append(reference[i]-simulation[i])
+    delta.append(abs(reference[i]-simulation[i]))
 
 
 ### Check for test condition ###
-result = all(ele < 1e-12 for ele in delta)                        # Check whether each element of delta list is smaller than xxx
+result = all(ele < 1e-12 for ele in delta)                        # Check whether each element of delta list is smaller than 1e-12
 if result == True:
     print('\n##### Mordant-Testcase terminated successfully. #####')
 else:
