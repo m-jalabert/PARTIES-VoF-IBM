@@ -1,20 +1,20 @@
 [geometry]
 xmin = 0
-xmax = 0.65
+xmax = 0.1
 ymin = 0
-ymax = 0.65
+ymax = 0.2
 zmin = 0
-zmax = 2.5
+zmax = 0.1
 
 
 [grid]
-NXM = 78
-NYM = 78
-NZM = 300
+NXM = 92
+NYM = 184
+NZM = 92
 
 
 [flow]
-Re 	= 184.6381093
+Re 	= 8510.6382978723
 dp_dx 	= 0  # constant volume force
 
 
@@ -32,7 +32,7 @@ ubulk_target 	= 1.0 #  constant mass flux enables this
 
 [simulation]
 
-time_max 		= 1.3
+time_max 		= 1.75
 output_time_interval 	= 1
 cfl 			= 0.5
 max_dt 			= 1e-1 
@@ -42,8 +42,8 @@ resume 			= 0	# if 0 =  start from t=0
 
 
 [particle]
-grav 		= {0, 0, -9.81}  # {a,b,c,..} notion for a list
-rho_s 		= 2.5677
+grav 		= {0, -9.81, 0}  # {a,b,c,..} notion for a list
+rho_s 		= 1.164
 Co 		= 0
 
 
