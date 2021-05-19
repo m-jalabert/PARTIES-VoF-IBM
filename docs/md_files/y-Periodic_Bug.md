@@ -1,5 +1,7 @@
 # y-Periodic Bug
 
+
+
 This bug seems to make the code crash, when the YPERIODIC boundary condition is selected for the y-boundary. If the boundary condition TRIPLE_Periodic is selected (which applies the periodic boundary condition to all three boundaries), the code will work just fine. Just, when the periodic boundary condition is selected individually for the y-boundary and other boundary conditions, such as free-slip or no-slip, are selected for the other bodaunries, the simulation will crash. 
 
 Simulation will stop within the first iterations with the following error code:
