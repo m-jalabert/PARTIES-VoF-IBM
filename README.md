@@ -28,7 +28,7 @@ Paralleliztion of the code <br>
 
 ## Other
 [h5ToVTK](https://github.com/metialex/h5ToVTK) - this tool converts PARTIES Eulerian and Lagrangian output .h5 files into .vtk files. <br>
-[Bug Report Section](https://github.com/metialex/PARTIES/blob/thomas_bug_report/docs/md_files/bug_report.md)
+[Bug Report Section](https://github.com/metialex/PARTIES/blob/kleischmann_03_bugReport/docs/md_files/bug_report.md)
 
 The main description of code structure <br>
 Links to other related applications - e.g. non-dimensionalization calculators, pre- and post-processing scripts. 
