@@ -22,7 +22,7 @@ Important: The original testcase according to Mordant et al. requires a relativb
 Represent the two "original" input files for the testcase, meaning according to the mordant testcase (not simplified).
 
 
-## reference_data_orig.inp
+## reference_data_orig.dat
 Contains the original simulation data that was obtained by the original Mordant-Testcase (not simplified).
 
 
