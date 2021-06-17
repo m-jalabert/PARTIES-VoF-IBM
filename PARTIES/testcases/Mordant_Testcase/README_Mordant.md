@@ -5,7 +5,8 @@ Simulations were carried out based on the Experiments of Mordant & Pinton (2000)
 
 Parties Input File | Parameter | Original Setp | Simplified Setup
 :-: | :-: | :-: | :-: |
-test | test | test | test
+parties.inp | xmax & ymax | 1.25 | 0.65
+parties.inp | zmax | 10 | 2.5
 
 ## Files of the testcase
 Boundary_Mordant.h (corresponds to the Boundary.h-File), p_fixed.inp, p_mobile.inp, parties.inp, stop.inp and xdmfWriter.inp(220)
