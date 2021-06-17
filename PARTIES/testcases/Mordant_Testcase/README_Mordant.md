@@ -4,7 +4,7 @@ Simulations were carried out based on the Experiments of Mordant & Pinton (2000)
 
 
 | File | Parameter | Original Setp | Simplified Setup
---- | --- | --- | --- |
+:-: | :-: | :-: | :-: |
 test | test | test | test
 
 ## Files of the testcase
