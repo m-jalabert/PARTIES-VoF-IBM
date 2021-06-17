@@ -24,7 +24,7 @@ Boundary_Mordant.h (corresponds to the Boundary.h-File), p_fixed.inp, p_mobile.i
 
 
 ## mordant_testcase.sh
-This file starts the testcase (copies the Boundary_Mordant.h-File to the coressponding location, asks for number of processors for run etc.)
+This file starts the testcase (copies the Boundary_Mordant.h-File to the coressponding location, asks for number of processors for run etc.).
 
 
 ## mordant_testcase.py
