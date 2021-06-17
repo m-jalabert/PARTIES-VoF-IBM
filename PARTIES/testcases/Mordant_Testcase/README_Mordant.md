@@ -1,12 +1,21 @@
 # Documentation for Mordant-Testcase
 
-Simulations were carried out based on the Experiments of Mordant & Pinton (2000) as well as on the simulations carried out by Biegert in his dissertation 2018. The simulation data of Biegert (that are matching the experimental data) could be reproduced using the PARTIES code. However, a simulation with the original setup takes several hours on 24 cores and is therefore not suitable for a testcase. Because of that, the setup was simplified in order to end up with a simulation time of several minutes. The input files of the original setup can be found in the folder "Files_Original_Testcase". In order to illustrate the simplifications that have been made, a table below is presented.
+Simulations were carried out based on the Experiments of Mordant & Pinton (2000) as well as on the simulations carried out by Biegert in his dissertation 2018. The simulation data of Biegert (that are matching the experimental data) could be reproduced using the PARTIES code. However, a simulation with the original setup takes several hours on 24 cores and is therefore not suitable for a testcase. Because of that, the setup was simplified in order to end up with a simulation time of several minutes. The input files of the original setup can be found in the folder "Files_Original_Testcase". In order to illustrate the simplifications that have been made, a table below is presented. Note that the parameter that are not presented within the table have note been changed.
 
 
 Parties Input File | Parameter | Original Setp | Simplified Setup
 :-: | :-: | :-: | :-: |
 parties.inp | xmax & ymax | 1.25 | 0.65
 parties.inp | zmax | 10 | 2.5
+parties.inp | NXM & NYM | 150 | 78
+parties.inp | NZM | 1200 | 300
+parties.inp | time_max | 5 | 1.3
+parties.inp | output_time_interval | 4 | 1
+parties.inp | max_dt | 1e-2 | 1e-1 
+parties.inp | default_dt | 1e-5 | 1e-2
+parties.inp | constant_dt | 0 | 1
+p_mobile.inp | position | 0.625 0.625 9 | 0.325 0.325 2
+
 
 ## Files of the testcase
 Boundary_Mordant.h (corresponds to the Boundary.h-File), p_fixed.inp, p_mobile.inp, parties.inp, stop.inp and xdmfWriter.inp(220)
