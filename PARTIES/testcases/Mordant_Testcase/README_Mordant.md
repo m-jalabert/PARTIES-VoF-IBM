@@ -5,9 +5,11 @@ Simulations were carried out based on the Experiments of Mordant & Pinton (2000)
 
 Parties Input File | Parameter | Original Setp | Simplified Setup
 :-: | :-: | :-: | :-: |
-parties.inp | xmax & ymax | 1.25 | 0.65
+parties.inp | xmax  | 1.25 | 0.65
+parties.inp | ymax | 1.25 | 0.65
 parties.inp | zmax | 10 | 2.5
-parties.inp | NXM & NYM | 150 | 78
+parties.inp | NXM | 150 | 78
+parties.inp | NYM | 150 | 78
 parties.inp | NZM | 1200 | 300
 parties.inp | time_max | 5 | 1.3
 parties.inp | output_time_interval | 4 | 1
