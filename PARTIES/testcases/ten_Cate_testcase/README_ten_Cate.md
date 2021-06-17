@@ -1,6 +1,6 @@
 # Documentation for Mordant-Testcase
 
-Simulations were carried out based on the Experiments of ten Cate et al. (2002) as well as on the simulations carried out by Biegert in his dissertation (2018) (for the case of 14 cells per diameter). The simulation data of Biegert (that are matching the experimental data) could be reproduced using the PARTIES code. However, a simulation with the original setup would take to long for a testcase. Because of that, the setup was simplified in order to end up with a simulation time of several minutes. The input files of the original setup can be found in the folder "Files_Original_Testcase". In order to illustrate the simplifications that have been made, a table below is presented. Note that the parameters that are not presented within the table have note been changed.
+Simulations were carried out based on the experiments of ten Cate et al. (2002) as well as on the simulations carried out by Biegert in his dissertation (2018) (for the case of 14 cells per diameter). The simulation data of Biegert (that are matching the experimental data) could be reproduced using the PARTIES code. However, a simulation with the original setup would take to long for a testcase. Because of that, the setup was simplified in order to end up with a simulation time of several minutes. The input files of the original setup can be found in the folder "Files_Original_Testcase". In order to illustrate the simplifications that have been made, a table below is presented. Note that the parameters that are not presented within the table have not been changed.
 
 
 Parties Input File | Parameter | Original Setp | Simplified Setup
@@ -25,16 +25,13 @@ Carries out the final validation (is called automatically by the mordant_testcas
 ## reference_data.dat
 Contains the data against which the data that are calculated during testrun are compared.
 
-Important: The original testcase according to Mordant & Pinton requires a relativbely large domain, leading to a long computation time. After it was verified that the PARTIES code can reproduce the experimental data from Mordant & Pinton, the testcase was simplified in order carry out the simulation much faster. The data contained in "reference_data.dat" are the ones from the simplified setup.
-
-
 ## parties_orig.inp
-Represent the two "original" input files for the testcase, meaning according to the mordant & Pinton testcase (not simplified).
+Represents the "original" input file for the testcase, meaning according to the ten Cate et al. testcase (not simplified).
 
 
 ## reference_data_orig.dat
-Contains the original simulation data that was obtained by the original Mordant-Testcase (not simplified).
+Contains the original simulation data that was obtained by the simulation based on the ten Cate et al. paper (not simpliefied).
 
 
 ## plot_reference_vs_simulation
-Contains an svg-graphic that displays the original experimental data (Mordant), original simulation data (Biegert) as well as the "new" PARTIES simulation data.
+Contains an svg-graphic that displays the experimental data extracted from a graph in the dissertation of Biegert (based on the ten Cate et al. simulation with 14 cells per diameter) as well as the "new" PARTIES simulation data.
