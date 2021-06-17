@@ -3,7 +3,7 @@
 Simulations were carried out based on the Experiments of Mordant & Pinton (2000) as well as on the simulations carried out by Biegert in his dissertation 2018. The simulation data of Biegert (that are matching the experimental data) could be reproduced using the PARTIES code. However, a simulation with the original setup takes several hours on 24 cores and is therefore not suitable for a testcase. Because of that, the setup was simplified in order to end up with a simulation time of several minutes. The input files of the original setup can be found in the folder "Files_Original_Testcase". In order to illustrate the simplifications that have been made, a table below is presented. Note that the parameters that are not presented within the table have not been changed.
 
 
-Parties Input File | Parameter | Original Setp | Simplified Setup
+Parties Input File | Parameter | Original Setup | Simplified Setup
 :-: | :-: | :-: | :-: |
 parties.inp | xmax  | 1.25 | 0.65
 parties.inp | ymax | 1.25 | 0.65
