@@ -34,7 +34,6 @@ Contains the original simulation data that was obtained by the simulation based 
 
 
 ## plot_reference_vs_simulation_vs_simplified
-Contains an svg-graphic that displays the experimental data extracted from a graph in the dissertation of Biegert (based on the ten Cate et al. simulation with 14 cells per diameter) as well as the "new" PARTIES simulation data.
+An svg-graphic that displays the experimental data extracted from a graph in the dissertation of Biegert (based on the ten Cate et al. simulation with 14 cells per diameter), the "new" PARTIES simulation data as well as the data obtained by the simpliefied testcase.
 
-![Alt text](./plot_reference_vs_simulation_vs_simplified.svg)
 <img src="./plot_reference_vs_simulation_vs_simplified.svg">
