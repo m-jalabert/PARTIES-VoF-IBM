@@ -19,9 +19,6 @@ parties.inp | constant_dt | 0 | 1
 p_mobile.inp | position | 0.625 0.625 9 | 0.325 0.325 2
 
 
-
-In the following, the various files of the Mordant testcase are presented and shortly explained.
-
 ## Files of the testcase
 Boundary_Mordant.h (corresponds to the Boundary.h-File), p_fixed.inp, p_mobile.inp, parties.inp, stop.inp and xdmfWriter.inp(220)
 
