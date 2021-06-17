@@ -33,5 +33,8 @@ Represents the "original" input file for the testcase, meaning according to the 
 Contains the original simulation data that was obtained by the simulation based on the ten Cate et al. paper (not simpliefied).
 
 
-## plot_reference_vs_simulation
+## plot_reference_vs_simulation_vs_simplified
 Contains an svg-graphic that displays the experimental data extracted from a graph in the dissertation of Biegert (based on the ten Cate et al. simulation with 14 cells per diameter) as well as the "new" PARTIES simulation data.
+
+![Alt text](./plot_reference_vs_simulation_vs_simplified.svg)
+<img src="./plot_reference_vs_simulation_vs_simplified.svg">
