@@ -45,5 +45,7 @@ Represent the two "original" input files for the testcase, meaning according to 
 Contains the original simulation data that was obtained by the original Mordant-Testcase (not simplified).
 
 
-## plot_reference_vs_simulation
-Contains an svg-graphic that displays the original experimental data (Mordant), original simulation data (Biegert) as well as the "new" PARTIES simulation data.
+## plot_reference_vs_simulation_vs_simplified
+An svg-graphic that displays the original experimental data (Mordant & Pinton), original simulation data (Biegert), the "new" PARTIES simulation data as well as the data obtained by the simpliefied testcase.
+
+<img src="plot_reference_vs_simulation_vs_simplified.svg" width = "100%">
