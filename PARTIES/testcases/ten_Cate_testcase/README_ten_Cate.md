@@ -1,9 +1,9 @@
-# Documentation for Mordant-Testcase
+# Documentation for ten Cate-Testcase
 
 Simulations were carried out based on the experiments of ten Cate et al. (2002) as well as on the simulations carried out by Biegert in his dissertation (2018) (for the case of 14 cells per diameter). The simulation data of Biegert (that are matching the experimental data) could be reproduced using the PARTIES code. However, a simulation with the original setup would take to long for a testcase. Because of that, the setup was simplified in order to end up with a simulation time of several minutes. The input files of the original setup can be found in the folder "Files_Original_Testcase". In order to illustrate the simplifications that have been made, a table below is presented. Note that the parameters that are not presented within the table have not been changed.
 
 
-Parties Input File | Parameter | Original Setp | Simplified Setup
+Parties Input File | Parameter | Original Setup | Simplified Setup
 :-: | :-: | :-: | :-: |
 parties.inp | max_dt | 1e-2 | 1e-1 
 parties.inp | default_dt | 1e-4 | 1e-2
