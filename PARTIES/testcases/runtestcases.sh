@@ -10,6 +10,7 @@ test_home_path=`pwd`
 # Path to executables
 POISEUILLE_FLOW="$test_home_path/Poiseuille_Testcase/poiseuille_flow_testcase.sh"
 COUETTE_FLOW="$test_home_path/Couette_Testcase/couette_flow_testcase.sh"
+MORDANT_TESTCASE="$test_home_path/Mordant_Testcase/mordant_testcase.sh"
 
 # Input no of processors
 read -p 'Enter number of processors: ' nproc
@@ -27,9 +28,14 @@ printf '\n\n'
 cd Couette_Testcase/
 . "$COUETTE_FLOW" $nproc
 
+printf '\n\n'
+cd Mordant_Testcase/
+. "$MORDANT_TESTCASE" $nproc
+
 ###########################################################################
 #                                Clean up                                 #
 ###########################################################################
 cd $test_home_path
 rm -rf Poiseuille_run
 rm -rf Couette_run
+rm -rf Mordant_run
