@@ -1,0 +1,103 @@
+[geometry]
+xmin = 0
+xmax = 1.25
+ymin = 0
+ymax = 1.25
+zmin = 0
+zmax = 10
+
+
+[grid]
+NXM = 150
+NYM = 150
+NZM = 1200
+
+
+[flow]
+Re 	= 184.6381093
+dp_dx 	= 0  # constant volume force
+
+
+# Initialization types:
+# 0 - zero flow
+# 1 - uniform flow profile
+# 2 - linear flow profile
+# 3 - Poiseuille (parabolic) flow profile
+# 4 - rotational shear flow profile
+# 5 - precursor simulation
+vel_init_type 	= 0
+vel_init_y0 	= 0  # over this coordinate velocity is set
+ubulk_target 	= 1.0 #  constant mass flux enables this
+
+
+[simulation]
+
+time_max 		= 5
+output_time_interval 	= 4
+cfl 			= 0.5
+max_dt 			= 1e-2 
+default_dt 		= 1e-5
+constant_dt 		= 0 	#  if 0 = CFL condition if 1 = default timestep
+resume 			= 0	# if 0 =  start from t=0
+
+
+[particle]
+grav 		= {0, 0, -9.81}  # {a,b,c,..} notion for a list
+rho_s 		= 2.5677
+Co 		= 0
+
+
+e_dry_wall 	= 0.97
+e_dry_particles = 0.97
+Ndt_coll 	= 10
+N_forcing_loops = 3  # Extra loops for enforcing no-slip
+
+## scalar fields
+N_impheating_loops 	= 0 # Loops for enforcing conc BC
+N_heating_loops 	= 1 # Extra loops for enforcing conc BC
+
+
+[conc]
+NConc 		= 1   # should be smaller than 50!!!
+richardson 	= {-500}
+V_s0   		= {0.0}
+conc_init_type	= {0} ##Initialization types: 0 == c=0; 1 == Lock exchange; 2 == half triple cos; 3 == half triple sin; 4 == double sin
+Pe 		= {2}
+					## 5 == sin in x direction; 6== linear RB 1 at bottom 0 at the top ; 7 == Ardekani 2014 test case
+
+BC_AN = {0}
+BC_AS = {0}
+BC_AE = {1}
+BC_AW = {1}
+BC_AB = {1}
+BC_AF = {1}
+
+BC_BN = {1}
+BC_BS = {1}
+BC_BE = {0}
+BC_BW = {0}
+BC_BF = {0}
+BC_BB = {0}
+
+BC_CN = {0}
+BC_CS = {1}
+BC_CE = {0}
+BC_CW = {0}
+BC_CF = {0}
+BC_CB = {0}
+
+
+[lock]  ## lock exchange
+x_fr = 0.
+y_fr = 0.
+z_fr = 0.
+
+
+[output]
+#lock exchange
+front_location_output 	= 0
+ave_height_output     	= 0
+output_vfu			  	= 0
+output_vfv			  	= 0
+output_vfw			  	= 0
+output_vfc			  	= 0
