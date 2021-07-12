@@ -17,6 +17,7 @@
 #include "Particle.h"
 #include "ParticleOutput.h"
 
+extern MPI_Datatype MPI_PARTICLE;
 
 /******************************************************************************/
 /*
