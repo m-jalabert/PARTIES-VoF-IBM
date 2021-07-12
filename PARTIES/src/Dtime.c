@@ -15,6 +15,9 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+extern MPI_Comm comm3d;
+
 /******************************************************************************/
 /*
  This function computes dt from the CFL condition
