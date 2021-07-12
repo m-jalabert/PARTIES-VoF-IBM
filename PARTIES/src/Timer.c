@@ -6,6 +6,8 @@
 #include "DataTypes.h"
 #include "Timer.h"
 
+extern MPI_Comm comm3d;
+
 Timer *Timer_create(MAC_grid *grid, Parameters *params) {
 
 	Timer *timer = (Timer *)malloc(sizeof(Timer));

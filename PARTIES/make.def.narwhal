@@ -1,22 +1,22 @@
 # -*- mode: makefile -*-
-# Machine: stampede.tacc.utexas.edu
+# Machine: narwhat.navydsrc.hpc.mil
 
 # Compiler executable
-compiler_cmd := mpicc
+compiler_cmd := cc
 # Compiler flags
 #   cflags - flags to give the compiler
 #   optmz  - optimization (default)
 #   debug  - debugging
-#   libs   - libraries needed to be linked to executable
+#ed   libs   - libraries needed to be linked to executable
 cflags      +=
-optmz_flags := -xCORE-AVX2 -axCORE-AVX512,MIC-AVX512 -O3 ## recommended for multiplatform buildls
+optmz_flags := -O3 ## -xCORE-AVX2 -axCORE-AVX512,MIC-AVX512 -O3 ## recommended for multiplatform buildls
 debug_flags :=
-libs        += -fp-model precise -lfftw3 -lhdf5 -lz
+libs        += -lmpifort -ldl -lmpi -lrt ## -lfftw3 -lhedf5 ## -fp-model precise -lfftw3 -lhdf5 -lz
 
 # Location of packages
-fftw_dir := $(TACC_FFTW3_DIR)
-hdf5_dir := $(TACC_HDF5_DIR)
-mpi_dir  :=
+fftw_dir := /opt/cray/pe/cray-fftw/default/x86_rome
+hdf5_dir := /opt/cray/pe/cray-hdf5-parallel/default/gnu/9.1
+mpi_dir  := ## /opt/cray/pe/mpich/default/ucx/gnu/9.1
 
 # FFTW
 ifneq ($(strip $(fftw_dir)),) # If not empty
@@ -37,7 +37,7 @@ ifneq ($(strip $(mpi_dir)),) # If not empty
   lflags   += -L$(mpi_dir)/lib
   libs     += -Wl,-rpath=$(mpi_dir)/lib/openmpi
   includes += -I$(mpi_dir)/include
-  compiler := $(mpi_dir)/bin/$(compiler_cmd)
+  ## icompiler := $(mpi_dir)/bin/$(compiler_cmd)
 else
   compiler := $(compiler_cmd)
 endif

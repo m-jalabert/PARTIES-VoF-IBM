@@ -1,0 +1,32 @@
+#!/bin/bash
+## The first line (above) specifies the shell to use for parsing 
+## the remaining lines of the batch script.
+#
+## Required PBS Directives --------------------------------------
+#PBS -A ARLAP44862H70 
+#PBS -q debug
+#PBS -l select=2:ncpus=128:mpiprocs=128
+#PBS -l walltime=00:30:00
+#PBS -l application=PARTIES
+#
+## Optional PBS Directives --------------------------------------
+#PBS -N Test_Run_1
+#PBS -j oe
+#PBS -V
+#PBS -S /bin/bash
+#
+## Execution Block ----------------------------------------------
+# Environment Setup
+
+module load cray-fftw
+module load cray-hdf5
+# cd to your personal directory in the scratch file system
+cd $WORKDIR/PARTIES/PARTIES
+#
+make clean
+make
+# Launching
+# copy executable from $HOME and submit it
+cp $HOME/parties .
+mpiexec -n 256 ./parties
+#

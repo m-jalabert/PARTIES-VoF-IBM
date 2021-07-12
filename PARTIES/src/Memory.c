@@ -7,6 +7,7 @@
 #include <string.h>
 #include <complex.h>
 
+extern MPI_Comm comm3d;
 
 /******************************************************************************/
 /*

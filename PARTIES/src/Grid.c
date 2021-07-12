@@ -16,6 +16,7 @@
 #include "Immersed.h"
 #include "Memory.h"
 
+extern MPI_Comm comm3d;
 
 /******************************************************************************/
 /*

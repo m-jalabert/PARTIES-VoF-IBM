@@ -1,7 +1,10 @@
 #ifndef DEFINITIONS_H
 	#define DEFINITIONS_H
 
+#include "mpi.h"
 #include "Boundary.h"
+
+extern MPI_Comm comm3d;
 
 #ifndef PI
 	#define PI 3.14159265358979323846
