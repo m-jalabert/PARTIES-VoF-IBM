@@ -234,7 +234,7 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		ParticleOutput_h5(data_bag, ntime, DTRACE("ParticleOutput_h5"));
 	#endif
 
-		ParticleOutput_dat(data_bag->lag->p_mobile_list, grid, params, DTRACE("ParticleOutput_dat"));
+//		ParticleOutput_dat(data_bag->lag->p_mobile_list, grid, params, DTRACE("ParticleOutput_dat"));
 
 	#endif
 
