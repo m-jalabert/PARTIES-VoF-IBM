@@ -209,7 +209,8 @@ void Lagrangian_advect_particles(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 	// Solve particle motion based on collisions using substeps
 	for (i = 0; i < N_substeps[which_stage_top]; i++) {
-//		ParticleOutput_dat(*p_mobile_ptr, grid, params);
+		Particle_list *p_mobile_list = data_bag -> lag -> p_mobile_list;
+		ParticleOutput_dat(p_mobile_list, grid, params, DTRACE("ParticleOutput.dat"));
 		for (rk = 0; rk < 3; rk++) {
 			params -> which_stage = rk;
 			Lagrangian_integrate_particle_motion(data_bag, DTRACE("Lagrangian_advect_particles"));
@@ -652,7 +653,7 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		Tc_old[2] = Tc[2];
 
 #ifdef STARTUP
-		if (time >= startup_time) {
+		if (X[1] <= 2*p->R) {
 			params->startup_flag = 0;
 		}
 		if (params->startup_flag) {
@@ -660,7 +661,8 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 			DSET_ZERO(Omega, 3);
 //			U[1]=1;
 //			Omega[2]=0;
-//			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
+			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 27
+//			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 152
 //			U[1] = 10.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
 //			U[1] = 0.385 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=20
 //			U[1] = 0.288 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=15
@@ -776,7 +778,7 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 #endif
 
 #ifdef STARTUP
-		if (time >= startup_time) {
+		if (X[1] <= 2*p->R) {
 			params->startup_flag = 0;
 		}
 		if (params->startup_flag) {
@@ -784,7 +786,8 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 			DSET_ZERO(Omega, 3);
 //			U[1]=1;
 //			Omega[2]=0;
-//			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
+			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 27
+//			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret10d:St=152
 //			U[1] = 10.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
 //			U[1] = 0.385 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=20
 //			U[1] = 0.288 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=15

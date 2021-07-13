@@ -11,11 +11,11 @@ compiler_cmd := cc
 cflags      +=
 optmz_flags := -O3 ## -xCORE-AVX2 -axCORE-AVX512,MIC-AVX512 -O3 ## recommended for multiplatform buildls
 debug_flags :=
-libs        += -lmpifort -ldl -lmpi -lrt ## -lfftw3 -lhedf5 ## -fp-model precise -lfftw3 -lhdf5 -lz
+libs        += -ldl -lrt ## -lfftw3 -lhedf5 ## -fp-model precise -lfftw3 -lhdf5 -lz
 
 # Location of packages
-fftw_dir := /opt/cray/pe/cray-fftw/default/x86_rome
-hdf5_dir := /opt/cray/pe/cray-hdf5-parallel/default/gnu/9.1
+fftw_dir := ## /opt/cray/pe/fftw/default/x86_rome
+hdf5_dir := ## /opt/cray/pe/hdf5-parallel/default/gnu/9.1
 mpi_dir  := ## /opt/cray/pe/mpich/default/ucx/gnu/9.1
 
 # FFTW
