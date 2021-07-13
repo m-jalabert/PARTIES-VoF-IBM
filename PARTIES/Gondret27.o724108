@@ -1,0 +1,72 @@
+rm -rf obj
+rm -f parties
+rm -f parties_dry
+make -C src
+make[1]: Entering directory '/p/work/aleonell/PARTIES/PARTIES/src'
+mkdir ../obj
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Timer.c -o ../obj/Timer.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Temporal_int.c -o ../obj/Temporal_int.o
+In file included from Temporal_int.c:30:
+/p/work/aleonell/PARTIES/PARTIES/src/Include/Statistics2d.h:1:9: warning: 'STATISTIC2D_H' is used as a header guard here, followed by #define of a different macro [-Wheader-guard]
+#ifndef STATISTIC2D_H
+        ^~~~~~~~~~~~~
+/p/work/aleonell/PARTIES/PARTIES/src/Include/Statistics2d.h:2:10: note: 'STATISTICS2D_H' is defined here; did you mean 'STATISTIC2D_H'?
+ #define STATISTICS2D_H
+         ^~~~~~~~~~~~~~
+         STATISTIC2D_H
+1 warning generated.
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Statistics2d.c -o ../obj/Statistics2d.o
+In file included from Statistics2d.c:12:
+/p/work/aleonell/PARTIES/PARTIES/src/Include/Statistics2d.h:1:9: warning: 'STATISTIC2D_H' is used as a header guard here, followed by #define of a different macro [-Wheader-guard]
+#ifndef STATISTIC2D_H
+        ^~~~~~~~~~~~~
+/p/work/aleonell/PARTIES/PARTIES/src/Include/Statistics2d.h:2:10: note: 'STATISTICS2D_H' is defined here; did you mean 'STATISTIC2D_H'?
+ #define STATISTICS2D_H
+         ^~~~~~~~~~~~~~
+         STATISTIC2D_H
+1 warning generated.
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c MyMath.c -o ../obj/MyMath.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Memory.c -o ../obj/Memory.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Immersed.c -o ../obj/Immersed.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Grid.c -o ../obj/Grid.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Dtime.c -o ../obj/Dtime.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Communication.c -o ../obj/Communication.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Cart3d.c -o ../obj/Cart3d.o
+In file included from Cart3d.c:32:
+/p/work/aleonell/PARTIES/PARTIES/src/Include/Statistics2d.h:1:9: warning: 'STATISTIC2D_H' is used as a header guard here, followed by #define of a different macro [-Wheader-guard]
+#ifndef STATISTIC2D_H
+        ^~~~~~~~~~~~~
+/p/work/aleonell/PARTIES/PARTIES/src/Include/Statistics2d.h:2:10: note: 'STATISTICS2D_H' is defined here; did you mean 'STATISTIC2D_H'?
+ #define STATISTICS2D_H
+         ^~~~~~~~~~~~~~
+         STATISTIC2D_H
+1 warning generated.
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include  -c Array.c -o ../obj/Array.o
+make -C IO sources
+make[2]: Entering directory '/p/work/aleonell/PARTIES/PARTIES/src/IO'
+mkdir ../../obj/IO
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include -c Resume.c -o ../../obj/IO/Resume.o
+cc -O3   -I/p/work/aleonell/PARTIES/PARTIES/src/Include -I/p/work/aleonell/PARTIES/PARTIES/src/IO/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Eulerian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Lagrangian/Include -I/p/work/aleonell/PARTIES/PARTIES/src/Turb_model/Include -I/p/work/aleonell/PARTIES/PARTIES/src/tools/Include -c ParticleOutput.c -o ../../obj/IO/ParticleOutput.o
+ParticleOutput.c:115:10: error: no member named 'F_lub' in 'struct particle'
+                                                p->F_lub[0],  p->F_lub[1],  p->F_lub[2],
+                                                ~  ^
+ParticleOutput.c:115:24: error: no member named 'F_lub' in 'struct particle'
+                                                p->F_lub[0],  p->F_lub[1],  p->F_lub[2],
+                                                              ~  ^
+ParticleOutput.c:115:38: error: no member named 'F_lub' in 'struct particle'
+                                                p->F_lub[0],  p->F_lub[1],  p->F_lub[2],
+                                                                            ~  ^
+ParticleOutput.c:444:9: warning: implicit declaration of function 'H5Pset_dxpl_mpio' is invalid in C99 [-Wimplicit-function-declaration]
+        assert(H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE) >= 0);
+               ^
+ParticleOutput.c:704:9: warning: implicit declaration of function 'H5Pset_dxpl_mpio' is invalid in C99 [-Wimplicit-function-declaration]
+        assert(H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE) >= 0);
+               ^
+2 warnings and 3 errors generated.
+make[2]: *** [Makefile:35: ../../obj/IO/ParticleOutput.o] Error 1
+make[2]: Leaving directory '/p/work/aleonell/PARTIES/PARTIES/src/IO'
+make[1]: *** [Makefile:48: IO] Error 2
+make[1]: Leaving directory '/p/work/aleonell/PARTIES/PARTIES/src'
+make: *** [Makefile:21: parties] Error 2
+aprun: file ./parties not found
+aprun: Exiting due to errors. Application aborted
