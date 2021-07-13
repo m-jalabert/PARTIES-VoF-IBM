@@ -98,18 +98,22 @@ void ParticleOutput_dat(Particle_list *p_list, MAC_grid *grid, Parameters *param
 		while (p != NULL) {
 
 				fprintf(fptr,
-						"% .10g,%d,"
-// 						"% .10g,% .10g,% .10g,"
-// 						"% .10g,% .10g,% .10g,"
-// 						"% .10g,% .10g,% .10g,"
-// 						"% .10g,% .10g,% .10g,"
-						"%.20g,%.10g,%.10g,%.10g,%.10g,%.10g\n",
+						"% .10g, %d,"
+ 						"%.10g, %.10g, %.10g,"
+ 						"%.10g, %.10g, %.10g,"
+ 						"%.10g, %.10g, %.10g,"
+ 						"%.10g, %.10g, %.10g,"
+ 						"%.10g, %.10g, %.10g,"
+ 						"%.10g, %.10g, %.10g,"
+						"%.10g, %.10g, %.10g\n",
 						params->time, p->ID,
-// 						p -> X[0],      p -> X[1],      p -> X[2],
-// 						p -> U[0],      p -> U[1],      p -> U[2],
-// 						p -> Omega[0],  p -> Omega[1],  p -> Omega[2],
-// 						p -> Fc[0],     p -> Fc[1],     p -> Fc[2],
-						p -> X[0], p -> X[1], p -> X[2], p -> U[0], p -> U[1], p -> U[2] );
+ 						p->X[0],      p->X[1],      p->X[2],
+ 						p->U[0],      p->U[1],      p->U[2],
+ 						p->Omega[0],  p->Omega[1],  p->Omega[2],
+						p->F[0],      p->F[1],      p->F[2],
+ 						p->Fc[0],     p->Fc[1],     p->Fc[2],
+						p->F_lub[0],  p->F_lub[1],  p->F_lub[2],
+						p->F_coll[0], p->F_coll[1], p->F_coll[2])
 			p = p -> next;
 		}
 		fclose(fptr);

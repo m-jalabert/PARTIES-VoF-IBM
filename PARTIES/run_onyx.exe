@@ -5,12 +5,12 @@
 ## Required PBS Directives --------------------------------------
 #PBS -A ARLAP44862H70 
 #PBS -q debug
-#PBS -l select=2:ncpus=128:mpiprocs=128
+#PBS -l select=2:ncpus=44:mpiprocs=44
 #PBS -l walltime=00:30:00
 #PBS -l application=PARTIES
 #
 ## Optional PBS Directives --------------------------------------
-#PBS -N Test_Run_1
+#PBS -N Gondret27
 #PBS -j oe
 #PBS -V
 #PBS -S /bin/bash
@@ -27,6 +27,5 @@ make clean
 make
 # Launching
 # copy executable from $HOME and submit it
-cp $HOME/parties .
-mpiexec -n 256 ./parties
+aprun -n 88 -N 44 ./parties
 #

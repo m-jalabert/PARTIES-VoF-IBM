@@ -11,10 +11,10 @@
 #undef  DIRTY_FIX  // if 1 fix is one; to disable put 0
 
 
-#undef PERIODIC_NOSLIP_BOX
+#define PERIODIC_NOSLIP_BOX
 #undef PERIODIC_FREESLIP_BOX
 #undef XPERIODIC_FREESLIP_BOX
-#define PERIODIC_SHEAR_FLOW
+#undef PERIODIC_SHEAR_FLOW
 #undef PERIODIC_DOUBLE_SHEAR_FLOW
 #undef DOUBLE_PERIODIC_FREESLIP_BOX
 #undef NOSLIP_BOX
@@ -240,7 +240,7 @@
 #undef  FORCES_DAT             // Print out 'forces.dat' - F acting on particle // error here
 #define  DRY_COLLISION          // Turn off fluid forces for large St collisions
 #undef ROUGH_COLLISION        // Start collision at surface roughness
-#undef  LAG_MARKER_FLAG        // Turn off all competing Lag markers
+#define LAG_MARKER_FLAG        // Turn off all competing Lag markers
 #undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
 
 #undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
