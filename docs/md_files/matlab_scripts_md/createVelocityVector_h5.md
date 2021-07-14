@@ -1,6 +1,6 @@
 # createVelocityVector_h5.m
 
-The present matlab script creates cell centered velcoity vectors in each domain cell based on the scalar velocities u, v, and w. <br>
+The present matlab script creates cell centered velcoity vectors in each cell of the domain based on the scalar velocities u, v, and w. <br>
 
 <b> Prerequisite: </b> <em>Data_*.h5</em> files; the simulation must have already run. <br> 
 <b> Input: </b> Enter the path to the simulation file in which the <em>Data_*.h5</em> files are located. <br>
