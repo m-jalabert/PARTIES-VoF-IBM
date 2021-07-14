@@ -1,4 +1,4 @@
-function [output] = write_Reader_Vector_Velocity_xmf(path, Nx, Ny, Nz, time)
+function [output] = write_Reader_Vector_Velocity_xmf(path, no_files, time, Nx, Ny, Nz)
 
 if isfile(fullfile(path, 'Reader_vector.xmf'))
     delete (fullfile(path, 'Reader_vector.xmf'))
@@ -8,8 +8,6 @@ Nx_i = Nx - 1;
 Ny_i = Ny - 1;
 Nz_i = Nz - 1; 
 N_vec = 3;
-
-no_vector_files = size(time,1);
 
 file = fullfile(path, strcat('Reader_vector.xmf'));
 
@@ -27,7 +25,7 @@ fprintf(file_begin,'        <DataItem Dimensions="3" Format="XML">\n');
 fprintf(file_begin,'          0    1    %d\n', Nx_i);
 fprintf(file_begin,'        </DataItem>\n');
 fprintf(file_begin,'        <DataItem Format="HDF" Dimensions="%d">\n', Nx_i); % Nx
-fprintf(file_begin,'          Vector_0.h5:/grid/xc\n');
+fprintf(file_begin,'          Vector_%d.h5:/grid/xc\n', time(1,1));
 fprintf(file_begin,'        </DataItem>\n');
 fprintf(file_begin,'      </DataItem>\n\n');
 
@@ -36,7 +34,7 @@ fprintf(file_begin,'        <DataItem Dimensions="3" Format="XML">\n');
 fprintf(file_begin,'          0    1    %d\n', Ny_i);
 fprintf(file_begin,'        </DataItem>\n');
 fprintf(file_begin,'        <DataItem Format="HDF" Dimensions="%d">\n', Ny_i); % Ny
-fprintf(file_begin,'          Vector_0.h5:/grid/yc\n');
+fprintf(file_begin,'          Vector_%d.h5:/grid/yc\n', time(1,1));
 fprintf(file_begin,'        </DataItem>\n');
 fprintf(file_begin,'      </DataItem>\n\n');
 
@@ -45,7 +43,7 @@ fprintf(file_begin,'        <DataItem Dimensions="3" Format="XML">\n');
 fprintf(file_begin,'          0    1    %d\n', Nz_i);
 fprintf(file_begin,'        </DataItem>\n');
 fprintf(file_begin,'        <DataItem Format="HDF" Dimensions="%d">\n', Nz_i); % Nz
-fprintf(file_begin,'          Vector_0.h5:/grid/zc\n');
+fprintf(file_begin,'          Vector_%d.h5:/grid/zc\n', time(1,1));
 fprintf(file_begin,'        </DataItem>\n');
 fprintf(file_begin,'      </DataItem>\n');
 fprintf(file_begin,'    </Geometry>\n\n');
@@ -55,10 +53,10 @@ fprintf(file_begin,'    <Grid Name="TemporalGrid" GridType="Collection" Collecti
 
 file_main = fopen(file, 'a');
 
-for i = 1 : no_vector_files
+for i = 1 : no_files
 
     fprintf(file_main, '      <Grid Name="SpatialGrid_%d" GridType="Uniform">\n', (i-1));
-    fprintf(file_main, '        <Time Value="%f"/>\n', time(i));
+    fprintf(file_main, '        <Time Value="%f"/>\n', time(i,2));
     fprintf(file_main, '        <Topology Reference="/Xdmf/Domain/Topology[1]"/>\n');
     fprintf(file_main, '        <Geometry Reference="/Xdmf/Domain/Geometry[1]"/>\n');
     fprintf(file_main, '        <Attribute Name="vector" AttributeType="Vector" Center="Node">\n');
@@ -69,7 +67,7 @@ for i = 1 : no_vector_files
     fprintf(file_main, '              %-4d %-4d %-4d %-4d\n', Nz_i, Ny_i, Nx_i, N_vec);
     fprintf(file_main, '            </DataItem>\n');
     fprintf(file_main, '            <DataItem Format="HDF" NumberType="Double" Precision="8" Dimensions="%d %d %d %d">\n', Nx_i, Ny_i, Nz_i, N_vec); % Nx, Ny, Nz, N_vec
-    fprintf(file_main, '              Vector_%d.h5:/vector_velocity\n', i-1);
+    fprintf(file_main, '              Vector_%d.h5:/vector_velocity\n', time(i,1));
     fprintf(file_main, '            </DataItem>\n');
     fprintf(file_main, '          </DataItem>\n');
     fprintf(file_main, '        </Attribute>\n');

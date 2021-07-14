@@ -4,12 +4,41 @@ clear;
 % enter path to simulation folder
 % if the whole file "xdmf_Writer" has been copied to the simulation folder,
 % set: path = '..';
-path = '..'; 
+path = '/home/Desktop/PARTIES'; 
+
+% Do you want to consider all h5-files (timesteps)?
+% 1 = yes, 0 = no
+all_files = 1; 
+
+% If no, please provide start- and end-file:
+start_file = 0;
+end_file = 5;
 
 
 %% Pre-Check
-% Check if entered path is corrrect by checking whether Data_0.h5 exists 
-if isfile(fullfile(path, 'Data_0.h5'))
+
+if all_files
+    no_files = numel(dir(fullfile(path, 'Data_*')));
+    file_id = 0;
+    check = 1;
+else
+    start_check = isfile(fullfile(path, strcat('Data_', string(start_file), '.h5')));
+    end_check = isfile(fullfile(path, strcat('Data_', string(end_file), '.h5')));
+    
+    if start_check && end_check
+        no_files = end_file - start_file + 1;
+        file_id = start_file;
+        check = 1;
+    else 
+        check = 0;
+    end
+end
+
+
+%% Existence-Check
+% Check if entered path is corrrect (by checking whether Data_0.h5 exists) 
+% and if start_ and end_file exist 
+if isfile(fullfile(path, 'Data_0.h5')) && check
     %% Store and print Nx, Ny, and Nz
     Nx = h5read(fullfile(path, 'Data_0.h5'), '/grid/NX');
     Ny = h5read(fullfile(path, 'Data_0.h5'), '/grid/NY');
@@ -23,15 +52,16 @@ if isfile(fullfile(path, 'Data_0.h5'))
 
 
     %% Store and print time steps
-    no_data_files = numel(dir(fullfile(path, 'Data_*')));
-    time = zeros(no_data_files,1);
+    time = zeros(no_files,2);
 
-    for i = 1 : no_data_files
-        data_file = strcat('Data_', string(i-1), '.h5');
+    for i = 1 : no_files
+        data_file = strcat('Data_', string(file_id), '.h5');
         % store time steps in an array to provide all time steps to the
         % functions "write_Reader_*"
-        time(i) = double(h5read(fullfile(path, data_file), '/time'));
-        fprintf('t_%d = %.6f \n', i-1, time(i))
+        time(i,1) = file_id;
+        time(i,2) = double(h5read(fullfile(path, data_file), '/time'));
+        fprintf('t_%d = %.6f \n', file_id, time(i,2))
+        file_id = file_id + 1;
     end %i
     fprintf('\n')
 
@@ -79,7 +109,7 @@ if isfile(fullfile(path, 'Data_0.h5'))
             end %k
 
             % write Reader_p_fixed/mobile.xmf
-            p = write_Reader_Particle_xmf(path, time, type, Type, Np, att_list);
+            p = write_Reader_Particle_xmf(path, no_files, time, type, Type, Np, att_list);
             fprintf(p)
             fprintf('\n')
 
@@ -89,19 +119,19 @@ if isfile(fullfile(path, 'Data_0.h5'))
     
     
     % write Reader_c.xmf
-    c = write_Reader_c_xmf(path, Nx, Ny, Nz, time);
+    c = write_Reader_c_xmf(path, no_files, time, Nx, Ny, Nz);
     fprintf(c)
 
     % write Reader_u.xmf
-    u = write_Reader_Scalar_Velocity_xmf(path, Nx, Ny, Nz, time, "u");
+    u = write_Reader_Scalar_Velocity_xmf(path, no_files, time, Nx, Ny, Nz, "u");
     fprintf(u)
 
     % write Reader_v.xmf
-    v = write_Reader_Scalar_Velocity_xmf(path, Nx, Ny, Nz, time, "v");
+    v = write_Reader_Scalar_Velocity_xmf(path, no_files, time, Nx, Ny, Nz, "v");
     fprintf(v)
 
     % write Reader_w.xmf
-    w = write_Reader_Scalar_Velocity_xmf(path, Nx, Ny, Nz, time, "w");
+    w = write_Reader_Scalar_Velocity_xmf(path, no_files, time, Nx, Ny, Nz, "w");
     fprintf(w)
 
     % check if Vector_*.h5 files exist
@@ -110,16 +140,22 @@ if isfile(fullfile(path, 'Data_0.h5'))
         
     if size_vector > 0
         % write Reader_vector.xmf
-        vector = write_Reader_Vector_Velocity_xmf(path, Nx, Ny, Nz, time);
+        vector = write_Reader_Vector_Velocity_xmf(path, no_files, time, Nx, Ny, Nz);
         fprintf(vector)
     end
 
     fprintf('##########################\n')
 
-else
+elseif not(isfile(fullfile(path, 'Data_0.h5'))) && check || not(isfile(fullfile(path, 'Data_0.h5'))) && not(check)
     
     fprintf('##########################\n')
     fprintf('Please check the entered path, because no simulation data (h5 files) could be found!\n')
     fprintf('##########################\n')
 
+elseif isfile(fullfile(path, 'Data_0.h5')) && not(check)
+    
+    fprintf('##########################\n')
+    fprintf('Please check the entered start and end value!\n')
+    fprintf('##########################\n')
+           
 end

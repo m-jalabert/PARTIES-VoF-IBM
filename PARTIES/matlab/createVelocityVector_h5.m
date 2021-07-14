@@ -3,7 +3,7 @@ clear;
 %% Input 
 % enter path to simulation folder
 % if matlab script has been copied to simulation folder, set: path = '';
-path = '';
+path = '/home/Desktop/PARTIES';
 
 
 %% Create Vector_*.h5 files
