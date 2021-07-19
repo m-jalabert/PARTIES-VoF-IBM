@@ -1,4 +1,4 @@
-# y-Periodic Bug
+# y-Periodicity
 
 It seems that the 
 
