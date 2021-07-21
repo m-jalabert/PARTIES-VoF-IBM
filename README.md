@@ -8,6 +8,7 @@
 ## Guidelines
 
 [Workflow and branching](https://github.com/vowinckel/PARTIES/blob/master/docs/md_files/guidline.md) <br>
+[Testcases guideline](https://github.com/metialex/PARTIES/blob/metelkin_doc_commands/docs/md_files/test_case_doc.md) <br>
 Writing the code - comments, description of functions <br>
 
 ## Fluid Dynamic Theory
@@ -28,8 +29,8 @@ Paralleliztion of the code <br>
 
 ## Other
 [h5ToVTK](https://github.com/metialex/h5ToVTK) - this tool converts PARTIES Eulerian and Lagrangian output .h5 files into .vtk files. <br>
-[Bug reports](https://github.com/metialex/PARTIES/blob/kleischmann_03_bugReport/docs/md_files/bug_report.md)
-
+[Bug reports](https://github.com/metialex/PARTIES/blob/kleischmann_03_bugReport/docs/md_files/bug_report.md)  <br>
+[Main git commands](https://github.com/metialex/PARTIES/blob/master/docs/md_files/git_commands.md) <br>
 The main description of code structure <br>
 Links to other related applications - e.g. non-dimensionalization calculators, pre- and post-processing scripts. 
 
