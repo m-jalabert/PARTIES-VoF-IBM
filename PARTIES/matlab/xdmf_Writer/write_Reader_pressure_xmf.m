@@ -1,8 +1,8 @@
-function [output] = write_Reader_c_xmf(path, no_files, time, Nx, Ny, Nz)
+function [output] = write_Reader_pressure_xmf(path, no_files, time, Nx, Ny, Nz)
 
 
-if isfile(fullfile(path, 'Reader_c.xmf'))
-    delete (fullfile(path, 'Reader_c.xmf'))
+if isfile(fullfile(path, 'Reader_pressure.xmf'))
+    delete (fullfile(path, 'Reader_pressure.xmf'))
 end
 
 Nx_i = Nx - 1;
@@ -11,7 +11,7 @@ Nz_i = Nz - 1;
 
 
 
-file = fullfile(path, 'Reader_c.xmf');
+file = fullfile(path, 'Reader_pressure.xmf');
 
 file_begin = fopen(file, 'w');
 

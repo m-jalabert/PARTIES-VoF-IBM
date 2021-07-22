@@ -124,9 +124,10 @@ if isfile(fullfile(path, 'Data_0.h5')) && check
 
     end % if
     
-    % write Reader_pressure.xmf
-    pres = write_Reader_pressure_xmf(path, no_files, time, Nx, Ny, Nz);
-    fprintf(pres)
+    
+    % write Reader_c.xmf
+    c = write_Reader_pressure_xmf(path, no_files, time, Nx, Ny, Nz);
+    fprintf(c)
 
     % write Reader_u.xmf
     u = write_Reader_Scalar_Velocity_xmf(path, no_files, time, Nx, Ny, Nz, "u");
