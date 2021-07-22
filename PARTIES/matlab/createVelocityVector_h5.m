@@ -2,8 +2,16 @@ clear;
 
 %% Input 
 % enter path to simulation folder
-% if matlab script has been copied to simulation folder, set: path = '';
+
+% if the result files (h5-files) are outsourced, which means they are not 
+% located in the main file (including the matlab- and src-files), you have 
+% to enter the path
 path = '/home/Desktop/PARTIES';
+
+% if the files are still stored in the main file, use the following two
+% path-commands
+%path = matlab.desktop.editor.getActiveFilename;
+%path = path(1:end-33);
 
 
 %% Create Vector_*.h5 files
