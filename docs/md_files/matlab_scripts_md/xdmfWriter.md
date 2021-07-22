@@ -7,11 +7,18 @@ The following specification deals with the main script <em>xdmf_Writer.m</em>.
 <b> Prerequisite: </b> <em>Data_*.h5</em> files; the simulation must have already run. <br> 
 <b> Input: </b> Enter the path to the simulation file in which the <em>Data_*.h5</em> files are located. <br>
 <pre>
-%% Input
+%% Input 
 % enter path to simulation folder
-% if the whole file "xdmf_Writer" has been copied to the simulation folder,
-% set: path = '..';
-path = '/home/Desktop/PARTIES'; 
+
+% if the result files (h5-files) are outsourced, which means they are not 
+% located in the main file (including the matlab- and src-files), you have 
+% to enter the path
+path = '/home/Desktop/PARTIES';
+
+% if the files are still stored in the main file, use the following two
+% path-commands
+%path = matlab.desktop.editor.getActiveFilename;
+%path = path(1:end-33);
 </pre>
 
 Moreover, decide if you want to consider all existing h5-files, means from the first until the last time step, or only a specific range. If a specific is wanted, provide the start- and end-h5 file.
