@@ -5,10 +5,18 @@ The present matlab script creates cell centered velcoity vectors in each cell of
 <b> Prerequisite: </b> <em>Data_*.h5</em> files; the simulation must have already run. <br> 
 <b> Input: </b> Enter the path to the simulation file in which the <em>Data_*.h5</em> files are located. <br>
 <pre>
-%% Input
+%% Input 
 % enter path to simulation folder
-% if matlab script has been copied to simulation folder, set: path = '';
+
+% if the result files (h5-files) are outsourced, which means they are not 
+% located in the main file (including the matlab- and src-files), you have 
+% to enter the path
 path = '/home/Desktop/PARTIES';
+
+% if the files are still stored in the main file, use the following two
+% path-commands
+%path = matlab.desktop.editor.getActiveFilename;
+%path = path(1:end-33);
 </pre>
 
 <b> Process: </b> The face velocities of each cell are averaged in each coordinate direction to calculate the cell centered velocities. <br>
