@@ -30,7 +30,7 @@ Paralleliztion of the code <br>
 ## Other
 [h5ToVTK](https://github.com/metialex/h5ToVTK) - this tool converts PARTIES Eulerian and Lagrangian output .h5 files into .vtk files. <br>
 [Main git commands](https://github.com/metialex/PARTIES/blob/master/docs/md_files/git_commands.md) <br>
-[Matlab scripts](https://github.com/metialex/PARTIES/blob/kleischmann_xdmfWriter/docs/md_files/matlab_scripts.md) <br>
+[Matlab scripts](https://github.com/metialex/PARTIES/blob/master/docs/md_files/matlab_scripts.md) <br>
 The main description of code structure <br>
 Links to other related applications - e.g. non-dimensionalization calculators, pre- and post-processing scripts. 
 
