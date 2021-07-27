@@ -30,14 +30,14 @@ void lubrication(Collision_bag *bag, double h, Parameters *params) {
 
 	// Blend lubrication force from a value near zero at surface_distance=2h to
 	// a value near one at surface_distance=h
-	double blend = 0.5 * erf(6.0 - 4.0*surface_distance/h) + 0.5;
+	//double blend = 0.5 * erf(6.0 - 4.0*surface_distance/h) + 0.5;
 
 #ifdef LUBRICATION_NORMAL
 	// Relative translational velocity normal to contact surface
 	double *gn = bag -> gn;
 
 	// Lubrication force, less velocity component
-	temp = -6.0 * blend * PI / (surface_distance * params->Re) * R_eff * R_eff;
+	temp = -6.0 * PI / (surface_distance * params->Re) * R_eff * R_eff;
 
 	// Evaluate and store lubrication force
 	FORI3 Flub[i] = temp * gn[i];

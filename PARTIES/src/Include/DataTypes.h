@@ -292,7 +292,6 @@ struct parameters {
 	double dp_dx, dp_dx_old;
     double amplitude;
 	double tref;
-	double startup_time;    // starting time to release the particle (in STARTUP flag)
 	double phase_shift_factor;     // phase shift of the oscillating force= phase_shift_factor * Pi
 
 	// Streamwise bulk velocity
@@ -400,7 +399,10 @@ struct parameters {
 	double bl_thick;
 
 #ifdef STARTUP
-	int startup_flag;
+	unsigned int startup_flag;
+	double startup_time;    // starting time to release the particle (in STARTUP flag)
+	unsigned int startup_init;
+	double startup_velocity[3];
 #endif
 
 	// Collision parameters
