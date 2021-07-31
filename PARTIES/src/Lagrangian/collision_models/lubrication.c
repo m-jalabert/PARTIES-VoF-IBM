@@ -28,10 +28,6 @@ void lubrication(Collision_bag *bag, double h, Parameters *params) {
 	double abs_roughness = params->roughness * R_mean;
 	double surface_distance = max(bag->surface_distance, abs_roughness);
 
-	// Blend lubrication force from a value near zero at surface_distance=2h to
-	// a value near one at surface_distance=h
-	//double blend = 0.5 * erf(6.0 - 4.0*surface_distance/h) + 0.5;
-
 #ifdef LUBRICATION_NORMAL
 	// Relative translational velocity normal to contact surface
 	double *gn = bag -> gn;
