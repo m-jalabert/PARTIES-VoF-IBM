@@ -32,7 +32,7 @@ CFG(simulation, output_time_interval, 0.5, atof) // Time interval between output
 CFG(simulation, output_time_interval_2d, 0.5, atof) // Time interval between output files
 CFG(simulation, default_dt, 0.001, atof)     // Initial timestep
 CFG(simulation, max_dt, 0.05, atof)           // Maximum allowable dt
-CFG(simulation, constant_dt, 0, atoi)        // Use constant time step?
+CFG(simulation, constant_dt, 0, atoi)        // Use constant time step? 0 = CFL condition, 1 = default timestep
 CFG(simulation, cfl, 0.5, atof)              // CFL number
 CFG(simulation, ghost_nodes, 3, atoi)        // Ghost nodes
 CFG(simulation, resume, 0, atoi)             // Resume simulation flag
@@ -65,7 +65,7 @@ CFG(flow, amplitude, 0.0, atof)			// Amplitude for oscillation due to ISS vibrat
 CFG(flow, tref, 0.0, atof)			// reference time for sinus function of oscillation (ISS)
 CFG(flow, startup_time, 0.0, atof)		// starting time to release the particle (in STARTUP flag)
 CFGArray(startup_velocity, grav, "{0.0, 0.0, 0.0}", GVG_DOUBLE)  // Prescribed velocity which acts on the particle during startup time
-CFG(flow, startup_init, 0.0, atof)		// starting time to release the particle (in STARTUP flag)
+CFG(flow, startup_init, 0.0, atof)		// 0 - User defined velocity and startup_time; 1,2 - Gondret testcase St=27 and St = 152
 CFG(flow, phase_shift_factor, 0.0, atof)	// phase shift of the oscillating force = phase_shift_factor * Pi
 
 //------------------------------------------------------------------------------

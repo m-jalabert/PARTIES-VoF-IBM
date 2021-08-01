@@ -183,24 +183,24 @@
 #undef CONC             // Turn on Concentration
 #undef BOUSSINESQ       // Boussinesq approximation
 #undef IBM_SCALAR
-#define VOF_SCALAR
-#define VOF_VELOCITY
+#undef VOF_SCALAR
+#undef VOF_VELOCITY
 #undef VOF_SCALAR_DEBUG
-#define VOF_SMOOTH_VELO
+#undef VOF_SMOOTH_VELO
 #undef VOF_SCALAR_NODIV // if defined we do non-conservative scheme
 #undef VOF_NO_VOLUME  // the volume fraction is not used only possible with VOF_SMOOTH_VELO is enabled
 #undef VOF_PROJECT
-#define VOF_PP_VFPRIME
+#undef VOF_PP_VFPRIME
 //#undef  CONC_CLIP        // not supported Clip concentration to max 1
 
 
 						/* Concentration solution method*/
-#define CONC_CENTRAL     // second order advection scheme
+#undef CONC_CENTRAL     // second order advection scheme
 #undef  CONC_QUICK		 // third order advection scheme does only work for a channel flow with zero gradients!!!
 //#undef  CONC_BQUICK  // not supported
 //#undef  CONC_FTUPWIND  // not supported && not working with periodic conditions  !!!
 
-#define CONC_FULLY_IMPLICIT
+#undef CONC_FULLY_IMPLICIT
 #undef  CONC_FULLY_EXPLICIT  // the solutal diffusion is treated fully explicit .. later we may treat temperatures implicit and conc expl !!!! Not tested !!!!!
 #undef  CONC_SEMI_IMPLICIT  // the solutal diffusion is treated  explicit for x&z  !!!!!! Not tested !!!!!
 
@@ -240,7 +240,7 @@
 #undef  FORCES_DAT             // Print out 'forces.dat' - F acting on particle // error here
 #define  DRY_COLLISION          // Turn off fluid forces for large St collisions
 #undef ROUGH_COLLISION        // Start collision at surface roughness
-#undef  LAG_MARKER_FLAG        // Turn off all competing Lag markers
+#define  LAG_MARKER_FLAG        // Turn off all competing Lag markers
 #undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
 
 #undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
