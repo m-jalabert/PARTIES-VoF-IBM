@@ -652,21 +652,22 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		Tc_old[2] = Tc[2];
 
 #ifdef STARTUP
-		if (params->startup_init == 0 && time >= startup_time) {
+		if (params->startup_init == STUP_INIT_TIME && time >= startup_time) {
 			params->startup_flag = 0;
 		}
-		if ((params->startup_init == 1 || params->startup_init == 2) && X[1] <= 2*p->R) {
+		if ((params->startup_init == STUP_INIT_GOND_ST_27 || params->startup_init == STUP_INIT_GOND_ST_152)
+																	 && X[1] <= 2*p->R) {
 			params->startup_flag = 0;
 		}
 		if (params->startup_flag) {
 			DSET_ZERO(Omega, 3);
-			if(params->startup_init == 0) FORI3 U[i] = params->startup_velocity[i];
-			if(params->startup_init == 1) U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret St=27
-			if(params->startup_init == 2) U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret St=152
+			if(params->startup_init == STUP_INIT_TIME) FORI3 U[i] = params->startup_velocity[i];
+			if(params->startup_init == STUP_INIT_GOND_ST_27) U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret St=27
+			if(params->startup_init == STUP_INIT_GOND_ST_152) U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret St=152
 //			U[1]=1;
 //			Omega[2]=0;
 //			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
-//			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
+//			U[1] = 10.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
 //			U[1] = 0.385 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=20
 //			U[1] = 0.288 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=15
 //			U[1] = 0.192 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=10
@@ -781,17 +782,18 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 #endif
 
 #ifdef STARTUP
-		if (params->startup_init == 0 && time >= startup_time) {
+		if (params->startup_init == STUP_INIT_TIME && time >= startup_time) {
 			params->startup_flag = 0;
 		}
-		if ((params->startup_init == 1 || params->startup_init == 2) && X[1] <= 2*p->R) {
+		if ((params->startup_init == STUP_INIT_GOND_ST_27 || params->startup_init == STUP_INIT_GOND_ST_152)
+																	 && X[1] <= 2*p->R) {
 			params->startup_flag = 0;
 		}
 		if (params->startup_flag) {
 			DSET_ZERO(Omega, 3);
-			if(params->startup_init == 0) FORI3 U[i] = params->startup_velocity[i];
-			if(params->startup_init == 1) U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret St=27
-			if(params->startup_init == 2) U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret St=152
+			if(params->startup_init == STUP_INIT_TIME) FORI3 U[i] = params->startup_velocity[i];
+			if(params->startup_init == STUP_INIT_GOND_ST_27) U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret St=27
+			if(params->startup_init == STUP_INIT_GOND_ST_152) U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret St=152
 //			U[1]=1;
 //			Omega[2]=0;
 //			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
