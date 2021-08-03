@@ -2,7 +2,6 @@ import math
 import os
 import sys
 import csv
-from termcolor import colored
 
 ### Load reference data ###
 f           = open(os.path.join(sys.path[0], "../Gondret_Testcase/Reference_data/mobile_st_27.dat"), 'r')
@@ -30,7 +29,7 @@ delta = []
 for i in range(0, len(reference)):                              # Create list of delta between reference and simulation values
     delta.append(abs(reference[i]-simulation[i]))
     if (delta[i] > 1e-12):
-        print(colored(('\nTest failed. Difference {} in line {}'.format(delta[i],i+1)), 'red'))
+        print('\nTest failed. Difference {} in line {}'.format(delta[i],i+1))
         exit()
 
-print(colored('\nTest passed.','green'))
+print('\nTest passed.')
