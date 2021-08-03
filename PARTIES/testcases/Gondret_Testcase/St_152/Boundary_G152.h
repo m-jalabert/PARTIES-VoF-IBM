@@ -183,24 +183,24 @@
 #undef CONC             // Turn on Concentration
 #undef BOUSSINESQ       // Boussinesq approximation
 #undef IBM_SCALAR
-#define VOF_SCALAR
-#define VOF_VELOCITY
+#undef VOF_SCALAR
+#undef VOF_VELOCITY
 #undef VOF_SCALAR_DEBUG
-#define VOF_SMOOTH_VELO
+#undef VOF_SMOOTH_VELO
 #undef VOF_SCALAR_NODIV // if defined we do non-conservative scheme
 #undef VOF_NO_VOLUME  // the volume fraction is not used only possible with VOF_SMOOTH_VELO is enabled
 #undef VOF_PROJECT
-#define VOF_PP_VFPRIME
+#undef VOF_PP_VFPRIME
 //#undef  CONC_CLIP        // not supported Clip concentration to max 1
 
 
 						/* Concentration solution method*/
-#define CONC_CENTRAL     // second order advection scheme
+#undef CONC_CENTRAL     // second order advection scheme
 #undef  CONC_QUICK		 // third order advection scheme does only work for a channel flow with zero gradients!!!
 //#undef  CONC_BQUICK  // not supported
 //#undef  CONC_FTUPWIND  // not supported && not working with periodic conditions  !!!
 
-#undef CONC_FULLY_IMPLICIT
+#define CONC_FULLY_IMPLICIT
 #undef  CONC_FULLY_EXPLICIT  // the solutal diffusion is treated fully explicit .. later we may treat temperatures implicit and conc expl !!!! Not tested !!!!!
 #undef  CONC_SEMI_IMPLICIT  // the solutal diffusion is treated  explicit for x&z  !!!!!! Not tested !!!!!
 
