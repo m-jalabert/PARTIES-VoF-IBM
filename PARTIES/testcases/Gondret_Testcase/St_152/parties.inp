@@ -15,7 +15,7 @@ NZM = 128
 
 
 [flow]
-Re = 93457.944
+Re = 93457.943925234
 ubulk_target = 0
 
 # Startup flag variables

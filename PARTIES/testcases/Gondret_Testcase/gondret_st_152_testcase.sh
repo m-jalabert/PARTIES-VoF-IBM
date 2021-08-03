@@ -62,48 +62,10 @@ cd $work_path
 echo 'START: Flow simulation'
 mpirun_o -np $1 parties > output.log
 echo 'END: Flow simulation'
-:'
-###########################################################################
-#                           Reading Data_*.h5                             #
-###########################################################################
-# Obtains the velocities at the selected plane of the grid
-h5dump -d "/u" -s "0,0,150" -c "1,101,1" -w 0 Data_1.h5 > velo.dat
-
-# File manipulation: Velocities placed in a file !!Omitted the last entry!!
-header_line_no=`grep -n "\<DATA\>" velo.dat | gawk '{print $1}' FS=":"`
-echo '      U(y)' > numerical_velo.dat
-awk "NR==$((header_line_no+1)), NR==$((header_line_no+101))" velo.dat | gawk '{print $2}' FS=": " | gawk '{print $1}' FS="," >> numerical_velo.dat
 
 ###########################################################################
-#                                L2 Norm                                  #
+#                          Checking mobile.dat                            #
 ###########################################################################
-mv numerical_velo_verified_CF.dat numerical_velo_verified.dat
-g++ l2norm.c -o l2norm.sh
-./l2norm.sh
-
-###########################################################################
-#                                Post proc                                #
-###########################################################################
-# Replace file in Results folder if passed
-if grep -Fxq PASS absolute_error.dat
-then
-    # "Test Passed"
-    # delete the old verified numerical soln
-    # rename the new numerical soln as the verified soln
-    rm -rf numerical_velo_verified.dat
-    mv numerical_velo.dat numerical_velo_verified_CF.dat
-    mv absolute_error.dat absolute_error_CF.dat
-    # cp numerical_velo_verified_CF.dat l2norm_CF.dat ../Testcase_Results/
-else
-    # "Test Failed"
-    # old verified numerical soln, remains as is
-    # new numerical soln remains as is
-    mv numerical_velo_verified.dat numerical_velo_verified_CF.dat
-    mv numerical_velo.dat numerical_velo_failed_CF.dat
-    mv absolute_error.dat absolute_error_failed_CF.dat
-fi
-
-# Clean up
-rm -rf velo.dat
-cd $home_path/..
-'
+echo 'START: Data comparison'
+python3 gondret_st_152_compare.py
+echo 'END: Data comparison'
