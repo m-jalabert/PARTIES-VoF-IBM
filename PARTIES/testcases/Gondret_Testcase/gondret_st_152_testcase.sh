@@ -69,3 +69,5 @@ echo 'END: Flow simulation'
 echo 'START: Data comparison'
 python3 gondret_st_152_compare.py
 echo 'END: Data comparison'
+
+cd $home_path/..

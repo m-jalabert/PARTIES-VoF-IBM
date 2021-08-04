@@ -64,7 +64,7 @@ CFG(flow, per_fr, 1.5, atof)
 CFG(flow, amplitude, 0.0, atof)			// Amplitude for oscillation due to ISS vibration
 CFG(flow, tref, 0.0, atof)			// reference time for sinus function of oscillation (ISS)
 CFG(flow, startup_time, 0.0, atof)		// starting time to release the particle (in STARTUP flag)
-CFGArray(startup_velocity, grav, "{0.0, 0.0, 0.0}", GVG_DOUBLE)  // Prescribed velocity which acts on the particle during startup time
+CFGArray(flow, startup_velocity, "{0.0, 0.0, 0.0}", GVG_DOUBLE)  // Prescribed velocity which acts on the particle during startup time
 CFG(flow, startup_init, 0.0, atof)		// 0 - User defined velocity and startup_time; 1,2 - Gondret testcase St=27 and St = 152
 CFG(flow, phase_shift_factor, 0.0, atof)	// phase shift of the oscillating force = phase_shift_factor * Pi
 

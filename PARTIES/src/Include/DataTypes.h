@@ -402,7 +402,7 @@ struct parameters {
 	unsigned int startup_flag;
 	double startup_time;    // starting time to release the particle (in STARTUP flag)
 	unsigned int startup_init;
-	double startup_velocity[3];
+	double *startup_velocity;
 #endif
 
 	// Collision parameters

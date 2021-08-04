@@ -3,9 +3,9 @@
 # v1
 # Alexander Metelkin: a.metelkin@tu-braunschweig.de
 
-# Current directory will be <PARTIES_home>/testcases/Couette_Testcase/
-echo '----------**Gondret test case St = 27**----------'
-cd St_27
+# Current directory will be <PARTIES_home>/testcases/Gondret_Testcase/
+echo '----------**Collision test case St = 120**----------'
+cd test_St_120
 home_path=`pwd`
 cd ../
 ###########################################################################
@@ -26,20 +26,20 @@ fi
 #             Placing the required files in working dir                   #
 ###########################################################################
 cd ../
-mkdir St_27_run
-chmod 777 St_27_run
-cp $home_path/*.* St_27_run/
-cd St_27_run
+mkdir test_St_120_run
+chmod 777 test_St_120_run
+cp $home_path/*.* test_St_120_run/
+cd test_St_120_run
 work_path=`pwd`
 
 ###########################################################################
 #                        Setting the Boundary.h                           #
 ###########################################################################
-cp Boundary_G27.h ../../src/Include
+cp Boundary_St_120.h ../../src/Include
 cd ../../src/Include
 boundary_path=`pwd`
 mv Boundary.h Boundary_ORIG.h
-mv Boundary_G27.h Boundary.h
+mv Boundary_St_120.h Boundary.h
 
 
 ###########################################################################
@@ -48,12 +48,12 @@ mv Boundary_G27.h Boundary.h
 cd ../../
 echo 'START: Compiling executable'
 printf 'make clean\nmake\n'
-make clean > make_G27.log
-make >> make_G27.log
+make clean > make_St120.log
+make >> make_St120.log
 echo 'END: Compiling executable'
 
 cp parties $work_path
-mv make_G27.log $work_path
+mv make_St120.log $work_path
 cd $boundary_path
 rm -rf Boundary.h
 mv Boundary_ORIG.h Boundary.h
@@ -67,7 +67,8 @@ echo 'END: Flow simulation'
 #                          Checking mobile.dat                            #
 ###########################################################################
 echo 'START: Data comparison'
-python3 gondret_st_27_compare.py
+python3 test_st_120_compare.py
+STATUS=$?
+cd $home_path/../..
 echo 'END: Data comparison'
-
-cd $home_path/..
+(exit $STATUS)

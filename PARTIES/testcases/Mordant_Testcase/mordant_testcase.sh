@@ -58,7 +58,7 @@ mv Boundary_ORIG.h Boundary.h
 
 cd $work_path
 echo 'START: Flow simulation'
-mpirun -np $1 parties > output.log
+mpirun_o -np $1 parties > output.log
 echo 'END: Flow simulation'
 
 ###########################################################################
@@ -66,4 +66,6 @@ echo 'END: Flow simulation'
 ###########################################################################
 #  Run the python-script
 python mordant_testcase.py
-
+STATUS=$?
+cd $home_path/..
+(exit $STATUS)

@@ -34,7 +34,11 @@ for i in range(0, len(reference)):                              # Create list of
 result = all(ele < 1e-12 for ele in delta)                        # Check whether each element of delta list is smaller than 1e-12
 if result == True:
     print('\nTest passed.')
+    print('\n----------**End Mordant  Testcase**----------')
+    sys.exit(1)
 else:
     print('\nTest failed.')
+    print('\n----------**End Mordant  Testcase**----------')
+    sys.exit(0)
 
-print('\n----------**End Mordant  Testcase**----------')
+
