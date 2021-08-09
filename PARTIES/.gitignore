@@ -1,6 +1,12 @@
+# Makefile in main directory
+make.def.*
 # Compiled files
 obj/
 parties
 # Data files
 *.h5
 *.dat
+# Output files
+*.log
+*.out
+*.err
