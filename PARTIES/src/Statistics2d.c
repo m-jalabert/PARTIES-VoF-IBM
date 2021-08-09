@@ -15,8 +15,6 @@
 #include "Particle.h"
 #include "Interpolate.h"
 
-MPI_COMM comm3d;
-
 /******************************************************************************/
 /*
  Compute statistics of
