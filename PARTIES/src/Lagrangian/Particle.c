@@ -15,8 +15,8 @@
 #include "Particle.h"
 #include "ParticleInput.h"
 
-MPI_Datatype MPI_PARTICLE;
-MPI_Datatype MPI_COLLISION;
+extern MPI_Datatype MPI_PARTICLE;
+extern MPI_Datatype MPI_COLLISION;
 
 // Effective radius of particle (area of influence)
 #define R_EFF (p->R)
