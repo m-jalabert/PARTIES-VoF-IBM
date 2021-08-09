@@ -12,3 +12,5 @@ parties
 *.log
 *.out
 *.err
+# Executables
+*.exe
