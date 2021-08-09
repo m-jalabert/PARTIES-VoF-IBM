@@ -5,6 +5,7 @@ obj/
 parties
 # Input files in main directory
 *.inp
+src/Include/Boundary.h
 # Data files
 *.h5
 *.dat
