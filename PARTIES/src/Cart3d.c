@@ -41,8 +41,6 @@
 #include "Interpolate.h"
 #include "EPforcing.h"
 
-extern MPI_Comm comm3d;
-
 
 int main(int argc, char **args) {
 

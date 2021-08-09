@@ -15,7 +15,7 @@
 #include "Particle.h"
 #include "Interpolate.h"
 
-extern MPI_Comm comm3d;
+MPI_COMM comm3d;
 
 /******************************************************************************/
 /*
