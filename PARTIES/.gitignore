@@ -12,5 +12,8 @@ parties
 *.log
 *.out
 *.err
+<<<<<<< HEAD
 # Executables
 *.exe
+=======
+>>>>>>> fbcd04c... .gitignore update
