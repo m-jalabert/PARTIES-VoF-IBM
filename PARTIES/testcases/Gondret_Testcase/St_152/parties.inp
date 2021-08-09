@@ -32,4 +32,5 @@ constant_dt = 1
 
 [particle]
 grav = {0, -9.81, 0}  # {a,b,c,..} notion for a list
-rho_s = 8.083;
+rho_s = 8.342;
+N_forcing_loops = 1
