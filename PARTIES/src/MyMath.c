@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <math.h>
 
-extern MPI_Comm comm3d;
+MPI_COMM comm3d;
 
 /******************************************************************************/
 /*

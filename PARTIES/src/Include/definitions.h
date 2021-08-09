@@ -4,7 +4,7 @@
 #include "Boundary.h"
 #include "DataTypes.h"
 
-extern MPI_Comm comm3d;
+extern MPI_COMM comm3d;
 
 #ifndef PI
 	#define PI 3.14159265358979323846

@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-extern MPI_Comm comm3d;
+MPI_COMM comm3d;
 
 /******************************************************************************/
 /*
