@@ -60,7 +60,7 @@ mv Boundary_ORIG.h Boundary.h
 
 cd $work_path
 echo 'START: Flow simulation'
-mpirun_o -np $1 parties > output.log
+mpirun -np $1 parties > output.log
 echo 'END: Flow simulation'
 
 ###########################################################################
