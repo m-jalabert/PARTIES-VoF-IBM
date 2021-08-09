@@ -13,7 +13,12 @@ parties
 *.out
 *.err
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Executables
 *.exe
 =======
 >>>>>>> fbcd04c... .gitignore update
+=======
+# Executables
+*.exe
+>>>>>>> 4e9905d... Removed executables from main dir
