@@ -661,8 +661,8 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 			DSET_ZERO(Omega, 3);
 //			U[1]=1;
 //			Omega[2]=0;
-			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 27
-//			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 152
+//			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 27
+			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 152
 //			U[1] = 10.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
 //			U[1] = 0.385 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=20
 //			U[1] = 0.288 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=15
@@ -786,8 +786,8 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 			DSET_ZERO(Omega, 3);
 //			U[1]=1;
 //			Omega[2]=0;
-			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 27
-//			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret10d:St=152
+//			U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St = 27
+			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret10d:St=152
 //			U[1] = 10.518 * ( exp(-40 * params->time) - 1 );  // Gondret10d
 //			U[1] = 0.385 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=20
 //			U[1] = 0.288 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=15
