@@ -3,6 +3,8 @@ make.def.*
 # Compiled files
 obj/
 parties
+# Input files in main directory
+*.inp
 # Data files
 *.h5
 *.dat
