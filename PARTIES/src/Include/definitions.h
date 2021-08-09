@@ -1,8 +1,8 @@
 #ifndef DEFINITIONS_H
 	#define DEFINITIONS_H
 
-#include "mpi.h"
 #include "Boundary.h"
+#include "DataTypes.h"
 
 extern MPI_Comm comm3d;
 
