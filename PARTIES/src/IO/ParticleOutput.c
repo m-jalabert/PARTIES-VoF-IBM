@@ -35,6 +35,7 @@ void ParticleOutput_dat(Particle_list *p_list, MAC_grid *grid, Parameters *param
 
 	int i;
 	MPI_Status status;
+	extern MPI_Datatype MPI_PARTICLE;
 	int nproc = params -> size;
 	int rank = params -> rank;
 	int *Np, Np_local, *Nc;
