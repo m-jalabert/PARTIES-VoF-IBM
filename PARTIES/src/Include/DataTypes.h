@@ -9,8 +9,9 @@
 
 	#include <complex.h>
 
-MPI_Comm comm3d;
-
+extern MPI_Comm comm3d;
+extern MPI_Datatype MPI_PARTICLE;
+extern MPI_Datatype MPI_COLLISION;
 
 /******************************************************************************/
 /*                             LSOLVER_TRANSPOSE                              */
