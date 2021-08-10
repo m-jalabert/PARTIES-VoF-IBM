@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+
+MPI_Comm comm3d;
+
 /******************************************************************************/
 /*
  This function reduces (sums) all the global arrays to the W_array.
