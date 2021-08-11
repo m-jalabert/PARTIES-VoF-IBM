@@ -3,7 +3,7 @@
 # v1
 # Alexander Metelkin: a.metelkin@tu-braunschweig.de
 
-# Current directory will be <PARTIES_home>/testcases/Couette_Testcase/
+# Current directory will be <PARTIES_home>/testcases/Gondret_Testcase/
 echo '----------**Gondret test case St = 27**----------'
 cd St_27
 home_path=`pwd`
