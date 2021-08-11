@@ -15,6 +15,7 @@ src/Include/Boundary.h
 *.err
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Executables
 *.exe
 =======
@@ -23,3 +24,7 @@ src/Include/Boundary.h
 # Executables
 *.exe
 >>>>>>> 4e9905d... Removed executables from main dir
+=======
+# Executables
+*.exe
+>>>>>>> ed18d906fc36f067630b2a094f6dd543e5bdbf77
