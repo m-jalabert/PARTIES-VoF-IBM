@@ -91,6 +91,10 @@ then
     rm -rf numerical_velo_verified.dat
     mv numerical_velo.dat numerical_velo_verified_PF.dat
     mv absolute_error.dat absolute_error_PF.dat
+    # Clean up
+    rm -rf velo.dat
+    cd $home_path/..
+    (exit 1)
     # cp numerical_velo_verified_PF.dat l2norm_PF.dat ../Testcase_Results/
 else
     # "Test Failed"
@@ -99,8 +103,8 @@ else
     mv numerical_velo_verified.dat numerical_velo_verified_PF.dat
     mv numerical_velo.dat numerical_velo_failed_PF.dat
     mv absolute_error.dat absolute_error_failed_PF.dat
+    # Clean up
+    rm -rf velo.dat
+    cd $home_path/..
+    (exit 0)
 fi
-
-# Clean up
-rm -rf velo.dat
-cd $home_path/..

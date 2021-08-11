@@ -1,0 +1,36 @@
+# parties.inp file for Gondret St = 152 test case
+[geometry]
+xmin = 0
+xmax = 0.02
+ymin = 0
+ymax = 0.2
+zmin = 0
+zmax = 0.02
+
+
+[grid]
+NXM = 128
+NYM = 1280
+NZM = 128
+
+
+[flow]
+Re = 93457.943925234
+ubulk_target = 0
+
+# Startup flag variables
+startup_init = 2
+
+
+[simulation]
+time_max = 0.6
+output_time_interval = 0.06
+default_dt = 8.9e-5
+max_dt = 8.9e-5
+constant_dt = 1
+
+
+[particle]
+grav = {0, -9.81, 0}  # {a,b,c,..} notion for a list
+rho_s = 8.342;
+N_forcing_loops = 1

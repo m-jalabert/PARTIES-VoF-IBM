@@ -66,4 +66,6 @@ echo 'END: Flow simulation'
 ###########################################################################
 #  Run the python-script
 python mordant_testcase.py
-
+STATUS=$?
+cd $home_path/..
+(exit $STATUS)

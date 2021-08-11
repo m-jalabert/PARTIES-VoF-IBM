@@ -92,6 +92,11 @@ then
     mv numerical_velo.dat numerical_velo_verified_CF.dat
     mv absolute_error.dat absolute_error_CF.dat
     # cp numerical_velo_verified_CF.dat l2norm_CF.dat ../Testcase_Results/
+    
+    # Clean up
+    rm -rf velo.dat
+    cd $home_path/..
+    (exit 1)
 else
     # "Test Failed"
     # old verified numerical soln, remains as is
@@ -99,8 +104,11 @@ else
     mv numerical_velo_verified.dat numerical_velo_verified_CF.dat
     mv numerical_velo.dat numerical_velo_failed_CF.dat
     mv absolute_error.dat absolute_error_failed_CF.dat
+
+    # Clean up
+    rm -rf velo.dat
+    cd $home_path/..
+    (exit 0)
 fi
 
-# Clean up
-rm -rf velo.dat
-cd $home_path/..
+

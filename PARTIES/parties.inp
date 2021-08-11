@@ -17,6 +17,13 @@ NZM = 200
 Re = 180
 dp_dx = 0  # constant volume force
 
+#Startup flag variables
+startup_time = 0.0
+startup_velocity = {0, -1, 0}
+startup_init = 0
+#Flag types:
+# 0 - defined by startup time and velocity
+# 1,2 - velocity prescribed for Gondret testcase St=27 and St = 152
 
 
 # Initialization types:

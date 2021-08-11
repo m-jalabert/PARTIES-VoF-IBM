@@ -129,6 +129,12 @@
 #define VEL_INIT_JET_3D 8
 #define VEL_INIT_LEFT_RIGHT 9
 #define VEL_INIT_NOISE 10
+
+// Startup initialization options
+#define STUP_INIT_TIME			0
+#define STUP_INIT_GOND_ST_27	1
+#define STUP_INIT_GOND_ST_152	2
+
 // Concentration initialization options
 #define CONC_INIT_TWOLAYERS 0
 #define CONC_INIT_LINGRAD 1

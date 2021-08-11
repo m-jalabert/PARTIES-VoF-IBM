@@ -4,11 +4,11 @@ import sys
 import csv
 
 ### Load reference data ###
-f           = open(os.path.join(sys.path[0], "reference_data.dat"), 'r')
+f           = open(os.path.join(sys.path[0], "../Gondret_Testcase/Reference_data/mobile_st_27.dat"), 'r')
 csv_f       = csv.reader(f, delimiter=',')
 reference   = []
 for row in csv_f:
-     reference.append(row[7:8])                                 # Get the eight column
+     reference.append(row[3:4])                                 # Get the fourth column
 f.close()
 flatList    = [item for elem in reference for item in elem]     # Flatten the nested list obtained by for-loop
 reference   = [float(i) for i in flatList]                      # Convert each list element into a float
@@ -18,7 +18,7 @@ f           = open(os.path.join(sys.path[0], "mobile.dat"), 'r')
 csv_f       = csv.reader(f, delimiter=',')
 simulation   = []
 for row in csv_f:
-     simulation.append(row[7:8])                                # Get the eight column
+     simulation.append(row[3:4])                                # Get the fourth column
 f.close()
 flatList    = [item for elem in simulation for item in elem]    # Flatten the nested list obtained by for-loop
 simulation  = [float(i) for i in flatList]                      # Convert each list element into a float
@@ -28,15 +28,8 @@ simulation  = [float(i) for i in flatList]                      # Convert each l
 delta = []
 for i in range(0, len(reference)):                              # Create list of delta between reference and simulation values
     delta.append(abs(reference[i]-simulation[i]))
+    if (delta[i] > 1e-12):
+        print('\nTest failed. Difference {} in line {}'.format(delta[i],i+1))
+        exit()
 
-
-### Check for test condition ###
-result = all(ele < 1e-12 for ele in delta)                        # Check whether each element of delta list is smaller than 1e-12
-if result == True:
-    print('\nTest passed.')
-    print('\n----------**End ten Cate Testcase**----------')
-    sys.exit(1)
-else:
-    print('\nTest failed.')
-    print('\n----------**End ten Cate Testcase**----------')
-    sys.exit(0)
+print('\nTest passed.')

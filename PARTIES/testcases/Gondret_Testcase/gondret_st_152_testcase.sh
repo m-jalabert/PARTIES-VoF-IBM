@@ -1,12 +1,13 @@
 #!/bin/bash
-# Shell script to run a test for Poiseuille Flow with the PARTIES fluid solver.
+# Shell script to run a test for particle contact (Gondret test case) with the PARTIES fluid solver.
 # v1
-# Ralph George: r.george@tu-braunschweig.de
+# Alexander Metelkin: a.metelkin@tu-braunschweig.de
 
-# Current directory will be <PARTIES_home>/testcases/Poiseuilli_Testcase/
-echo '----------**Start ten Cate Testcase**----------'
+# Current directory will be <PARTIES_home>/testcases/Gondret_Testcase/
+echo '----------**Gondret test case St = 152**----------'
+cd St_152
 home_path=`pwd`
-
+cd ../
 ###########################################################################
 #                         Set no of processors                            #
 ###########################################################################
@@ -22,23 +23,24 @@ else
 fi
 
 ###########################################################################
-#              Placing the required files in working dir                  #
+#             Placing the required files in working dir                   #
 ###########################################################################
 cd ../
-mkdir ten_Cate_run
-chmod 777 ten_Cate_run
-cp $home_path/*.* ten_Cate_run/
-cd ten_Cate_run
+mkdir St_152_run
+chmod 777 St_152_run
+cp $home_path/*.* St_152_run/
+cd St_152_run
 work_path=`pwd`
 
 ###########################################################################
 #                        Setting the Boundary.h                           #
 ###########################################################################
-cp Boundary_ten_Cate.h ../../src/Include
+cp Boundary_G152.h ../../src/Include
 cd ../../src/Include
 boundary_path=`pwd`
 mv Boundary.h Boundary_ORIG.h
-mv Boundary_ten_Cate.h Boundary.h
+mv Boundary_G152.h Boundary.h
+
 
 ###########################################################################
 #                          Running parties.sh                             #
@@ -46,12 +48,12 @@ mv Boundary_ten_Cate.h Boundary.h
 cd ../../
 echo 'START: Compiling executable'
 printf 'make clean\nmake\n'
-make clean > make_ten_Cate.log
-make >> make_ten_Cate.log
+make clean > make_G152.log
+make >> make_G152.log
 echo 'END: Compiling executable'
 
 cp parties $work_path
-mv make_ten_Cate.log $work_path
+mv make_G152.log $work_path
 cd $boundary_path
 rm -rf Boundary.h
 mv Boundary_ORIG.h Boundary.h
@@ -62,11 +64,10 @@ mpirun -np $1 parties > output.log
 echo 'END: Flow simulation'
 
 ###########################################################################
-#                           Validation                             #
+#                          Checking mobile.dat                            #
 ###########################################################################
-#  Run the python-script
-python ten_Cate_testcase.py
-STATUS=$?
-cd $home_path/..
-(exit $STATUS)
+echo 'START: Data comparison'
+python3 gondret_st_152_compare.py
+echo 'END: Data comparison'
 
+cd $home_path/..
