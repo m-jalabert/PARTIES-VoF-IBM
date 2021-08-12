@@ -398,12 +398,10 @@ struct parameters {
 	// Used to smooth velocity field around swimmers to remove viscous BL
 	double bl_thick;
 
-#ifdef STARTUP
 	unsigned int startup_flag;
 	double startup_time;    // starting time to release the particle (in STARTUP flag)
 	unsigned int startup_init;
 	double *startup_velocity;
-#endif
 
 	// Collision parameters
 	double e_dry_wall, e_dry_particles;  // Restitution coefficients
