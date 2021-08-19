@@ -1,6 +1,17 @@
+# Makefile in main directory
+make.def.*
 # Compiled files
 obj/
 parties
+# Input files in main directory
+*.inp
+src/Include/Boundary.h
 # Data files
 *.h5
 *.dat
+# Output files
+*.log
+*.out
+*.err
+# Executables
+*.exe

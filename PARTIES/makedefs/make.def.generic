@@ -1,41 +1,40 @@
 # -*- mode: makefile -*-
-# Machine: stampede.tacc.utexas.edu
+# Machine:  generic machine where the libraries are built with "install_parties.sh"
 
 # Compiler executable
-compiler_cmd := mpicc
-# Compiler flags
+compiler_cmd :=mpicc
 #   cflags - flags to give the compiler
 #   optmz  - optimization (default)
 #   debug  - debugging
 #   libs   - libraries needed to be linked to executable
 cflags      +=
-optmz_flags := -xCORE-AVX2 -axCORE-AVX512,MIC-AVX512 -O3 ## recommended for multiplatform buildls
-debug_flags :=
-libs        += -fp-model precise -lfftw3 -lhdf5 -lz
+optmz_flags := -O3
+debug_flags := -g
+libs        += -lm -ldl -lfftw3 -lhdf5
 
 # Location of packages
-fftw_dir := $(TACC_FFTW3_DIR)
-hdf5_dir := $(TACC_HDF5_DIR)
-mpi_dir  :=
+fftw_dir:=$(HOME)/Software/PARTIES_Libs
+hdf5_dir:=$(HOME)/Software/PARTIES_Libs
+mpi_dir :=$(HOME)/Software/PARTIES_Libs
 
 # FFTW
 ifneq ($(strip $(fftw_dir)),) # If not empty
-  lflags   += -L$(fftw_dir)/lib
-  libs     += -Wl,-rpath=$(fftw_dir)/lib
+  lflags += -L$(fftw_dir)/lib
+  libs += -Wl,-rpath=$(fftw_dir)/lib
   includes += -I$(fftw_dir)/include
 endif
 
 # HDF5
 ifneq ($(strip $(hdf5_dir)),) # If not empty
-  lflags   += -L$(hdf5_dir)/lib
-  libs     += -Wl,-rpath=$(hdf5_dir)/lib
+  lflags += -L$(hdf5_dir)/lib
+  libs += -Wl,-rpath=$(hdf5_dir)/lib
   includes += -I$(hdf5_dir)/include
 endif
 
 # MPI
 ifneq ($(strip $(mpi_dir)),) # If not empty
-  lflags   += -L$(mpi_dir)/lib
-  libs     += -Wl,-rpath=$(mpi_dir)/lib/openmpi
+  lflags += -L$(mpi_dir)/lib/openmpi
+  libs += -Wl,-rpath=$(mpi_dir)/lib/openmpi
   includes += -I$(mpi_dir)/include
   compiler := $(mpi_dir)/bin/$(compiler_cmd)
 else

@@ -73,3 +73,8 @@ cleandata:
 	-rm Reader_*.xmf
 	-rm *.dat
 	-rm *.h5
+
+cleanlogs:
+	-rm *.log
+	-rm *.out
+	-rm *.err
