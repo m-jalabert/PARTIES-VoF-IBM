@@ -27,7 +27,8 @@ simulation  = [float(i) for i in flatList]                      # Convert each l
 ### Create delta list of reference and simulation data ###
 delta = []
 for i in range(0, len(reference)):                              # Create list of delta between reference and simulation values
-    delta.append(abs(reference[i]-simulation[i]))
+    if reference[i] != 0.0:
+        delta.append(abs(reference[i]-simulation[i])/abs(reference[i]))
 
 
 ### Check for test condition ###
