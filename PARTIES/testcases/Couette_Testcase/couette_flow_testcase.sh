@@ -96,7 +96,7 @@ then
     # Clean up
     rm -rf velo.dat
     cd $home_path/..
-    (exit 1)
+    (exit 0)
 else
     # "Test Failed"
     # old verified numerical soln, remains as is
@@ -108,7 +108,7 @@ else
     # Clean up
     rm -rf velo.dat
     cd $home_path/..
-    (exit 0)
+    (exit 1)
 fi
 
 

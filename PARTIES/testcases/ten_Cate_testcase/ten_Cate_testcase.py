@@ -35,8 +35,8 @@ result = all(ele < 1e-12 for ele in delta)                        # Check whethe
 if result == True:
     print('\nTest passed.')
     print('\n----------**End ten Cate Testcase**----------')
-    sys.exit(1)
+    sys.exit(0)
 else:
     print('\nTest failed.')
     print('\n----------**End ten Cate Testcase**----------')
-    sys.exit(0)
+    sys.exit(1)

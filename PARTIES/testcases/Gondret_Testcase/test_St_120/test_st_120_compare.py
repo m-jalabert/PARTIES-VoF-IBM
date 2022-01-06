@@ -30,7 +30,7 @@ for i in range(0, len(reference)):                              # Create list of
     delta.append(abs(reference[i]-simulation[i]))
     if (delta[i] > 1e-12):
         print('\nTest failed. Difference {} in line {}'.format(delta[i],i+1))
-        sys.exit(0)
+        sys.exit(1)
 
 print('\nTest passed.')
-sys.exit(1)
+sys.exit(0)
