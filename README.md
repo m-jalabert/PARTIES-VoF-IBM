@@ -8,7 +8,7 @@
 ## Guidelines
 
 [Workflow and branching](https://github.com/vowinckel/PARTIES/blob/master/docs/md_files/guidline.md) <br>
-[Testcases guideline](https://github.com/metialex/PARTIES/blob/metelkin_doc_commands/docs/md_files/test_case_doc.md) <br>
+[Testcases guideline](https://github.com/metialex/PARTIES/blob/master/docs/md_files/test_case_doc.md) <br>
 Writing the code - comments, description of functions <br>
 
 ## Fluid Dynamic Theory
