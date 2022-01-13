@@ -74,4 +74,3 @@ rm -rf ten_Cate_run
 rm -rf test_St_3_run
 rm -rf test_St_120_run
 rm $LOGFILE
-
