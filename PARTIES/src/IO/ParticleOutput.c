@@ -102,7 +102,7 @@ void ParticleOutput_dat(Particle_list *p_list, MAC_grid *grid, Parameters *param
 // 						"% .10g,% .10g,% .10g,"
 // 						"% .10g,% .10g,% .10g,"
 // 						"% .10g,% .10g,% .10g,"
-						"%.20g,%.10g,%.10g,%.10g,%.10g,%.10g\n",
+						"%.20g,%.20g,%.20g,%.20g,%.20g,%.20g\n",
 						params->time, p->ID,
 // 						p -> X[0],      p -> X[1],      p -> X[2],
 // 						p -> U[0],      p -> U[1],      p -> U[2],

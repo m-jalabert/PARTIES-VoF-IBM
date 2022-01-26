@@ -5,7 +5,7 @@
 
 #Define status print function
 print_status() {
-    if [[ $1 -eq 1 ]]; then tput setaf 2; printf "\t PASSED"
+    if [[ $1 -eq 0 ]]; then tput setaf 2; printf "\t PASSED"
     else tput setaf 1; printf "\t FAILED"; fi
     tput sgr0
 }
@@ -74,4 +74,3 @@ rm -rf ten_Cate_run
 rm -rf test_St_3_run
 rm -rf test_St_120_run
 rm $LOGFILE
-
