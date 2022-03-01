@@ -9,7 +9,7 @@ git clone <em>URL</em>
 The libraries are in <em>.tar</em> and <em>.tar.gz</em> format and need to be unpacked. Unpack the files to a local directory, which we will call <b>your_directory</b>, and create an additional file, e.g. <em>PARTIES_Libs</em>, in the same directory. Please note that you have to specify the path of your directory in all following commands for <b>your_directory</b>.
 
 <pre>
-tar -xf <em>*.tar*</em> -C <b>your_directory</b>
+tar -xf <em>*.tar</em> -C <b>your_directory</b>
 cd <b>your_directory</b>
 mkdir <em>PARTIES_Libs</em>
 </pre>
