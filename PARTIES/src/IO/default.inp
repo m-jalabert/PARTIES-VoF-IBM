@@ -225,6 +225,14 @@ CFG(output, output_vfv, NO, atoi)     // particle indicator function
 CFG(output, output_vfw, NO, atoi)     // particle indicator function
 CFG(output, output_vfc, NO, atoi)     // particle indicator function
 
+
+// SLICE_OUTPUT
+CFG(output, slice_axis, 2, atoi)      // Specification of the axis to be sliced: 0=X, 1=Y, 2=Z
+CFG(output, slice_half, 1, atoi)      // Slice in the center of the specified slicing axis: 1=yes; 0=no -> if no, specify slice_position
+CFG(output, slice_pos, 1, atoi)       // If slice_half=0 -> grid point number for slicing position
+CFG(output, slice_p, 0, atoi)         // Specifiy if pressure field should be sliced: 0=no; 1=yes
+
+
 /*  For statistics2d  */
 
 

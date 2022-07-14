@@ -93,7 +93,30 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Statistics2d *st2d = data_bag -> st2d;
 #endif
 
+	#ifdef SLICE_OUTPUT
 
+		double ***slice_data_1, ***slice_data_2;
+		char name_data_1, name_data_2;
+
+		if (params->slice_axis==0){ // slice of X-axis
+			slice_data_1 = data_bag->w->data;
+			slice_data_2 = data_bag->v->data;
+			name_data_1 = 'w';
+			name_data_2 = 'v';
+
+		} else if (params->slice_axis==1){ // slice of Y-axis
+			slice_data_1 = data_bag->u->data;
+			slice_data_2 = data_bag->w->data;
+			name_data_1 = 'u';
+			name_data_2 = 'w';
+
+		} else if (params->slice_axis==2){ // slice of Z-axis
+			slice_data_1 = data_bag->u->data;
+			slice_data_2 = data_bag->v->data;
+			name_data_1 = 'u';
+			name_data_2 = 'v';
+		} 
+	#endif
 
 
 	/*------------------------------------------------------------------------*/
@@ -188,14 +211,27 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 			fclose(timeFile);
 		}
 
-#ifdef OUTPUT2D
-		//Output_h5_data2d(data_bag, DTRACE("Output_h5_data2d"));
-		Statistics2d_computeStatistics(data_bag, DTRACE("Statistics2d_computeStatistics"));
-		params->noutput_2d++;
+		#if defined OUTPUT2D || defined SLICE_OUTPUT
 
-#endif
+			#ifdef OUTPUT2D
+				Statistics2d_computeStatistics(data_bag, DTRACE("Statistics2d_computeStatistics"));
+			#endif
+
+
+			#ifdef SLICE_OUTPUT
+				slice_2d_output(slice_data_1,name_data_1,data_bag, time, DTRACE("slice_2d_output"));
+				slice_2d_output(slice_data_2,name_data_2,data_bag, time, DTRACE("slice_2d_output"));
+				if (params->slice_p == 1) {
+					slice_2d_output(data_bag->p->p_data_avg,'p',data_bag, time, DTRACE("slice_2d_output"));
+				}
+			#endif
+
+			params->output_time_2d += output_time_interval_2d;
+			params->noutput_2d++;
+
+		#endif
+
 		params->output_time += output_time_interval;
-		params->output_time_2d += output_time_interval_2d;
 		params->noutput++;
 
 		Display_progress(params,"Initial flow properties have been saved successfully...\n");
@@ -290,19 +326,29 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		} // Output writing
 
 
-#ifdef OUTPUT2D
-		if ( (fabs(time - params->output_time_2d) < dt &&
-		     fabs(time - params->output_time_2d) < fabs(time + dt - params->output_time_2d)) ||
-		     (time > params->output_time_2d) ) {
+		#if defined OUTPUT2D || defined SLICE_OUTPUT
+			if ( (fabs(time - params->output_time_2d) < dt &&
+		     	fabs(time - params->output_time_2d) < fabs(time + dt - params->output_time_2d)) ||
+		     	(time > params->output_time_2d) ) {
 
+				#ifdef OUTPUT2D
+					Statistics2d_computeStatistics(data_bag, DTRACE("Statistics2d_computeStatistics"));
+				#endif
 
-				Statistics2d_computeStatistics(data_bag, DTRACE("Statistics2d_computeStatistics"));
+				#ifdef SLICE_OUTPUT
+					slice_2d_output(slice_data_1,name_data_1,data_bag, time, DTRACE("slice_2d_output"));
+					slice_2d_output(slice_data_2,name_data_2,data_bag, time, DTRACE("slice_2d_output"));
+					if (params->slice_p == 1) {
+						slice_2d_output(data_bag->p->p_data_avg,'p',data_bag, time, DTRACE("slice_2d_output"));
+					}
+				#endif
 
 				params->output_time_2d += output_time_interval_2d;
 				params->noutput_2d++;
 
-		}
-#endif
+			}
+		#endif
+		
 		/*--------------------------------------------------------------------*/
 		/*
 		 Runge Kutta sub-steps
@@ -428,11 +474,27 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		// Save data, if stopping
 		//----------------------------------------------------------------------
 		if (int_stop) {
-#ifdef OUTPUT2D
-			//Output_h5_data2d(data_bag, DTRACE("Output_h5_data2d"));
-			Statistics2d_computeStatistics(data_bag, DTRACE("Statistics2d_computeStatistics"));
-			params->output_time_2d += output_time_interval_2d;
-#endif
+			#if defined OUTPUT2D || defined SLICE_OUTPUT
+				if ( (fabs(time - params->output_time_2d) < dt &&
+					fabs(time - params->output_time_2d) < fabs(time + dt - params->output_time_2d)) ||
+					(time > params->output_time_2d) ) {
+
+					#ifdef OUTPUT2D
+						Statistics2d_computeStatistics(data_bag, DTRACE("Statistics2d_computeStatistics"));
+					#endif
+
+					#ifdef SLICE_OUTPUT
+						slice_2d_output(slice_data_1,name_data_1,data_bag, time, DTRACE("slice_2d_output"));
+						slice_2d_output(slice_data_2,name_data_2,data_bag, time, DTRACE("slice_2d_output"));
+						if (params->slice_p == 1) {
+							slice_2d_output(data_bag->p->p_data_avg,'p',data_bag, time, DTRACE("slice_2d_output"));
+						}
+					#endif
+
+					params->output_time_2d += output_time_interval_2d;
+					params->noutput_2d++;
+				}
+			#endif
 
 			Output_h5_data(data_bag, DTRACE("Output_h5_data"));
 			Output_h5_resume(data_bag, DTRACE("Output_h5_resume"));
@@ -1080,13 +1142,15 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 
 /******************************************************************************/
 /*
- * Simple function to output a slice of 'u_data'
+ * Simple function to output a (2D) slice of 'u_, v_, w_ and/or p_data' depending
+ * on the specifications in parties.inp
  */
 /******************************************************************************/
-void test_2d_output(double ***data3d, char nme, Cart3d_bag *data_bag, int counter, Debug_trace *dtrace) {
+void slice_2d_output(double ***data3d, char nme, Cart3d_bag *data_bag, double time, Debug_trace *dtrace) {
 
 	int i, j, k;
 	char filename[50];
+	double *x,*y,*z;
 
 	MAC_grid *grid = data_bag -> grid;
 	Parameters *params = data_bag -> params;
@@ -1097,12 +1161,43 @@ void test_2d_output(double ***data3d, char nme, Cart3d_bag *data_bag, int counte
 
 	int Ie = grid->G_Ie;
 	int Je = grid->G_Je;
+	int Ke = grid->G_Ke;
 
-	// Dimensions of slice as part of a 3-D array
+	int slice_half = params->slice_half; // determines if slice should be taken in the center of the specified slicing axis
+	int slice_pos  = params->slice_pos;  // determines the position of the slicing (number of grid cell), if not in the center
+
+	// Dimensions of slice as part of a 3-D array and specification of position of slicing
 	int dim[3];
-	dim[0] = grid->NX;
-	dim[1] = grid->NY;
 	dim[2] = 1;
+
+	if (params->slice_axis==0){ // slice of X-axis
+		dim[0] = grid->NZ;
+		dim[1] = grid->NY;
+		if (slice_half==0){
+			i = slice_pos;
+		} else if (slice_half==1){
+			i = (grid->NX-1)/2;		// N-1 to delete ghost cell
+		}
+
+	} else if (params->slice_axis==1){ // slice of Y-axis
+		dim[0] = grid->NX;
+		dim[1] = grid->NZ;
+		if (slice_half==0){
+			j = slice_pos;
+		} else if (slice_half==1){
+			j = (grid->NY-1)/2;
+		}
+
+	} else if (params->slice_axis==2){ // slice of Z-axis
+		dim[0] = grid->NX;
+		dim[1] = grid->NY;
+		if (slice_half==0){
+			k = slice_pos;
+		} else if (slice_half==1){
+			k = (grid->NZ-1)/2;
+		}
+	}
+	
 
 	// Allocate storage for send an receive buffers (initialized to zero)
 	// (in production code, only free at beginning of simulation)
@@ -1110,53 +1205,141 @@ void test_2d_output(double ***data3d, char nme, Cart3d_bag *data_bag, int counte
 	double **W_data2d = Memory_allocate_2D_double_array(dim[0], dim[1]);
 
 
-	// Copy slice of 3-D data (from local processor)
-	k = 0;
-	for (j = Js; j < Je; j++) {
-		for (i = Is; i < Ie; i++) {
-			G_data2d[j][i] = data3d[k][j][i];
-		}
-	}
-
+	// Copy slice of 3-D data (from local processor) and
 	// Describe dimensions of 2-D data
 	Indices G_s, G_e, W_e;
-	G_s.x_index = Is;
-	G_s.y_index = Js;
 
-	G_e.x_index = Ie;
-	G_e.y_index = Je;
+	if (params->slice_axis==0){ // slice of X-axis
+		for (j = Js; j < Je; j++) {
+			for (k = Ks; k < Ke; k++) {
+				G_data2d[j][k] = 0.0;
+				if (i >= Is && i < Ie) { // only the processor which contains data at location i should be considered
+					if (slice_half==0){
+						G_data2d[j][k] = data3d[k][j][i];
+					} else if (slice_half==1){	// slicing in center
+						// calculate data exactly in the center of the x-coordinate
+						G_data2d[j][k] = (data3d[k][j][i] + data3d[k][j][i-1]) / 2;
+					}
+				}
+			}
+		}
+		G_s.x_index = Ks;
+		G_s.y_index = Js;
+
+		G_e.x_index = Ke;
+		G_e.y_index = Je;
+
+	} else if (params->slice_axis==1){ // slice of Y-axis
+		for (k = Ks; k < Ke; k++) {
+			for (i = Is; i < Ie; i++) {
+				G_data2d[k][i] = 0.0;
+				if (j >= Js && j < Je) { // only the processor which contains data at location j should be considered
+					if (slice_half==0){
+						G_data2d[k][i] = data3d[k][j][i];
+					} else if (slice_half==1){	// slicing in center
+						// calculate data exactly in the center of the y-coordinate
+						G_data2d[k][i] = (data3d[k][j][i] + data3d[k][j-1][i]) / 2;
+					}
+				}
+			}
+		}
+		G_s.x_index = Is;
+		G_s.y_index = Ks;
+
+		G_e.x_index = Ie;
+		G_e.y_index = Ke;
+
+	} else if (params->slice_axis==2){ // slice of Z-axis
+		for (j = Js; j < Je; j++) {
+			for (i = Is; i < Ie; i++) {
+				G_data2d[j][i] = 0.0;
+				if (k >= Ks && k < Ke) { // only the processor which contains data at location k should be considered
+					if (slice_half==0){
+						G_data2d[j][i] = data3d[k][j][i];
+					} else if (slice_half==1){	// slicing in center
+						// calculate data exactly in the center of the z-coordinate
+						G_data2d[j][i] = (data3d[k][j][i] + data3d[k-1][j][i]) / 2;  
+					}
+				}
+			}
+		}
+		G_s.x_index = Is;
+		G_s.y_index = Js;
+
+		G_e.x_index = Ie;
+		G_e.y_index = Je;
+	}
 
 	W_e.x_index = dim[0];
 	W_e.y_index = dim[1];
+
 
 	// Reduce 2-D data to master processor
 	Communication_reduce_2D_arrays(G_data2d, W_data2d, &G_s, &G_e, &W_e, REDUCE_TO_MASTER, data_bag);
 
 	// Write 2-D data from master processor
+	if (params->slice_axis==0){ // slice of X-axis
+		if (nme=='w'){
+		sprintf(filename, "./trn/w_%.4f.h5", time);
+		x = grid->zw;
+		y = grid->yc;
+		z = &(grid->xu[i]);
+		}
+		if (nme=='v'){
+		sprintf(filename, "./trn/v_%.4f.h5", time);
+		x = grid->zc;
+		y = grid->yv;
+		z = &(grid->xu[i]);
+		}
+		if (nme=='p'){
+		sprintf(filename, "./trn/p_%.4f.h5", time);
+		x = grid->zc;
+		y = grid->yc;
+		z = &(grid->xu[i]);
+		}
 
-	if (nme=='u'){
-	sprintf(filename, "./trn/u_%d.h5", counter);
+	} else if (params->slice_axis==1){ // slice of Y-axis
+		if (nme=='u'){
+		sprintf(filename, "./trn/u_%.4f.h5", time);
+		x = grid->xu;
+		y = grid->zc;
+		z = &(grid->yv[j]);
+		}
+		if (nme=='w'){
+		sprintf(filename, "./trn/w_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->zw;
+		z = &(grid->yv[j]);
+		}
+		if (nme=='p'){
+		sprintf(filename, "./trn/p_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->zc;
+		z = &(grid->yv[j]);
+		}
+
+	} else if (params->slice_axis==2){ // slice of Z-axis
+		if (nme=='u'){
+		sprintf(filename, "./trn/u_%.4f.h5", time);
+		x = grid->xu;
+		y = grid->yc;
+		z = &(grid->zw[k]);
+		}
+		if (nme=='v'){
+		sprintf(filename, "./trn/v_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->yv;
+		z = &(grid->zw[k]);
+		}
+		if (nme=='p'){
+		sprintf(filename, "./trn/p_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->yc;
+		z = &(grid->zw[k]);
+		}
 	}
-	if (nme=='v'){
-	sprintf(filename, "./trn/v_%d.h5", counter);
-	}
-	if (nme=='w'){
-	sprintf(filename, "./trn/w_%d.h5", counter);
-	}
-	if (nme=='a'){
-	sprintf(filename, "./trn/ubc_%d.h5", counter);
-	}
-	if (nme=='b'){
-	sprintf(filename, "./trn/vbc_%d.h5", counter);
-	}
-	if (nme=='c'){
-	sprintf(filename, "./trn/wbc_%d.h5", counter);
-	}
-	if (nme=='p'){
-	sprintf(filename, "./trn/p_%d.h5", counter);
-	}
-	Output_2d_data(W_data2d, dim, grid->xu, grid->yc, &(grid->zc[k]), filename,
-		data_bag, DTRACE("Output_2d_data"));
+
+	Output_2d_data(W_data2d, dim, x, y, z, filename, data_bag, DTRACE("Output_2d_data"));
 
 	// Free storage (in production code, only free at end of simulation)
 	Memory_free_2D_double_array(dim[1], G_data2d);

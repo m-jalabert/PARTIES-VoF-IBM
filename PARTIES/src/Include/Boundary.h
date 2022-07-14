@@ -175,6 +175,7 @@
 /*                                   Output                                   */
 /******************************************************************************/
 #undef  OUTPUT2D
+#define SLICE_OUTPUT
 
 
 /******************************************************************************/
@@ -207,7 +208,7 @@
 
 // defines some output quantities should be handeled differently
 #undef SCALAR_DEBUG	// prints the difference at the Lagrangian points to stdout
-#undef POST_PROCESS    //Ed ibm force make field in x direction
+#define POST_PROCESS    //Ed ibm force make field in x direction
 
 
 						/* Now some predefined BC for a single conc field*/
@@ -309,6 +310,12 @@
 /******************************************************************************/
 /*                                Logic checks                                */
 /******************************************************************************/
+
+#if defined SLICE_OUTPUT && !defined POST_PROCESS
+	#warning 'SLICE_OUTPUT' defined, but not 'POST_PROCESS'. Defining 'POST_PROCESS'...
+	#define POST_PROCESS
+#endif
+
 
 //------------------------------------------------------------------------------
 // Oscillation
