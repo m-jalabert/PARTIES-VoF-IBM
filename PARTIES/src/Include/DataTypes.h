@@ -464,12 +464,12 @@ struct parameters {
 	int near_wall_slice_switch;
 
 
-	#ifdef SLICE_OUTPUT
-		int slice_axis; // Specification of the axis to be sliced: 0=X, 1=Y, 2=Z
-		int slice_half; // Slice in the center of the specified slicing axis: 1=yes; 0=no -> if no, specify slice_position
-		int slice_pos;	// If slice_half=0 -> grid point number for slicing position
-		int slice_p;	// Specifiy if pressure field should be sliced: 0=no; 1=yes
-	#endif
+
+	int slice_axis; // Specification of the axis to be sliced: 0=X, 1=Y, 2=Z
+	int slice_half; // Slice in the center of the specified slicing axis: 1=yes; 0=no -> if no, specify slice_position
+	int slice_pos;	// If slice_half=0 -> grid point number for slicing position
+	int slice_p;	// Specifiy if pressure field should be sliced: 0=no; 1=yes
+
 
 };
 typedef struct parameters Parameters;
