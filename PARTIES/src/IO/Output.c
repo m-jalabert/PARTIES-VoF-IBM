@@ -1767,3 +1767,210 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 	T2 = MPI_Wtime();
 	data_bag->timer->Wtime_output += T2 - T1;
 }
+
+
+/******************************************************************************/
+/*
+ * Simple function to output a (2D) slice of 'u_, v_, w_ and/or p_data' depending
+ * on the specifications in parties.inp
+ */
+/******************************************************************************/
+void slice_2d_output(double ***data3d, char nme, Cart3d_bag *data_bag, double time, Debug_trace *dtrace) {
+
+	int i, j, k;
+	char filename[50];
+	double *x,*y,*z;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+
+	int Is = grid->G_Is;
+	int Js = grid->G_Js;
+	int Ks = grid->G_Ks;
+
+	int Ie = grid->G_Ie;
+	int Je = grid->G_Je;
+	int Ke = grid->G_Ke;
+
+	int slice_half = params->slice_half; // determines if slice should be taken in the center of the specified slicing axis
+	int slice_pos  = params->slice_pos;  // determines the position of the slicing (number of grid cell), if not in the center
+
+	// Dimensions of slice as part of a 3-D array and specification of position of slicing
+	int dim[3];
+	dim[2] = 1;
+
+	if (params->slice_axis==0){ // slice of X-axis
+		dim[0] = grid->NZ;
+		dim[1] = grid->NY;
+		if (slice_half==0){
+			i = slice_pos;
+		} else if (slice_half==1){
+			i = (grid->NX-1)/2;		// N-1 to delete ghost cell
+		}
+
+	} else if (params->slice_axis==1){ // slice of Y-axis
+		dim[0] = grid->NX;
+		dim[1] = grid->NZ;
+		if (slice_half==0){
+			j = slice_pos;
+		} else if (slice_half==1){
+			j = (grid->NY-1)/2;
+		}
+
+	} else if (params->slice_axis==2){ // slice of Z-axis
+		dim[0] = grid->NX;
+		dim[1] = grid->NY;
+		if (slice_half==0){
+			k = slice_pos;
+		} else if (slice_half==1){
+			k = (grid->NZ-1)/2;
+		}
+	}
+	
+
+	// Allocate storage for send an receive buffers (initialized to zero)
+	// (in production code, only free at beginning of simulation)
+	double **G_data2d = Memory_allocate_2D_double_array(dim[0], dim[1]);
+	double **W_data2d = Memory_allocate_2D_double_array(dim[0], dim[1]);
+
+
+	// Copy slice of 3-D data (from local processor) and
+	// Describe dimensions of 2-D data
+	Indices G_s, G_e, W_e;
+
+	if (params->slice_axis==0){ // slice of X-axis
+		for (j = Js; j < Je; j++) {
+			for (k = Ks; k < Ke; k++) {
+				G_data2d[j][k] = 0.0;
+				if (i >= Is && i < Ie) { // only the processor which contains data at location i should be considered
+					if (slice_half==0){
+						G_data2d[j][k] = data3d[k][j][i];
+					} else if (slice_half==1){	// slicing in center
+						// calculate data exactly in the center of the x-coordinate
+						G_data2d[j][k] = (data3d[k][j][i] + data3d[k][j][i-1]) / 2;
+					}
+				}
+			}
+		}
+		G_s.x_index = Ks;
+		G_s.y_index = Js;
+
+		G_e.x_index = Ke;
+		G_e.y_index = Je;
+
+	} else if (params->slice_axis==1){ // slice of Y-axis
+		for (k = Ks; k < Ke; k++) {
+			for (i = Is; i < Ie; i++) {
+				G_data2d[k][i] = 0.0;
+				if (j >= Js && j < Je) { // only the processor which contains data at location j should be considered
+					if (slice_half==0){
+						G_data2d[k][i] = data3d[k][j][i];
+					} else if (slice_half==1){	// slicing in center
+						// calculate data exactly in the center of the y-coordinate
+						G_data2d[k][i] = (data3d[k][j][i] + data3d[k][j-1][i]) / 2;
+					}
+				}
+			}
+		}
+		G_s.x_index = Is;
+		G_s.y_index = Ks;
+
+		G_e.x_index = Ie;
+		G_e.y_index = Ke;
+
+	} else if (params->slice_axis==2){ // slice of Z-axis
+		for (j = Js; j < Je; j++) {
+			for (i = Is; i < Ie; i++) {
+				G_data2d[j][i] = 0.0;
+				if (k >= Ks && k < Ke) { // only the processor which contains data at location k should be considered
+					if (slice_half==0){
+						G_data2d[j][i] = data3d[k][j][i];
+					} else if (slice_half==1){	// slicing in center
+						// calculate data exactly in the center of the z-coordinate
+						G_data2d[j][i] = (data3d[k][j][i] + data3d[k-1][j][i]) / 2;  
+					}
+				}
+			}
+		}
+		G_s.x_index = Is;
+		G_s.y_index = Js;
+
+		G_e.x_index = Ie;
+		G_e.y_index = Je;
+	}
+
+	W_e.x_index = dim[0];
+	W_e.y_index = dim[1];
+
+
+	// Reduce 2-D data to master processor
+	Communication_reduce_2D_arrays(G_data2d, W_data2d, &G_s, &G_e, &W_e, REDUCE_TO_MASTER, data_bag);
+
+	// Write 2-D data from master processor
+	if (params->slice_axis==0){ // slice of X-axis
+		if (nme=='w'){
+		sprintf(filename, "./trn/w_%.4f.h5", time);
+		x = grid->zw;
+		y = grid->yc;
+		z = &(grid->xu[i]);
+		}
+		if (nme=='v'){
+		sprintf(filename, "./trn/v_%.4f.h5", time);
+		x = grid->zc;
+		y = grid->yv;
+		z = &(grid->xu[i]);
+		}
+		if (nme=='p'){
+		sprintf(filename, "./trn/p_%.4f.h5", time);
+		x = grid->zc;
+		y = grid->yc;
+		z = &(grid->xu[i]);
+		}
+
+	} else if (params->slice_axis==1){ // slice of Y-axis
+		if (nme=='u'){
+		sprintf(filename, "./trn/u_%.4f.h5", time);
+		x = grid->xu;
+		y = grid->zc;
+		z = &(grid->yv[j]);
+		}
+		if (nme=='w'){
+		sprintf(filename, "./trn/w_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->zw;
+		z = &(grid->yv[j]);
+		}
+		if (nme=='p'){
+		sprintf(filename, "./trn/p_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->zc;
+		z = &(grid->yv[j]);
+		}
+
+	} else if (params->slice_axis==2){ // slice of Z-axis
+		if (nme=='u'){
+		sprintf(filename, "./trn/u_%.4f.h5", time);
+		x = grid->xu;
+		y = grid->yc;
+		z = &(grid->zw[k]);
+		}
+		if (nme=='v'){
+		sprintf(filename, "./trn/v_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->yv;
+		z = &(grid->zw[k]);
+		}
+		if (nme=='p'){
+		sprintf(filename, "./trn/p_%.4f.h5", time);
+		x = grid->xc;
+		y = grid->yc;
+		z = &(grid->zw[k]);
+		}
+	}
+
+	Output_2d_data(W_data2d, dim, x, y, z, filename, data_bag, DTRACE("Output_2d_data"));
+
+	// Free storage (in production code, only free at end of simulation)
+	Memory_free_2D_double_array(dim[1], G_data2d);
+	Memory_free_2D_double_array(dim[1], W_data2d);
+}

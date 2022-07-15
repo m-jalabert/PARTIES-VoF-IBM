@@ -36,4 +36,6 @@ void Output_3d_data(double*** data3d, char node_type, char *ghost_type,
 void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 		char *filename, Cart3d_bag *data_bag, Debug_trace *dtrace);
 
+void slice_2d_output(double ***data3d, char nme, Cart3d_bag *data_bag, double time, Debug_trace *dtrace);		
+
 #endif
