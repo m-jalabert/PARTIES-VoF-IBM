@@ -219,10 +219,10 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 
 			#ifdef SLICE_OUTPUT
-				slice_2d_output(slice_data_1,name_data_1,data_bag, time, DTRACE("slice_2d_output"));
-				slice_2d_output(slice_data_2,name_data_2,data_bag, time, DTRACE("slice_2d_output"));
+				slice_2d_output(slice_data_1, name_data_1, data_bag, time, DTRACE("slice_2d_output"));
+				slice_2d_output(slice_data_2, name_data_2, data_bag, time, DTRACE("slice_2d_output"));
 				if (params->slice_p == 1) {
-					slice_2d_output(data_bag->p->p_data_avg,'p',data_bag, time, DTRACE("slice_2d_output"));
+					slice_2d_output(data_bag->p->p_data_avg, 'p', data_bag, time, DTRACE("slice_2d_output"));
 				}
 			#endif
 
@@ -336,10 +336,10 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 				#endif
 
 				#ifdef SLICE_OUTPUT
-					slice_2d_output(slice_data_1,name_data_1,data_bag, time, DTRACE("slice_2d_output"));
-					slice_2d_output(slice_data_2,name_data_2,data_bag, time, DTRACE("slice_2d_output"));
+					slice_2d_output(slice_data_1, name_data_1, data_bag, time, DTRACE("slice_2d_output"));
+					slice_2d_output(slice_data_2, name_data_2, data_bag, time, DTRACE("slice_2d_output"));
 					if (params->slice_p == 1) {
-						slice_2d_output(data_bag->p->p_data_avg,'p',data_bag, time, DTRACE("slice_2d_output"));
+						slice_2d_output(data_bag->p->p_data_avg, 'p', data_bag, time, DTRACE("slice_2d_output"));
 					}
 				#endif
 
@@ -484,10 +484,10 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 					#endif
 
 					#ifdef SLICE_OUTPUT
-						slice_2d_output(slice_data_1,name_data_1,data_bag, time, DTRACE("slice_2d_output"));
-						slice_2d_output(slice_data_2,name_data_2,data_bag, time, DTRACE("slice_2d_output"));
+						slice_2d_output(slice_data_1, name_data_1, data_bag, time, DTRACE("slice_2d_output"));
+						slice_2d_output(slice_data_2, name_data_2,d ata_bag, time, DTRACE("slice_2d_output"));
 						if (params->slice_p == 1) {
-							slice_2d_output(data_bag->p->p_data_avg,'p',data_bag, time, DTRACE("slice_2d_output"));
+							slice_2d_output(data_bag->p->p_data_avg, 'p', data_bag, time, DTRACE("slice_2d_output"));
 						}
 					#endif
 
