@@ -175,7 +175,7 @@
 /*                                   Output                                   */
 /******************************************************************************/
 #undef  OUTPUT2D
-#define SLICE_OUTPUT
+#undef SLICE_OUTPUT	// 2D-slice output of the flow field; output into subfolder './trn'
 
 
 /******************************************************************************/

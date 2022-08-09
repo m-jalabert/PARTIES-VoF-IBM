@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <complex.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "definitions.h"
 #include "Boundary.h"
@@ -210,6 +213,13 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 			fprintf(timeFile, "%f\n", time);
 			fclose(timeFile);
 		}
+
+		#if defined OUTPUT2D || defined SLICE_OUTPUT || defined PARTICLE_TRN
+			if( access( "./trn", F_OK ) == -1) {
+				mkdir("./trn", 0777);
+			}
+		#endif
+
 
 		#if defined OUTPUT2D || defined SLICE_OUTPUT
 
