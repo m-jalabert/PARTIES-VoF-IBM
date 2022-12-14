@@ -1022,8 +1022,7 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 
 
 #ifdef VOF_SCALAR
-		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_
-		);
+		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfc);
 		Interpolate_add_to_volume_fraction('c', data_bag->lag->p_mobile_list,
 		data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 		Interpolate_add_to_volume_fraction('c', data_bag->lag->p_fixed_list,
