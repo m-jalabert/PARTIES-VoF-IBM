@@ -404,7 +404,11 @@ void Output_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 if(params->output_vfc == 1){	Output_h5_noghost_variable(lag->ng_vfc, file_id, "/vfc", grid, params, DTRACE("Output_h5_noghost_variable")); }
 
-
+// Output for stress balance: eqn. 7.12 & 7.14 in E. Biegert's Dissertation (2018)
+#ifdef POST_PROCESS
+        Output_h5_noghost_variable(lag->ng_fx_IBM, file_id, "/fx_IBM", grid, params, DTRACE("Output_h5_noghost_variable"));
+        Output_h5_noghost_variable(lag->ng_fy_IBM, file_id, "/fy_IBM", grid, params, DTRACE("Output_h5_noghost_variable"));
+#endif
 
 
 

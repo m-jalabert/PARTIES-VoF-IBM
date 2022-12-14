@@ -1118,6 +1118,7 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfu);
 	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfv);
 	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfw);
+	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfc);
 
 	Interpolate_integrate_momentum(u, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
 	Interpolate_integrate_momentum(v, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
