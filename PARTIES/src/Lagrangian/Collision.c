@@ -39,6 +39,9 @@
 #ifdef ELECTROSTATIC_REPULSION
 	#include "collision_models/erm.c"
 #endif
+#ifdef COHESION
+	#include "collision_models/cohesion.c"
+#endif
 
 // Distance between two particles, squared
 #define PP_DIST_SQ(a,b) ( (a[0] - b[0]) * (a[0] - b[0]) + \
@@ -489,9 +492,9 @@ void Collision_wall(Particle *p, MAC_grid *grid, Parameters *params) {
 #ifdef ELECTROSTATIC_REPULSION
 	interaction_range = max(interaction_range, params->erm_range * h);
 #endif
-#ifdef COHESION
-	interaction_range = max(interaction_range, params->coh_range * h);
-#endif
+// #ifdef COHESION
+// 	interaction_range = max(interaction_range, params->coh_range * h);
+// #endif
 	/*------------------------------------------------------------------------*/
 	// check walls
 	/*------------------------------------------------------------------------*/
@@ -601,11 +604,11 @@ int count =0;
 						erm(bag, params);
 					}
 	#endif
-	#ifdef COHESION
-					if(surface_distance <= params->coh_range * h) {
-					  	cohesion(params-> coh_range * h, bag, params);
-					}
-	#endif
+	// #ifdef COHESION
+	// 				if(surface_distance <= params->coh_range * h) {
+	// 				  	cohesion(params-> coh_range * h, bag, params);
+	// 				}
+	// #endif
 				}  // if within interaction range
 #endif  // Long range interaction models
 
