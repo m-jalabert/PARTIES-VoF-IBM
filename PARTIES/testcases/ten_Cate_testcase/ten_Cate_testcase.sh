@@ -47,7 +47,7 @@ cd ../../
 echo 'START: Compiling executable'
 printf 'make clean\nmake\n'
 make clean > make_ten_Cate.log
-make >> make_ten_Cate.log
+make >> make_ten_Cate.log 2>&1
 echo 'END: Compiling executable'
 
 cp parties $work_path
@@ -58,14 +58,14 @@ mv Boundary_ORIG.h Boundary.h
 
 cd $work_path
 echo 'START: Flow simulation'
-mpirun -np $1 parties > output.log
+mpirun -np $1 parties > output.log 2>&1
 echo 'END: Flow simulation'
 
 ###########################################################################
 #                           Validation                             #
 ###########################################################################
 #  Run the python-script
-python ten_Cate_testcase.py
+python3 ten_Cate_testcase.py
 STATUS=$?
 cd $home_path/..
 (exit $STATUS)
