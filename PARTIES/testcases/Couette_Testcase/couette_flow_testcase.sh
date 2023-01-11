@@ -46,8 +46,8 @@ mv Boundary_CF.h Boundary.h
 cd ../../
 echo 'START: Compiling executable'
 printf 'make clean\nmake\n'
-make clean > make_couette.log
-make >> make_couette.log
+make clean > make_couette.log 2>&1
+make >> make_couette.log 2>&1
 echo 'END: Compiling executable'
 
 cp parties $work_path
@@ -58,7 +58,7 @@ mv Boundary_ORIG.h Boundary.h
 
 cd $work_path
 echo 'START: Flow simulation'
-mpirun -np $1 parties > output.log
+mpirun -np $1 parties > output.log 2>&1
 echo 'END: Flow simulation'
 
 ###########################################################################

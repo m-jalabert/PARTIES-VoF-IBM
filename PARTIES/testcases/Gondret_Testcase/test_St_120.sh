@@ -49,7 +49,7 @@ cd ../../
 echo 'START: Compiling executable'
 printf 'make clean\nmake\n'
 make clean > make_St120.log
-make >> make_St120.log
+make >> make_St120.log 2>&1
 echo 'END: Compiling executable'
 
 cp parties $work_path
@@ -60,7 +60,7 @@ mv Boundary_ORIG.h Boundary.h
 
 cd $work_path
 echo 'START: Flow simulation'
-mpirun -np $1 parties > output.log
+mpirun -np $1 parties > output.log 2>&1
 echo 'END: Flow simulation'
 
 ###########################################################################
