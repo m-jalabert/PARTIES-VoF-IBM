@@ -163,12 +163,18 @@
 /*                                Simulation -FlowSolver                      */
 /******************************************************************************/
 
-#define  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
-#undef FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
+#undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE
 #undef  BICG_SOLVE // nouniform mesh
 #undef  TEST
+
+#define OSCILLATION        		// Oscillation force 
+
+#undef OSCILLATING_PARTICLE		// Particle oscillates with prescribed u-velocity
+
+#undef STOKES_2ND_PROBLEM		// Oscillating boundary layer due to oscillating Top_Wall
+								// Required: 	#define  TOP_WALL_VELOCITY
 
 
 /******************************************************************************/
@@ -243,8 +249,6 @@
 #undef ROUGH_COLLISION        // Start collision at surface roughness
 #define LAG_MARKER_FLAG        // Turn off all competing Lag markers
 #undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
-
-#undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
 
 #undef ONE_WAY					// Turns on one-way coupling, i.e. no feedback from the particles on the fluid
 #undef TURB_FORCING			// Turns on the EP turbulent forcing
@@ -321,12 +325,8 @@
 // Oscillation
 //------------------------------------------------------------------------------
 
-#if defined FLUID_OSCILLATION || defined PARTICLE_OSCILLATION
-
-	#if defined FLUID_OSCILLATION && defined PARTICLE_OSCILLATION
-        #error Both oscillations (acting on fluid and on particle) are specified
-	#endif // defined
-
+#if defined STOKES_2ND_PROBLEM && !defined TOP_WALL_VELOCITY
+	#error 'STOKES_2ND_PROBLEM' only works together with 'TOP_WALL_VELOCITY'
 #endif
 
 
@@ -398,6 +398,11 @@
 //------------------------------------------------------------------------------
 // Particles
 //------------------------------------------------------------------------------
+
+#if defined PARTICLE_TRN && !defined LAG_PARTICLE_RESOLVED  
+	#error 'PARTICLE_TRN' only works together with 'LAG_PARTICLE_RESOLVED'
+#endif
+
 #if defined ACTM && defined DEM
 	#error Incompatible collision models 'ACTM' and 'DEM'
 #endif
