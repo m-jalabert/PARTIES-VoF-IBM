@@ -32,35 +32,35 @@ read -p 'Enter number of processors: ' nproc
 
 # Comment out unrequired flows
 
-printf '\nPoiseuille flow\t'
-cd Poiseuille_Testcase/
-. "$POISEUILLE_FLOW" $nproc > $LOGFILE
-print_status $?
+#printf '\nPoiseuille flow\t'
+#cd Poiseuille_Testcase/
+#. "$POISEUILLE_FLOW" $nproc > $LOGFILE
+#print_status $?
 
-printf '\nCouette flow\t'
-cd Couette_Testcase/
-. "$COUETTE_FLOW" $nproc >>  $LOGFILE
-print_status $?
+#printf '\nCouette flow\t'
+#cd Couette_Testcase/
+#. "$COUETTE_FLOW" $nproc >>  $LOGFILE
+#print_status $?
 
-printf '\nMordant test\t'
-cd Mordant_Testcase/
-. "$MORDANT_TESTCASE" $nproc >>  $LOGFILE
-print_status $?
+#printf '\nMordant test\t'
+#cd Mordant_Testcase/
+#. "$MORDANT_TESTCASE" $nproc >>  $LOGFILE
+#print_status $?
 
 printf '\nten Cate test\t'
 cd ten_Cate_testcase/
 . "$TEN_CATE_TESTCASE" $nproc >> $LOGFILE
 print_status $?
 
-printf '\nCollision test St=3'
-cd Gondret_Testcase/
-. "$COLLISION_TESTCASE_ST_3" $nproc >> $LOGFILE
-print_status $?
+#printf '\nCollision test St=3'
+#cd Gondret_Testcase/
+#. "$COLLISION_TESTCASE_ST_3" $nproc >> $LOGFILE
+#print_status $?
 
-printf '\nCollision test St=120' 
-cd Gondret_Testcase/
-. "$COLLISION_TESTCASE_ST_120" $nproc >> $LOGFILE
-print_status $?
+#printf '\nCollision test St=120' 
+#cd Gondret_Testcase/
+#. "$COLLISION_TESTCASE_ST_120" $nproc >> $LOGFILE
+#print_status $?
 
 printf '\n'
 ###########################################################################

@@ -1092,16 +1092,37 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 
 	double dp_dx_source = -params -> dp_dx;
 
-#ifdef FLUID_OSCILLATION
-// Oscillation due to ISS vibration
 
-	double amplitude = params -> amplitude;
-	double tref = params -> tref;
+#if defined OSCILLATION
+
 	double phase_shift_factor = params -> phase_shift_factor;
+	double frequency = params -> frequency;
+	double angular_vel = 2 * PI * frequency;	// = omega
+	double amplitude;
 
-	dp_dx_source = amplitude * sin(time / tref * 2 * PI + (phase_shift_factor * PI));
+	int amplitude_mode = params -> amplitude_mode;
 
-#endif // FLUID_OSCILLATION
+	if (amplitude_mode == 1){
+		double disp_amplitude = params -> disp_amplitude; 
+		amplitude = disp_amplitude * pow(angular_vel,2);		// amplitude = disp_amplitude[m] * omega^2
+	} 
+	else {
+		amplitude = params -> acc_amplitude;		// amplitude = acc_amplitude[m/s^2]
+	}
+
+	dp_dx_source = amplitude * sin(time * angular_vel + (phase_shift_factor * PI));
+
+	params -> oscillation = dp_dx_source;
+
+	if (params->oscillation_frame == 1){
+		// non-inertial (accelerated) frame
+		dp_dx_source = 0;
+	} 
+	// if inertial (fixed) frame
+	// then dp_dx_source remains = oscillation
+
+#endif // OSCILLATION
+
 
 #ifdef PRESSURE_PULSE
 	double ts, te;
@@ -1156,11 +1177,15 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 #ifdef LAG_PARTICLE_RESOLVED
 				rhs[k][j][i] += implicit[k][j][i];
 #endif
-#if defined XPERIODIC && !defined BOUSSINESQ
 
-				rhs[k][j][i] += 2.0 * dp_dx_source;
+#if defined XPERIODIC && !defined BOUSSINESQ 
+	rhs[k][j][i] += 2.0 * dp_dx_source;
 
+#elif defined OSCILLATION
+	rhs[k][j][i] -= 2.0 * dp_dx_source;
+	
 #endif
+
 #ifdef SWIMMERS_JET
 				double r1 = 0.5;
 				double ypos = yc[j] - Ly/2.0;
@@ -2127,7 +2152,23 @@ void Velocity_update_boundaries(double ***data, char component, int type, Cart3d
 #if defined BOTTOM_WALL_VELOCITY && defined TOP_WALL_VELOCITY
 	double top_wall_vel = params -> ubulk_target;
 #else
-	double top_wall_vel = 2.0 * params -> ubulk_target;
+	#if defined STOKES_2ND_PROBLEM
+		double u_oscillation;
+		double time = params->time;
+		double phase_shift_factor = params->phase_shift_factor;
+		double frequency = params->frequency;
+		double omega = 2 * PI * frequency; 		// angular velocity
+		double amplitude = params->disp_amplitude;
+
+		u_oscillation = -amplitude * omega * cos(time * omega + (phase_shift_factor * PI));
+
+		params->u_oscillation = u_oscillation;
+
+		double top_wall_vel = u_oscillation;
+
+	#else
+		double top_wall_vel = 2.0 * params -> ubulk_target;
+	#endif
 #endif
 
 	/*------------------------------------------------------------------------*/
@@ -3084,6 +3125,7 @@ double Velocity_ubulk(Velocity *uvel, Cart3d_bag *data_bag) {
 void Velocity_calculate_dpdx(Velocity *uvel, Cart3d_bag *data_bag) {
 
 	FILE *fid;
+	FILE *fid_osc;
 	double dt, a_dt;
 
 	MAC_grid *grid = data_bag -> grid;
@@ -3095,17 +3137,43 @@ void Velocity_calculate_dpdx(Velocity *uvel, Cart3d_bag *data_bag) {
 	dt = params -> dt;
 	a_dt = 1.0 / dt;
 	params -> dp_dx_old = params -> dp_dx;
-	params -> dp_dx     = params -> dp_dx_old
-	                      + 2.0 * (params->ubulk - params->ubulk_target) / params -> dt
-	                      - (params->ubulk_old - params->ubulk_target) / params -> dt_old;
+
+	#if defined CONSTANT_MASSFLUX 
+		params -> dp_dx     = params -> dp_dx_old
+	                      	+ 2.0 * (params->ubulk - params->ubulk_target) / params -> dt
+	                      	- (params->ubulk_old - params->ubulk_target) / params -> dt_old;
+	#endif
+
 	if (params -> rank == 0) {
-		fid = fopen("dpdx_history.dat","a");
-		fprintf(fid, "%8d %e %e %20.12e %20.12e %20.12e %20.12e\n", params->ntime,
+		if (params -> time == 0) {
+			fid = fopen("dpdx_history.dat","w"); }
+		else {
+			fid = fopen("dpdx_history.dat","a"); }
+
+		#if defined STOKES_2ND_PROBLEM
+			fprintf(fid, "%8d %e %e %20.12e %20.12e %20.12e %20.12e %20.12e\n", params->ntime,
+			params->time,dt, params->dp_dx, params->dp_dx_old, params->ubulk, params->ubulk_old, params->u_oscillation);
+			fclose(fid);
+		#else
+			fprintf(fid, "%8d %e %e %20.12e %20.12e %20.12e %20.12e\n", params->ntime,
 				params->time,dt, params->dp_dx, params->dp_dx_old, params->ubulk, params->ubulk_old);
-		fclose(fid);
+			fclose(fid);
+		#endif
 	}
 
-	return;
+	#if defined OSCILLATION
+		if (params -> rank == 0) {
+			if (params -> time == 0) {
+				fid_osc = fopen("oscillation.dat","w"); }
+			else {
+				fid_osc = fopen("oscillation.dat","a"); }
+
+		fprintf(fid_osc, "%8f %.20g\n", params->time, params -> oscillation);
+		fclose(fid_osc);	
+		}
+	#endif
+
+return;
 }
 
 
