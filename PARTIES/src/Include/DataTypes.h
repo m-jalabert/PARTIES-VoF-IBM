@@ -289,10 +289,18 @@ struct parameters {
 
 	// Pressure gradient
 	double dp_dx, dp_dx_old;
-    double amplitude;
-	double tref;
-	double phase_shift_factor;     // phase shift of the oscillating force= phase_shift_factor * Pi
 
+	// Oscillation parameters
+	double phase_shift_factor;     	// phase shift of the oscillating force= phase_shift_factor * Pi
+	int amplitude_mode;				// Use which amplitude mode? 1: amplitude = disp_amplitude[m] * (2 * Pi * frequency)^2[1/s^2] ,   0: amplitude = acc_amplitude [m/s^2]
+	double disp_amplitude;			// displacement-amplitude of the oscillation (dimensional in m)
+	double acc_amplitude;			// acceleration-amplitude of the oscillation (dimensional in m/s^2)
+	double frequency;				// oscillation frequency (dimensional in Hz)
+	double oscillation;				// total oscillation
+	int oscillation_frame;			// define observer: 0 = inertial (fixed) frame; 1 = non-inertial (accelerated) frame
+
+	double u_oscillation;			// Stokes 2nd problem; velocity of oscillating top_wall
+	
 	// Streamwise bulk velocity
 	double ubulk, ubulk_old;
 	double ubulk_target;
@@ -463,14 +471,16 @@ struct parameters {
 	int post_processing_switch;
 	int near_wall_slice_switch;
 
-
-
+	
 	int slice_axis; // Specification of the axis to be sliced: 0=X, 1=Y, 2=Z
 	int slice_half; // Slice in the center of the specified slicing axis: 1=yes; 0=no -> if no, specify slice_position
 	int slice_pos;	// If slice_half=0 -> grid point number for slicing position
 	int slice_p;	// Specifiy if pressure field should be sliced: 0=no; 1=yes
-
-
+	int center_two_particles;	// For two particles, specify whether the slicing should be performed in the center 
+	// between the particles along X-axis: 0=no; 1=yes; Only valid when slice_axis = 0
+	double particle_position[2][3]; // if center_two_particles==1, collect position of each particle of the pair;
+	// must be stored in params to be accessible to all processors
+	
 };
 typedef struct parameters Parameters;
 
