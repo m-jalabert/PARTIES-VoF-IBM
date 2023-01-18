@@ -274,18 +274,21 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 	// Collect hydrodynamic forces
 	//--------------------------------------------------------------------------
 
-//#ifndef ONE_WAY
-	p_list_foreign = Particle_list_foreign_create(p_mobile_list, data_bag, DTRACE("Particle_list_foreign_create"));
-	Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
-	Lagrangian_collect_forces(p_mobile_list, p_list_foreign, LAG_COLLECT_HYDRO, params, DTRACE("Lagrangian_collect_forces"));
-	Particle_list_destroy(p_list_foreign);
 
-	// Remove foreign particles from p_fixed for advecting particles
-	p_list_foreign = Particle_list_foreign_create(p_fixed_list, data_bag, DTRACE("Particle_list_foreign_create"));
-	Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
-	Lagrangian_collect_forces(p_fixed_list, p_list_foreign, LAG_COLLECT_HYDRO, params, DTRACE("Lagrangian_collect_forces"));
-	Particle_list_destroy(p_list_foreign);
-//#endif
+	//#ifndef ONE_WAY
+		p_list_foreign = Particle_list_foreign_create(p_mobile_list, data_bag, DTRACE("Particle_list_foreign_create"));
+		Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
+		Lagrangian_collect_forces(p_mobile_list, p_list_foreign, LAG_COLLECT_HYDRO, params, DTRACE("Lagrangian_collect_forces"));
+		Particle_list_destroy(p_list_foreign);
+
+		// Remove foreign particles from p_fixed for advecting particles
+		p_list_foreign = Particle_list_foreign_create(p_fixed_list, data_bag, DTRACE("Particle_list_foreign_create"));
+		Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
+		Lagrangian_collect_forces(p_fixed_list, p_list_foreign, LAG_COLLECT_HYDRO, params, DTRACE("Lagrangian_collect_forces"));
+		Particle_list_destroy(p_list_foreign);
+	//#endif
+
+
 	//--------------------------------------------------------------------------
 	// Evaluate fluid forces for mobile particles
 	//--------------------------------------------------------------------------
@@ -306,25 +309,25 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 		F_rigid = p -> F_rigid;
 		T_rigid = p -> T_rigid;
 
-#ifdef FORCES_DAT_OLD
-		// Output fluid forces
-		if (params->Np_mobile == 1) {
-			double F_ddt = idt2beta * (Int_U[1] - Int_U_old[1]);
-			double F_grav = p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-			double F_IBM = F[1] - F_ddt;
+		#ifdef FORCES_DAT_OLD
+			// Output fluid forces
+			if (params->Np_mobile == 1) {
+				double F_ddt = idt2beta * (Int_U[1] - Int_U_old[1]);
+				double F_grav = p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+				double F_IBM = F[1] - F_ddt;
 
-			FILE *fptr;
-			if (params -> time == 0) {
-				fptr = fopen("forces.dat", "w");
-			}
-			else {
-				fptr = fopen("forces.dat", "a");
-			}
+				FILE *fptr;
+				if (params -> time == 0) {
+					fptr = fopen("forces.dat", "w");
+				}
+				else {
+					fptr = fopen("forces.dat", "a");
+				}
 
-			fprintf(fptr, "%.10g, %.10g, %.10g, %.10g, ", params->time, F_IBM, F_ddt, F_grav);
-			fclose(fptr);
-		}
-#endif
+				fprintf(fptr, "%.10g, %.10g, %.10g, %.10g, ", params->time, F_IBM, F_ddt, F_grav);
+				fclose(fptr);
+			}
+		#endif
 
 		// Reset forces measured over entire timestep
 		if (params->which_stage == 0) {
@@ -334,36 +337,37 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			DSET_ZERO(T_rigid, 3);
 			DSET_ZERO(p->F_coll, 3);
 			DSET_ZERO(p->T_coll, 3);
-#ifdef POST_PROCESS
-			DSET_ZERO(p->Fc_norm_cum, 3);
-			DSET_ZERO(p->Fc_tan_cum, 3);
-			DSET_ZERO(p->Fl_norm_cum, 3);
-			DSET_ZERO(p->Fl_tan_cum, 3);
-#endif
+			#ifdef POST_PROCESS
+				DSET_ZERO(p->Fc_norm_cum, 3);
+				DSET_ZERO(p->Fc_tan_cum, 3);
+				DSET_ZERO(p->Fl_norm_cum, 3);
+				DSET_ZERO(p->Fl_tan_cum, 3);
+			#endif
 		}
 
 		// IBM force acting on particle over entire timestep
 
-#ifndef ONE_WAY
-		FORI3 F_IBM[i] += 2.0 * bet * F[i];
-		FORI3 T_IBM[i] += 2.0 * bet * T[i];
+		#ifndef ONE_WAY
+			FORI3 F_IBM[i] += 2.0 * bet * F[i];
+			FORI3 T_IBM[i] += 2.0 * bet * T[i];
 
 
-		//----------------------------------------------------------------------
-		// Rigid body force
-		//----------------------------------------------------------------------
-		F[0] += idt2beta * (Int_U[0] - Int_U_old[0]);
-		F[1] += idt2beta * (Int_U[1] - Int_U_old[1]);
-		F[2] += idt2beta * (Int_U[2] - Int_U_old[2]);
+			//----------------------------------------------------------------------
+			// Rigid body force
+			//----------------------------------------------------------------------
+			F[0] += idt2beta * (Int_U[0] - Int_U_old[0]);
+			F[1] += idt2beta * (Int_U[1] - Int_U_old[1]);
+			F[2] += idt2beta * (Int_U[2] - Int_U_old[2]);
 
-		T[0] += idt2beta * (Int_Omega[0] - Int_Omega_old[0]);
-		T[1] += idt2beta * (Int_Omega[1] - Int_Omega_old[1]);
-		T[2] += idt2beta * (Int_Omega[2] - Int_Omega_old[2]);
+			T[0] += idt2beta * (Int_Omega[0] - Int_Omega_old[0]);
+			T[1] += idt2beta * (Int_Omega[1] - Int_Omega_old[1]);
+			T[2] += idt2beta * (Int_Omega[2] - Int_Omega_old[2]);
 
-		// Rigid body force acting on particle over entire timestep
-		FORI3 F_rigid[i] += 1.0 / dt * (Int_U[i] - Int_U_old[i]);
-		FORI3 T_rigid[i] += 1.0 / dt * (Int_Omega[i] - Int_Omega_old[i]);
-#endif
+			// Rigid body force acting on particle over entire timestep
+			FORI3 F_rigid[i] += 1.0 / dt * (Int_U[i] - Int_U_old[i]);
+			FORI3 T_rigid[i] += 1.0 / dt * (Int_Omega[i] - Int_Omega_old[i]);
+		#endif
+
 		Int_U_old[0] = Int_U[0];
 		Int_U_old[1] = Int_U[1];
 		Int_U_old[2] = Int_U[2];
@@ -373,76 +377,76 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 		Int_Omega_old[2] = Int_Omega[2];
 
 
-#ifdef DRY_COLLISION
-		// Reset collision forces if maximum Stokes number > 5
-		if (Collision_above_critical(p)) {
-			DSET_ZERO(F, 3);
-			DSET_ZERO(T, 3);
-		}
-#endif
+		#ifdef DRY_COLLISION
+			// Reset collision forces if maximum Stokes number > 5
+			if (Collision_above_critical(p)) {
+				DSET_ZERO(F, 3);
+				DSET_ZERO(T, 3);
+			}
+		#endif
 
 		//----------------------------------------------------------------------
 		// Gravitational force
 		//----------------------------------------------------------------------
-#ifdef DRY_PARTICLES
-		// Normal gravity for dry particles
-		F[0] += p->M * params->grav[0];
-		F[1] += p->M * params->grav[1];
-		F[2] += p->M * params->grav[2];
-  // F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
-  // F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-  // F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+		#ifdef DRY_PARTICLES
+			// Normal gravity for dry particles
+			F[0] += p->M * params->grav[0];
+			F[1] += p->M * params->grav[1];
+			F[2] += p->M * params->grav[2];
+			// F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
+			// F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+			// F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
 
-	#ifdef STOKES_DRAG
-		//double top_wall_vel, top_wall_y;
-		// Stokes drag for a sheared suspension
-		/*#if defined TOP_WALL_VELOCITY && defined BOTTOM_WALL_VELOCITY
-		top_wall_vel = params->ubulk_target;
+			#ifdef STOKES_DRAG
+				//double top_wall_vel, top_wall_y;
+				// Stokes drag for a sheared suspension
+				/*#if defined TOP_WALL_VELOCITY && defined BOTTOM_WALL_VELOCITY
+				top_wall_vel = params->ubulk_target;
+				#else
+				top_wall_vel = 2.0 * params->ubulk_target;
+				#endif
+				#ifdef DOWNWARD_MOVING_WALL
+				top_wall_y = (params->vel_init_y0 - params->ymax) * params->time / params->time_max + params->ymax;
+				#else
+				top_wall_y = params->ymax;
+				#endif
+				double shear_rate = 2.0 * params->ubulk_target / (top_wall_y - params->ymin);*/
+
+				double U_inf[3]; // Modeled fluid velocity
+				//double L=5;//dimension of each Langmuir Cell
+				double U_0 = 1.0; // Mean background flow velocity
+				//double W=0.0;
+				//W=  (p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1] * params->Re) / (6* PI * p->R);
+				//double k_wavenumber= params -> k_wavenumber;
+				//U_inf[0] =  top_wall_vel - shear_rate * (top_wall_y - p->X[1]);
+
+				U_inf[0] = (U_0/PI)*sin(p->X[0]*PI)*cos(p->X[1]*PI);
+				U_inf[1] =  (-1)*(U_0/PI)*cos(p->X[0]*PI)*sin(p->X[1]*PI);
+					U_inf[2] =  0.0;
+					F[0] += -6.0 * PI * p->R * (p->U[0]-U_inf[0])/ params->Re;
+					F[1] += -6.0 * PI * p->R * (p->U[1]-U_inf[1])/ params->Re;
+					F[2] += -6.0 * PI * p->R * (p->U[2]-U_inf[2])/ params->Re;
+
+					T[0] +=  0.0;
+					T[1] +=  0.0;
+				T[2] +=  0.0;
+				//T[2] += -8.0 * PI * p->R * p->R * (p->Omega[2]+shear_rate)/ params->Re;
+			#endif  // Stokes drag
 		#else
-		top_wall_vel = 2.0 * params->ubulk_target;
-		#endif
-		#ifdef DOWNWARD_MOVING_WALL
-		top_wall_y = (params->vel_init_y0 - params->ymax) * params->time / params->time_max + params->ymax;
-		#else
-		top_wall_y = params->ymax;
-		#endif
-		double shear_rate = 2.0 * params->ubulk_target / (top_wall_y - params->ymin);*/
+			#ifdef ONE_WAY
+				// Require uniform grid
+				// where is particle
+				int ip = (int) round(p->X[0]/(params->xmax-params->xmin)*params->NXM);
+				int jp = (int) round(p->X[1]/(params->ymax-params->ymin)*params->NYM);
+				int kp = (int) round(p->X[2]/(params->zmax-params->zmin)*params->NZM);
 
-		double U_inf[3]; // Modeled fluid velocity
-    //double L=5;//dimension of each Langmuir Cell
-    double U_0 = 1.0; // Mean background flow velocity
-    //double W=0.0;
-    //W=  (p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1] * params->Re) / (6* PI * p->R);
-    //double k_wavenumber= params -> k_wavenumber;
-		//U_inf[0] =  top_wall_vel - shear_rate * (top_wall_y - p->X[1]);
+				F[0] += -6.0 * PI * p->R * (p->U[0]-u[kp][jp][ip])/ params->Re;
+				F[1] += -6.0 * PI * p->R * (p->U[1]-v[kp][jp][ip])/ params->Re;
+				F[2] += -6.0 * PI * p->R * (p->U[2]-w[kp][jp][ip])/ params->Re;
 
-        U_inf[0] = (U_0/PI)*sin(p->X[0]*PI)*cos(p->X[1]*PI);
-        U_inf[1] =  (-1)*(U_0/PI)*cos(p->X[0]*PI)*sin(p->X[1]*PI);
-		    U_inf[2] =  0.0;
-		    F[0] += -6.0 * PI * p->R * (p->U[0]-U_inf[0])/ params->Re;
-		    F[1] += -6.0 * PI * p->R * (p->U[1]-U_inf[1])/ params->Re;
-		    F[2] += -6.0 * PI * p->R * (p->U[2]-U_inf[2])/ params->Re;
+			#endif
 
-		    T[0] +=  0.0;
-		    T[1] +=  0.0;
-        T[2] +=  0.0;
-		//T[2] += -8.0 * PI * p->R * p->R * (p->Omega[2]+shear_rate)/ params->Re;
-	#endif  // Stokes drag
-#else
-	#ifdef ONE_WAY
-		// Require uniform grid
-		// where is particle
-		int ip = (int) round(p->X[0]/(params->xmax-params->xmin)*params->NXM);
-		int jp = (int) round(p->X[1]/(params->ymax-params->ymin)*params->NYM);
-		int kp = (int) round(p->X[2]/(params->zmax-params->zmin)*params->NZM);
-
-		F[0] += -6.0 * PI * p->R * (p->U[0]-u[kp][jp][ip])/ params->Re;
-		F[1] += -6.0 * PI * p->R * (p->U[1]-v[kp][jp][ip])/ params->Re;
-    F[2] += -6.0 * PI * p->R * (p->U[2]-w[kp][jp][ip])/ params->Re;
-
-	#endif
-
-    double time = params -> time;
+    		double time = params -> time;
 
 	#ifdef PARTICLE_OSCILLATION
     // Oscillation force acting on particle due to ISS vibration
@@ -473,15 +477,14 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
     #endif // PARTICLE_OSCILLATION
 
+			// TO REMOVE, JUST TEST
+			#ifdef ONE_WAY
+				FORI3 p->F_rigid[0] += -6.0 * PI * p->R * (p->U[0]-u[kp][jp][ip])/ params->Re;
+				FORI3 p->F_rigid[1] += -6.0 * PI * p->R * (p->U[1]-v[kp][jp][ip])/ params->Re;
+				FORI3 p->F_rigid[2] += -6.0 * PI * p->R * (p->U[2]-w[kp][jp][ip])/ params->Re;
+			#endif
 
-	// TO REMOVE, JUST TEST
-	#ifdef ONE_WAY
-		FORI3 p->F_rigid[0] += -6.0 * PI * p->R * (p->U[0]-u[kp][jp][ip])/ params->Re;
-		FORI3 p->F_rigid[1] += -6.0 * PI * p->R * (p->U[1]-v[kp][jp][ip])/ params->Re;
-		FORI3 p->F_rigid[2] += -6.0 * PI * p->R * (p->U[2]-w[kp][jp][ip])/ params->Re;
-	#endif
-
-#endif
+		#endif
 
 		p = p -> next;
 	}
@@ -511,23 +514,23 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			DSET_ZERO(T_rigid, 3);
 			DSET_ZERO(p->F_coll, 3);
 			DSET_ZERO(p->T_coll, 3);
-#ifdef POST_PROCESS
-			DSET_ZERO(p->Fc_norm_cum, 3);
-			DSET_ZERO(p->Fc_tan_cum, 3);
-			DSET_ZERO(p->Fl_norm_cum, 3);
-			DSET_ZERO(p->Fl_tan_cum, 3);
-#endif
+			#ifdef POST_PROCESS
+				DSET_ZERO(p->Fc_norm_cum, 3);
+				DSET_ZERO(p->Fc_tan_cum, 3);
+				DSET_ZERO(p->Fl_norm_cum, 3);
+				DSET_ZERO(p->Fl_tan_cum, 3);
+			#endif
 		}
 
 		// IBM force acting on particle over entire timestep
-#ifndef ONE_WAY
-		FORI3 F_IBM[i] += 2.0 * bet * F[i];
-		FORI3 T_IBM[i] += 2.0 * bet * T[i];
+		#ifndef ONE_WAY
+			FORI3 F_IBM[i] += 2.0 * bet * F[i];
+			FORI3 T_IBM[i] += 2.0 * bet * T[i];
 
-		// Rigid body force acting on particle over entire timestep
-		FORI3 F_rigid[i] += 1.0 / dt * (Int_U[i] - Int_U_old[i]);
-		FORI3 T_rigid[i] += 1.0 / dt * (Int_Omega[i] - Int_Omega_old[i]);
-#endif
+			// Rigid body force acting on particle over entire timestep
+			FORI3 F_rigid[i] += 1.0 / dt * (Int_U[i] - Int_U_old[i]);
+			FORI3 T_rigid[i] += 1.0 / dt * (Int_Omega[i] - Int_Omega_old[i]);
+		#endif
 		Int_U_old[0] = Int_U[0];
 		Int_U_old[1] = Int_U[1];
 		Int_U_old[2] = Int_U[2];
@@ -1080,13 +1083,14 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
 				DSET_ZERO(p->F, 3);
 				DSET_ZERO(p->T, 3);
 			}
-#ifndef ONE_WAY
-			Lagrangian_force_individual(p, corrector, data_bag);
-#endif
+			#ifndef ONE_WAY
+				Lagrangian_force_individual(p, corrector, data_bag);
+			#endif
 			p = p -> next;
 		}
 
 		p = p_fixed_list -> start;
+
 		while (p != NULL) {
 
 			// Reset fluid forces
@@ -1094,42 +1098,43 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
 				DSET_ZERO(p->F, 3);
 				DSET_ZERO(p->T, 3);
 			}
-#ifndef ONE_WAY
-			Lagrangian_force_individual(p, corrector, data_bag);
-#endif
+			#ifndef ONE_WAY
+				Lagrangian_force_individual(p, corrector, data_bag);
+			#endif
 			p = p -> next;
 		}
-#ifndef ONE_WAY
-		// Update velocities
-		if (corrector) {
-			for (k = Ks; k < Ke; k++) {
-				for (j = Js; j < Je; j++) {
-					for (i = Is; i < Ie; i++) {
-						u_data[k][j][i] += dtbeta * u_rhs[k][j][i];
-						v_data[k][j][i] += dtbeta * v_rhs[k][j][i];
-						w_data[k][j][i] += dtbeta * w_rhs[k][j][i];
+
+		#ifndef ONE_WAY
+			// Update velocities
+			if (corrector) {
+				for (k = Ks; k < Ke; k++) {
+					for (j = Js; j < Je; j++) {
+						for (i = Is; i < Ie; i++) {
+							u_data[k][j][i] += dtbeta * u_rhs[k][j][i];
+							v_data[k][j][i] += dtbeta * v_rhs[k][j][i];
+							w_data[k][j][i] += dtbeta * w_rhs[k][j][i];
 
 
+						}
 					}
 				}
 			}
-		}
-#endif
+		#endif
 	}
 
-#ifndef FULLY_EXPLICIT
-	if (!corrector) {
-		for (i = 0; i < grid->ng_total_nodes; i++) {
-			u_rhs_1d[i] -= u_implicit_1d[i];
+	#ifndef FULLY_EXPLICIT
+		if (!corrector) {
+			for (i = 0; i < grid->ng_total_nodes; i++) {
+				u_rhs_1d[i] -= u_implicit_1d[i];
+			}
+			for (i = 0; i < grid->ng_total_nodes; i++) {
+				v_rhs_1d[i] -= v_implicit_1d[i];
+			}
+			for (i = 0; i < grid->ng_total_nodes; i++) {
+				w_rhs_1d[i] -= w_implicit_1d[i];
+			}
 		}
-		for (i = 0; i < grid->ng_total_nodes; i++) {
-			v_rhs_1d[i] -= v_implicit_1d[i];
-		}
-		for (i = 0; i < grid->ng_total_nodes; i++) {
-			w_rhs_1d[i] -= w_implicit_1d[i];
-		}
-	}
-#endif
+	#endif
 
 	T2 = MPI_Wtime();
 	data_bag->timer->Wtime_particle_forc += T2 - T1;
@@ -1220,79 +1225,80 @@ void Lagrangian_force_individual(Particle *p, int corrector, Cart3d_bag *data_ba
 	double ***temp_f = lag -> ng_temp;
 	double *Temp_U_L = lag -> Temp_L;
 	double *Temp_F_L = lag -> Temp_L;
-#ifdef POST_PROCESS
-	double ***fx_IBM = lag -> ng_fx_IBM;
-	double ***fy_IBM = lag -> ng_fy_IBM;
-#endif
+	#ifdef POST_PROCESS
+		double ***fx_IBM = lag -> ng_fx_IBM;
+		double ***fy_IBM = lag -> ng_fy_IBM;
+	#endif
 
-#ifdef SQUIRMER_SWIMMER
-	// Amplitude of first two modes
-	double B1 = params->B1;
-	double B2 = params->B2;
+	#ifdef SQUIRMER_SWIMMER
+		// Amplitude of first two modes
+		double B1 = params->B1;
+		double B2 = params->B2;
 
-	// Initialize angle to swimming direction and swimming velocity
-	double cos_theta;
-	double sin_theta;
-	double u_theta;
+		// Initialize angle to swimming direction and swimming velocity
+		double cos_theta;
+		double sin_theta;
+		double u_theta;
 
-	// Vector of swimming direction (i.e. particle orientation)
-	double es[3];
-	double es_norm;
+		// Vector of swimming direction (i.e. particle orientation)
+		double es[3];
+		double es_norm;
 
-#ifdef SWIMMER_VERTICAL
-	es[0] = 0.0;
-    es[1] = 1.0;
-    es[2] = 0.0;
-#elif defined SWIMMER_HORIZONTAL
-    es[0] = 1.0;
-    es[1] = 0.0;
-    es[2] = 0.0;
-#else
-    FORI3 es[i] = p->Rotn[i][1]; //  Result of Rotn.ey
-#endif
+	#ifdef SWIMMER_VERTICAL
+		es[0] = 0.0;
+		es[1] = 1.0;
+		es[2] = 0.0;
+	#elif defined SWIMMER_HORIZONTAL
+		es[0] = 1.0;
+		es[1] = 0.0;
+		es[2] = 0.0;
+	#else
+		FORI3 es[i] = p->Rotn[i][1]; //  Result of Rotn.ey
+	#endif
 
-	es_norm = sqrt(DOT(es,es)); // Norm of swimming direction vector
+		es_norm = sqrt(DOT(es,es)); // Norm of swimming direction vector
 
-	// Vector of tangential direction in spherical coordinates associated to the
-	// swimmer's reference frame.
-	double e_theta[3];
-	double e_theta_norm = 0.0;
+		// Vector of tangential direction in spherical coordinates associated to the
+		// swimmer's reference frame.
+		double e_theta[3];
+		double e_theta_norm = 0.0;
 
-	// Target vector (partile center to target)
-	double et[3];
-	FORI3 et[i] = -X[i] + params->target_coord[i];
-	double et_norm = sqrt(DOT(et,et)); //Norm
+		// Target vector (partile center to target)
+		double et[3];
+		FORI3 et[i] = -X[i] + params->target_coord[i];
+		double et_norm = sqrt(DOT(et,et)); //Norm
 
-	// Norm of r (vector from center to Lagrangian marker)
-	double r_norm = p->R; // Norm of vector r is always = radius of the particle
+		// Norm of r (vector from center to Lagrangian marker)
+		double r_norm = p->R; // Norm of vector r is always = radius of the particle
 
-	// Dot products
-	double es_dot_r;
-	double es_dot_et = DOT(es,et);
+		// Dot products
+		double es_dot_r;
+		double es_dot_et = DOT(es,et);
 
-	//
-	// Asymmetry
-	//
+		//
+		// Asymmetry
+		//
 
-//Angle from swimming direction to target
-double cos_theta_t = es_dot_et/es_norm/et_norm;
-//Angle from marker point to target projected on plan normal to swimming direction
-double cos_phi;
-// Asymmetry amplitude function
-double A = params->target_on * (params->coefA + (1-params->coefA) * erf( 2.0 * (1 - cos_theta_t) ));
+	//Angle from swimming direction to target
+	double cos_theta_t = es_dot_et/es_norm/et_norm;
+	//Angle from marker point to target projected on plan normal to swimming direction
+	double cos_phi;
+	// Asymmetry amplitude function
+	double A = params->target_on * (params->coefA + (1-params->coefA) * erf( 2.0 * (1 - cos_theta_t) ));
 
-	// Projection of et onto the plane normal to the swimming direction
-	double et_s[3];
-	FORI3 et_s[i] = et[i] - es_dot_et / (es_norm * es_norm) * es[i];
-	double et_s_norm = sqrt(DOT(et_s,et_s));
+		// Projection of et onto the plane normal to the swimming direction
+		double et_s[3];
+		FORI3 et_s[i] = et[i] - es_dot_et / (es_norm * es_norm) * es[i];
+		double et_s_norm = sqrt(DOT(et_s,et_s));
 
-	// Projection of r onto the plane normal to the swimming direction
-	double r_s[3];
-	double r_s_norm;
+		// Projection of r onto the plane normal to the swimming direction
+		double r_s[3];
+		double r_s_norm;
 
-	// Threshold to avoid division by zero
-	double r_s_norm_threshold = 0.001 * r_norm;
-#endif
+		// Threshold to avoid division by zero
+		double r_s_norm_threshold = 0.001 * r_norm;
+	#endif
+
 
 	/*------------------------------------------------------------------------*/
 	/*
@@ -1323,52 +1329,52 @@ double A = params->target_on * (params->coefA + (1-params->coefA) * erf( 2.0 * (
 		// Desired velocity of Lagrangian point
 		U_d = U[0] + Omega[1] * r[2] - Omega[2] * r[1];
 
-#ifdef SQUIRMER_SWIMMER
-		// Projection of swimming direction onto marker point position vector
-		es_dot_r = DOT(es,r);
+		#ifdef SQUIRMER_SWIMMER
+				// Projection of swimming direction onto marker point position vector
+				es_dot_r = DOT(es,r);
 
-		// Angle from marker point to swimming direction
-		cos_theta = es_dot_r / (es_norm * r_norm);
-		sin_theta = sqrt(es_norm*es_norm*r_norm*r_norm-es_dot_r*es_dot_r)/(es_norm*r_norm);
+				// Angle from marker point to swimming direction
+				cos_theta = es_dot_r / (es_norm * r_norm);
+				sin_theta = sqrt(es_norm*es_norm*r_norm*r_norm-es_dot_r*es_dot_r)/(es_norm*r_norm);
 
-		// Tangential velocity in Swimmer spherical reference frame
-		u_theta = B1*sin_theta + B2*sin_theta*cos_theta;
+				// Tangential velocity in Swimmer spherical reference frame
+				u_theta = B1*sin_theta + B2*sin_theta*cos_theta;
 
-		//------------
-		// non-symmetry
-		//------------
-		// Projection of r onto the plane normal to the swimming direction
-		FORI3 r_s[i] = r[i] - es_dot_r/(es_norm*es_norm)*es[i];
-		r_s_norm = sqrt(DOT(r_s,r_s));
+				//------------
+				// non-symmetry
+				//------------
+				// Projection of r onto the plane normal to the swimming direction
+				FORI3 r_s[i] = r[i] - es_dot_r/(es_norm*es_norm)*es[i];
+				r_s_norm = sqrt(DOT(r_s,r_s));
 
-		if (r_s_norm < r_s_norm_threshold) {
-			cos_phi = 0.0;
-		}
-		else if(et_s_norm < r_s_norm_threshold) {
-			cos_phi = 0.0;
-		}
-		else {
-		// Angle to target
-		cos_phi = DOT(r_s,et_s)/(r_s_norm*et_s_norm);
-		}
+				if (r_s_norm < r_s_norm_threshold) {
+					cos_phi = 0.0;
+				}
+				else if(et_s_norm < r_s_norm_threshold) {
+					cos_phi = 0.0;
+				}
+				else {
+					// Angle to target
+					cos_phi = DOT(r_s,et_s)/(r_s_norm*et_s_norm);
+				}
 
-		// Apply function
-		u_theta = u_theta*sqrt(1-A*cos_phi);
+				// Apply function
+				u_theta = u_theta*sqrt(1-A*cos_phi);
 
-//		//Progressive inccrease in swimming velocity
-//		u_theta = u_theta * erf(params->time);
+			//		//Progressive inccrease in swimming velocity
+			//		u_theta = u_theta * erf(params->time);
 
-		//-----------
-		// e_theta
-		//-----------
-		// Calculating e_theta in lab reference frame
-		FORI3 e_theta[i] = r_norm*r_norm*es[i] - es_dot_r*r[i];
-		e_theta_norm = sqrt(DOT(e_theta,e_theta));
-		FORI3 e_theta[i] = e_theta[i]/e_theta_norm;
+					//-----------
+					// e_theta
+					//-----------
+					// Calculating e_theta in lab reference frame
+					FORI3 e_theta[i] = r_norm*r_norm*es[i] - es_dot_r*r[i];
+					e_theta_norm = sqrt(DOT(e_theta,e_theta));
+					FORI3 e_theta[i] = e_theta[i]/e_theta_norm;
 
-		// Adds the u-momentum component of the squiremer velocity to the desired velocity
-		U_d = U_d - u_theta*e_theta[0];
-#endif
+					// Adds the u-momentum component of the squiremer velocity to the desired velocity
+					U_d = U_d - u_theta*e_theta[0];
+		#endif
 
 		// Force required to produce desired velocity at Lagrangian point
 		F_L = idt2beta * (U_d - Temp_U_L[mv]);
@@ -1439,52 +1445,52 @@ double A = params->target_on * (params->coefA + (1-params->coefA) * erf( 2.0 * (
 		// Desired velocity of Lagrangian point
 		U_d = U[1] + Omega[2] * r[0] - Omega[0] * r[2];
 
-#ifdef SQUIRMER_SWIMMER
-		// Projection of swimming direction onto marker point position vector
-		es_dot_r = DOT(es,r);
+		#ifdef SQUIRMER_SWIMMER
+					// Projection of swimming direction onto marker point position vector
+					es_dot_r = DOT(es,r);
 
-		// Angle from marker point to swimming direction
-		cos_theta = es_dot_r / (es_norm * r_norm);
-		sin_theta = sqrt(es_norm*es_norm*r_norm*r_norm-es_dot_r*es_dot_r)/(es_norm*r_norm);
+					// Angle from marker point to swimming direction
+					cos_theta = es_dot_r / (es_norm * r_norm);
+					sin_theta = sqrt(es_norm*es_norm*r_norm*r_norm-es_dot_r*es_dot_r)/(es_norm*r_norm);
 
-		// Tangential velocity in Swimmer spherical reference frame
-		u_theta = B1*sin_theta + B2*sin_theta*cos_theta;
+					// Tangential velocity in Swimmer spherical reference frame
+					u_theta = B1*sin_theta + B2*sin_theta*cos_theta;
 
-		//------------
-		// non-symmetry
-		//------------
-		// Projection of r onto the plane normal to the swimming direction
-		FORI3 r_s[i] = r[i] - es_dot_r/(es_norm*es_norm)*es[i];
-		r_s_norm = sqrt(DOT(r_s,r_s));
+					//------------
+					// non-symmetry
+					//------------
+					// Projection of r onto the plane normal to the swimming direction
+					FORI3 r_s[i] = r[i] - es_dot_r/(es_norm*es_norm)*es[i];
+					r_s_norm = sqrt(DOT(r_s,r_s));
 
-		if (r_s_norm < r_s_norm_threshold) {
-			cos_phi = 1.0;
-		}
-		else if(et_s_norm < r_s_norm_threshold) {
-			cos_phi = 1.0;
-		}
-		else {
-		// Angle to target
-		cos_phi = DOT(r_s,et_s)/(r_s_norm*et_s_norm);
-		}
+					if (r_s_norm < r_s_norm_threshold) {
+						cos_phi = 1.0;
+					}
+					else if(et_s_norm < r_s_norm_threshold) {
+						cos_phi = 1.0;
+					}
+					else {
+					// Angle to target
+					cos_phi = DOT(r_s,et_s)/(r_s_norm*et_s_norm);
+					}
 
-		// Apply function
-		u_theta = u_theta*sqrt(1-A*cos_phi);
+					// Apply function
+					u_theta = u_theta*sqrt(1-A*cos_phi);
 
-//		//Progressive inccrease in swimming velocity
-//		u_theta = u_theta * erf(params->time);
+			//		//Progressive inccrease in swimming velocity
+			//		u_theta = u_theta * erf(params->time);
 
-		//-----------
-		// e_theta
-		//-----------
-		// Calculating e_theta in lab reference frame
-		FORI3 e_theta[i] = r_norm*r_norm*es[i] - es_dot_r*r[i];
-		e_theta_norm = sqrt(DOT(e_theta,e_theta));
-		FORI3 e_theta[i] = e_theta[i]/e_theta_norm;
+					//-----------
+					// e_theta
+					//-----------
+					// Calculating e_theta in lab reference frame
+					FORI3 e_theta[i] = r_norm*r_norm*es[i] - es_dot_r*r[i];
+					e_theta_norm = sqrt(DOT(e_theta,e_theta));
+					FORI3 e_theta[i] = e_theta[i]/e_theta_norm;
 
-		// Adds the v-momentum component of the squiremer velocity to the desired velocity
-		U_d = U_d - u_theta*e_theta[1];
-#endif
+					// Adds the v-momentum component of the squiremer velocity to the desired velocity
+					U_d = U_d - u_theta*e_theta[1];
+		#endif
 
 		// Force required to produce desired velocity at Lagrangian point
 		F_L = idt2beta * (U_d - Temp_U_L[mv]);
@@ -1555,52 +1561,52 @@ double A = params->target_on * (params->coefA + (1-params->coefA) * erf( 2.0 * (
 		// Desired velocity of Lagrangian point
 		U_d = U[2] + Omega[0] * r[1] - Omega[1] * r[0];
 
-#ifdef SQUIRMER_SWIMMER
-		// Projection of swimming direction onto marker point position vector
-		es_dot_r = DOT(es,r);
+		#ifdef SQUIRMER_SWIMMER
+					// Projection of swimming direction onto marker point position vector
+					es_dot_r = DOT(es,r);
 
-		// Angle from marker point to swimming direction
-		cos_theta = es_dot_r / (es_norm * r_norm);
-		sin_theta = sqrt(es_norm*es_norm*r_norm*r_norm-es_dot_r*es_dot_r)/(es_norm*r_norm);
+					// Angle from marker point to swimming direction
+					cos_theta = es_dot_r / (es_norm * r_norm);
+					sin_theta = sqrt(es_norm*es_norm*r_norm*r_norm-es_dot_r*es_dot_r)/(es_norm*r_norm);
 
-		// Tangential velocity in Swimmer spherical reference frame
-		u_theta = B1*sin_theta + B2*sin_theta*cos_theta;
+					// Tangential velocity in Swimmer spherical reference frame
+					u_theta = B1*sin_theta + B2*sin_theta*cos_theta;
 
-		//------------
-		// non-symmetry
-		//------------
-		// Projection of r onto the plane normal to the swimming direction
-		FORI3 r_s[i] = r[i] - es_dot_r/(es_norm*es_norm)*es[i];
-		r_s_norm = sqrt(DOT(r_s,r_s));
+					//------------
+					// non-symmetry
+					//------------
+					// Projection of r onto the plane normal to the swimming direction
+					FORI3 r_s[i] = r[i] - es_dot_r/(es_norm*es_norm)*es[i];
+					r_s_norm = sqrt(DOT(r_s,r_s));
 
-		if (r_s_norm < r_s_norm_threshold) {
-			cos_phi = 1.0;
-		}
-		else if(et_s_norm < r_s_norm_threshold) {
-			cos_phi = 1.0;
-		}
-		else {
-		// Angle to target
-		cos_phi = DOT(r_s,et_s)/(r_s_norm*et_s_norm);
-		}
+					if (r_s_norm < r_s_norm_threshold) {
+						cos_phi = 1.0;
+					}
+					else if(et_s_norm < r_s_norm_threshold) {
+						cos_phi = 1.0;
+					}
+					else {
+					// Angle to target
+					cos_phi = DOT(r_s,et_s)/(r_s_norm*et_s_norm);
+					}
 
-		// Apply function
-		u_theta = u_theta*sqrt(1-A*cos_phi);
+					// Apply function
+					u_theta = u_theta*sqrt(1-A*cos_phi);
 
-//		//Progressive inccrease in swimming velocity
-//		u_theta = u_theta * erf(params->time);
+			//		//Progressive inccrease in swimming velocity
+			//		u_theta = u_theta * erf(params->time);
 
-		//-----------
-		// e_theta
-		//-----------
-		// Calculating e_theta in lab reference frame
-		FORI3 e_theta[i] = r_norm*r_norm*es[i] - es_dot_r*r[i];
-		e_theta_norm = sqrt(DOT(e_theta,e_theta));
-		FORI3 e_theta[i] = e_theta[i]/e_theta_norm;
+					//-----------
+					// e_theta
+					//-----------
+					// Calculating e_theta in lab reference frame
+					FORI3 e_theta[i] = r_norm*r_norm*es[i] - es_dot_r*r[i];
+					e_theta_norm = sqrt(DOT(e_theta,e_theta));
+					FORI3 e_theta[i] = e_theta[i]/e_theta_norm;
 
-		// Adds the w-momentum component of the squiremer velocity to the desired velocity
-		U_d = U_d - u_theta*e_theta[2];
-#endif
+					// Adds the w-momentum component of the squiremer velocity to the desired velocity
+					U_d = U_d - u_theta*e_theta[2];
+		#endif
 
 		// Force required to produce desired velocity at Lagrangian point
 		F_L = idt2beta * (U_d - Temp_U_L[mv]);
