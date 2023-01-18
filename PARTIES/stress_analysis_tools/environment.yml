@@ -1,0 +1,9 @@
+name: stress39
+dependencies:
+  - python=3.9
+  - numpy
+  - pandas
+  - jupyterlab
+  - matplotlib
+  - scipy
+  - h5py
