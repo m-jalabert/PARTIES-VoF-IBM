@@ -631,12 +631,26 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		U_old[0] = U[0];
 		U_old[1] = U[1];
 		U_old[2] = U[2];
-		U[0] = U_old[0] + dt_iM * ( 2.0 * bet * F[0] + gam * Fc[0] + zet * Fc_old[0]);
-		U[1] = U_old[1] + dt_iM * ( 2.0 * bet * F[1] + gam * Fc[1] + zet * Fc_old[1]);
-		U[2] = U_old[2] + dt_iM * ( 2.0 * bet * F[2] + gam * Fc[2] + zet * Fc_old[2]);
+
+		#ifdef OSCILLATING_PARTICLE
+			double amplitude = params -> disp_amplitude;
+			double frequency = params -> frequency;
+			double angular_vel = 2 * PI * frequency;	// = omega
+			double ps = params -> phase_shift_factor;
+			
+			U[0] = amplitude * angular_vel * (-cos(time * angular_vel + ps * PI)); 
+			U[1] = 0;
+			U[2] = 0;
+		#else
+			U[0] = U_old[0] + dt_iM * ( 2.0 * bet * F[0] + gam * Fc[0] + zet * Fc_old[0]);
+			U[1] = U_old[1] + dt_iM * ( 2.0 * bet * F[1] + gam * Fc[1] + zet * Fc_old[1]);
+			U[2] = U_old[2] + dt_iM * ( 2.0 * bet * F[2] + gam * Fc[2] + zet * Fc_old[2]);
+		#endif
+
 		Fc_old[0] = Fc[0];
 		Fc_old[1] = Fc[1];
 		Fc_old[2] = Fc[2];
+
 #ifdef POST_PROCESS
 		FORI3 p->Fc_norm_old[i] = p->Fc_norm[i];
 		FORI3 p->Fc_tan_old[i]  = p->Fc_tan[i];
@@ -755,9 +769,20 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		dt_iM = dt / p -> M;
 		dt_iI = dt / p -> I_p;
 
-		U[0] = U_old[0] + dt_iM * bet * ( 2.0 * F[0] + Fc[0] + Fc_old[0]);
-		U[1] = U_old[1] + dt_iM * bet * ( 2.0 * F[1] + Fc[1] + Fc_old[1]);
-		U[2] = U_old[2] + dt_iM * bet * ( 2.0 * F[2] + Fc[2] + Fc_old[2]);
+		#ifdef OSCILLATING_PARTICLE
+			double amplitude = params -> disp_amplitude;
+			double frequency = params -> frequency;
+			double angular_vel = 2 * PI * frequency;	// = omega
+			double ps = params -> phase_shift_factor;
+			
+			U[0] = amplitude * angular_vel * (-cos(time * angular_vel + ps * PI)); 
+			U[1] = 0;
+			U[2] = 0;
+		#else
+			U[0] = U_old[0] + dt_iM * bet * ( 2.0 * F[0] + Fc[0] + Fc_old[0]);
+			U[1] = U_old[1] + dt_iM * bet * ( 2.0 * F[1] + Fc[1] + Fc_old[1]);
+			U[2] = U_old[2] + dt_iM * bet * ( 2.0 * F[2] + Fc[2] + Fc_old[2]);
+		#endif
 
 		Omega[0] = Omega_old[0] + dt_iI * bet * ( 2.0 * T[0] + Tc[0] + Tc_old[0] );
 		Omega[1] = Omega_old[1] + dt_iI * bet * ( 2.0 * T[1] + Tc[1] + Tc_old[1] );
