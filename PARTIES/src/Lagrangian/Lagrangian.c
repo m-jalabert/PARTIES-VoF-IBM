@@ -448,34 +448,33 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
     		double time = params -> time;
 
-	#ifdef PARTICLE_OSCILLATION
-    // Oscillation force acting on particle due to ISS vibration
+			#ifdef OSCILLATION
 
-	double amplitude = params -> amplitude;
-	double tref = params -> tref;
-	double phase_shift_factor = params -> phase_shift_factor;
+				if (params->oscillation_frame == 1){
+					// non-inertial (accelerated) frame
+					double oscillation = params -> oscillation;
 
-	double oscillation = amplitude * sin(time / tref * 2 * PI + (phase_shift_factor * PI));
+					F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
+					F[0] -= p->M * (1.0 - 1.0 / p->rho_s) * oscillation;		// oscillation has to be subtracted due to the non-inertial frame
 
-	F[0] += p->M * (1.0 - 1.0 / p->rho_s) * oscillation;
+				} else if (params->oscillation_frame == 0){
+					// inertial (fixed) frame
+					F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
 
-	F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-	F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+				}
 
-	// Print values to check if this part is reached
-    	//printf("Particle Vibration: time - force in x, y, z = %g %g %g %g \n", time, F[0], F[1], F[2]);
+				F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+				F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
 
-    #else
+			#else
 
-	// Reduced gravity for submerged particles
-	F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
-	F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-	F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+				// Reduced gravity for submerged particles
+				F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
+				F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+				F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
 
-	// Print values to check if this part is reached
-    //printf("Particle_Oscillation is not defined, time = %g \n", time);
+			#endif // OSCILLATION
 
-    #endif // PARTICLE_OSCILLATION
 
 			// TO REMOVE, JUST TEST
 			#ifdef ONE_WAY
