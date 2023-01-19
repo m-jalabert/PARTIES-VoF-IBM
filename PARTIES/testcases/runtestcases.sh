@@ -22,6 +22,8 @@ MORDANT_TESTCASE="$test_home_path/Mordant_Testcase/mordant_testcase.sh"
 TEN_CATE_TESTCASE="$test_home_path/ten_Cate_testcase/ten_Cate_testcase.sh"
 COLLISION_TESTCASE_ST_3="$test_home_path/Gondret_Testcase/test_St_3.sh"
 COLLISION_TESTCASE_ST_120="$test_home_path/Gondret_Testcase/test_St_120.sh"
+OSCILLATION_DOMAIN="$test_home_path/Oscillation_Testcases/01_Osc_Domain/Osc_Dom_testcase.sh"
+OSCILLATION_PARTICLE="$test_home_path/Oscillation_Testcases/02_Osc_Particle/Osc_Par_testcase.sh"
 
 # Input no of processors
 read -p 'Enter number of processors: ' nproc
@@ -32,35 +34,45 @@ read -p 'Enter number of processors: ' nproc
 
 # Comment out unrequired flows
 
-#printf '\nPoiseuille flow\t'
-#cd Poiseuille_Testcase/
-#. "$POISEUILLE_FLOW" $nproc > $LOGFILE
-#print_status $?
+printf '\nPoiseuille flow\t'
+cd Poiseuille_Testcase/
+. "$POISEUILLE_FLOW" $nproc > $LOGFILE
+print_status $?
 
-#printf '\nCouette flow\t'
-#cd Couette_Testcase/
-#. "$COUETTE_FLOW" $nproc >>  $LOGFILE
-#print_status $?
+printf '\nCouette flow\t'
+cd Couette_Testcase/
+. "$COUETTE_FLOW" $nproc >>  $LOGFILE
+print_status $?
 
-#printf '\nMordant test\t'
-#cd Mordant_Testcase/
-#. "$MORDANT_TESTCASE" $nproc >>  $LOGFILE
-#print_status $?
+printf '\nMordant test\t'
+cd Mordant_Testcase/
+. "$MORDANT_TESTCASE" $nproc >>  $LOGFILE
+print_status $?
 
 printf '\nten Cate test\t'
 cd ten_Cate_testcase/
 . "$TEN_CATE_TESTCASE" $nproc >> $LOGFILE
 print_status $?
 
-#printf '\nCollision test St=3'
-#cd Gondret_Testcase/
-#. "$COLLISION_TESTCASE_ST_3" $nproc >> $LOGFILE
-#print_status $?
+printf '\nCollision test St=3'
+cd Gondret_Testcase/
+. "$COLLISION_TESTCASE_ST_3" $nproc >> $LOGFILE
+print_status $?
 
-#printf '\nCollision test St=120' 
-#cd Gondret_Testcase/
-#. "$COLLISION_TESTCASE_ST_120" $nproc >> $LOGFILE
-#print_status $?
+printf '\nCollision test St=120' 
+cd Gondret_Testcase/
+. "$COLLISION_TESTCASE_ST_120" $nproc >> $LOGFILE
+print_status $?
+
+printf '\nOscillation-Domain' 
+cd Oscillation_Testcases/01_Osc_Domain/
+. "$OSCILLATION_DOMAIN" $nproc >> $LOGFILE
+print_status $?
+
+printf '\nOscillation-Particle' 
+cd Oscillation_Testcases/02_Osc_Particle/
+. "$OSCILLATION_PARTICLE" $nproc >> $LOGFILE
+print_status $?
 
 printf '\n'
 ###########################################################################
@@ -73,4 +85,6 @@ rm -rf Mordant_run
 rm -rf ten_Cate_run
 rm -rf test_St_3_run
 rm -rf test_St_120_run
+rm -rf Osc_Dom_run
+rm -rf Osc_Par_run
 rm $LOGFILE
