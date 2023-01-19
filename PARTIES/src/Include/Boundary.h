@@ -169,9 +169,9 @@
 #undef  BICG_SOLVE // nouniform mesh
 #undef  TEST
 
-#define OSCILLATION        		// Oscillation force 
+#define OSCILLATION        		// Oscillation force for oscillating the domain/fluid container
 
-#undef OSCILLATING_PARTICLE		// Particle oscillates with prescribed u-velocity
+#undef OSCILLATING_PARTICLE		// Oscillation of the particle with prescribed u-velocity
 
 #undef STOKES_2ND_PROBLEM		// Oscillating boundary layer due to oscillating Top_Wall
 								// Required: 	#define  TOP_WALL_VELOCITY
