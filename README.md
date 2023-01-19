@@ -32,6 +32,7 @@ Paralleliztion of the code <br>
 [Bug reports](https://github.com/metialex/PARTIES/blob/master/docs/md_files/bug_report.md)  <br>
 [Main git commands](https://github.com/metialex/PARTIES/blob/master/docs/md_files/git_commands.md) <br>
 [Matlab scripts](https://github.com/metialex/PARTIES/blob/master/docs/md_files/matlab_scripts.md) <br>
+[Testcases](https://github.com/metialex/PARTIES/tree/master/PARTIES/testcases/README_Testcases.md) <br>
 The main description of code structure <br>
 Links to other related applications - e.g. non-dimensionalization calculators, pre- and post-processing scripts. 
 
