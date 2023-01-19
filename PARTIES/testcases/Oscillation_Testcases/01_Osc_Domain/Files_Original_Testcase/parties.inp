@@ -1,0 +1,128 @@
+[geometry]
+xmin = 0.0
+xmax = 10.0
+ymin = 0.0
+ymax = 10.0
+zmin = 0.0
+zmax = 10.0
+
+
+[grid]
+NXM = 200
+NYM = 200
+NZM = 200
+
+
+[flow]
+Re = 27.4428
+dp_dx = 0  # constant volume force
+
+
+
+# Initialization types:
+# 0 - zero flow
+# 1 - uniform flow profile
+# 2 - linear flow profile
+
+# 3 - Poiseuille (parabolic) flow profile
+# 4 - rotational shear flow profile
+# 5 - precursor simulation
+vel_init_type = 0
+vel_init_y0 = 0  ## over this coordinate velocity is set
+ubulk_target = 0 #  constant mass flux enables this
+
+# Oscillation Values
+oscillation_frame = 1		# define observer: 0 = fixed frame; 1 = accelerated (moving) frame
+startup_time = 0.0
+phase_shift_factor = 0.5         # phase_shift = phase_shift_factor * Pi
+
+amplitude_mode = 1			# Use which amplitude mode? 1: amplitude = disp_amplitude[m] * (2 * Pi * frequency)^2[1/s^2] ,   0: amplitude = acc_amplitude [m/s^2]
+disp_amplitude = 0.1		# displacement-amplitude of the oscillation (dimensional in m)
+frequency = 1.0			# oscillation frequency
+
+[simulation]
+time_max = 1.0
+output_time_interval = 1.0
+cfl = 0.5
+
+max_dt = 0.001
+default_dt = 0.0001
+constant_dt = 0 #  if 0 = CFL condition if 1== default timestep
+resume = 0	# if 0 =  start from t=0
+
+
+
+[particle]
+grav = {0, 0, 0}  # {a,b,c,..} notion for a list
+rho_s = 4.6793
+Co = 0
+
+
+e_dry_wall = 0.97
+e_dry_particles = 0.97
+Ndt_coll = 10
+N_forcing_loops = 1  # Extra loops for enforcing no-slip
+
+## scalar fields
+N_impheating_loops = 0# Loops for enforcing conc BC
+N_heating_loops = 0 # Extra loops for enforcing conc BC
+
+
+
+[conc]
+NConc = 1   ## should be smaller than 50!!!
+richardson ={-500}
+V_s0   = {0.0}
+
+conc_init_type= {0} ##Initialization types: 0 == c=0; 1 == Lock exchange; 2 == half triple cos; 3 == half triple sin; 4 == double sin
+Pe = {2}
+					## 5 == sin in x direction; 6== linear RB 1 at bottom 0 at the top ; 7 == Ardekani 2014 test case
+
+BC_AN = {0}
+BC_AS = {0}
+BC_AE = {1}
+BC_AW = {1}
+BC_AB = {1}
+BC_AF = {1}
+
+BC_BN = {1}
+BC_BS = {1}
+BC_BE = {0}
+BC_BW = {0}
+BC_BF = {0}
+BC_BB = {0}
+
+BC_CN = {0}
+BC_CS = {1}
+BC_CE = {0}
+BC_CW = {0}
+BC_CF = {0}
+BC_CB = {0}
+
+
+[lock]  ## lock exchange
+x_fr = 0.
+y_fr = 0.
+z_fr = 0.
+
+[output]
+
+##lock exchange
+front_location_output 	= 0
+ave_height_output     	= 0
+output_vfu			  	= 1
+output_vfv			  	= 0
+output_vfw			  	= 0
+output_vfc			  	= 0
+
+
+##SLICE_OUTPUT
+slice_axis      = 2             # Specification of the axis to be sliced: 0=X, 1=Y, 2=Z
+slice_half      = 1             # Slice in the center of the specified slicing axis: 1=yes; 0=no -> if no, specify slice_position
+slice_pos       = 0     		# If slice_half=0 -> grid point number for slicing position
+slice_p         = 0             # Specifiy if pressure field should be sliced: 0=no; 1=yes
+
+center_two_particles = 0        # For two particles, specify whether the slicing should be performed in the center
+                               	# between the particles along X-axis: 0=no; 1=yes; Only valid when slice_axis = 0
+
+
