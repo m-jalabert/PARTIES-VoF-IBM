@@ -446,33 +446,17 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 			#endif
 
-    		double time = params -> time;
+    		F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
+			F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+			F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+
 
 			#ifdef OSCILLATION
-
-				if (params->oscillation_frame == 1){
-					// non-inertial (accelerated) frame
+				if (params->oscillation_frame == 1){ 		// non-inertial (accelerated) frame
 					double oscillation = params -> oscillation;
-
-					F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
 					F[0] -= p->M * (1.0 - 1.0 / p->rho_s) * oscillation;		// oscillation has to be subtracted due to the non-inertial frame
-
-				} else if (params->oscillation_frame == 0){
-					// inertial (fixed) frame
-					F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
-
-				}
-
-				F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-				F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
-
-			#else
-
-				// Reduced gravity for submerged particles
-				F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
-				F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-				F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
-
+				} 	
+				// else if inertial (fixed) frame, there is no need to modify F[0]!
 			#endif // OSCILLATION
 
 

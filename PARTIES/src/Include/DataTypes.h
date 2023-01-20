@@ -290,12 +290,12 @@ struct parameters {
 	// Pressure gradient
 	double dp_dx, dp_dx_old;
 
-	// Oscillation parameters
+	// Oscillation parameters		with: L, T = length and time scale
 	double phase_shift_factor;     	// phase shift of the oscillating force= phase_shift_factor * Pi
-	int amplitude_mode;				// Use which amplitude mode? 1: amplitude = disp_amplitude[m] * (2 * Pi * frequency)^2[1/s^2] ,   0: amplitude = acc_amplitude [m/s^2]
-	double disp_amplitude;			// displacement-amplitude of the oscillation (dimensional in m)
-	double acc_amplitude;			// acceleration-amplitude of the oscillation (dimensional in m/s^2)
-	double frequency;				// oscillation frequency (dimensional in Hz)
+	int amplitude_mode;				// Use which amplitude mode? 1: amplitude = disp_amplitude[L] * (2 * Pi * frequency)^2[1/T^2] ,   0: amplitude = acc_amplitude [L/T^2]
+	double disp_amplitude;			// displacement-amplitude of the oscillation [L]
+	double acc_amplitude;			// acceleration-amplitude of the oscillation [L/T^2]
+	double frequency;				// oscillation frequency [1/T]
 	double oscillation;				// total oscillation
 	int oscillation_frame;			// define observer: 0 = inertial (fixed) frame; 1 = non-inertial (accelerated) frame
 

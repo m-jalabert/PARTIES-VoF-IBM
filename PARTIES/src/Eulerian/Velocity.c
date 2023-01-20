@@ -1104,10 +1104,10 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 
 	if (amplitude_mode == 1){
 		double disp_amplitude = params -> disp_amplitude; 
-		amplitude = disp_amplitude * pow(angular_vel,2);		// amplitude = disp_amplitude[m] * omega^2
+		amplitude = disp_amplitude * pow(angular_vel,2);		// amplitude = disp_amplitude[L] * omega^2
 	} 
 	else {
-		amplitude = params -> acc_amplitude;		// amplitude = acc_amplitude[m/s^2]
+		amplitude = params -> acc_amplitude;		// amplitude = acc_amplitude[L/T^2]
 	}
 
 	dp_dx_source = amplitude * sin(time * angular_vel + (phase_shift_factor * PI));
@@ -2152,7 +2152,7 @@ void Velocity_update_boundaries(double ***data, char component, int type, Cart3d
 #if defined BOTTOM_WALL_VELOCITY && defined TOP_WALL_VELOCITY
 	double top_wall_vel = params -> ubulk_target;
 #else
-	#if defined STOKES_2ND_PROBLEM
+	#ifdef STOKES_2ND_PROBLEM
 		double u_oscillation;
 		double time = params->time;
 		double phase_shift_factor = params->phase_shift_factor;
@@ -3138,7 +3138,7 @@ void Velocity_calculate_dpdx(Velocity *uvel, Cart3d_bag *data_bag) {
 	a_dt = 1.0 / dt;
 	params -> dp_dx_old = params -> dp_dx;
 
-	#if defined CONSTANT_MASSFLUX 
+	#ifdef CONSTANT_MASSFLUX 
 		params -> dp_dx     = params -> dp_dx_old
 	                      	+ 2.0 * (params->ubulk - params->ubulk_target) / params -> dt
 	                      	- (params->ubulk_old - params->ubulk_target) / params -> dt_old;
@@ -3150,7 +3150,7 @@ void Velocity_calculate_dpdx(Velocity *uvel, Cart3d_bag *data_bag) {
 		else {
 			fid = fopen("dpdx_history.dat","a"); }
 
-		#if defined STOKES_2ND_PROBLEM
+		#ifdef STOKES_2ND_PROBLEM
 			fprintf(fid, "%8d %e %e %20.12e %20.12e %20.12e %20.12e %20.12e\n", params->ntime,
 			params->time,dt, params->dp_dx, params->dp_dx_old, params->ubulk, params->ubulk_old, params->u_oscillation);
 			fclose(fid);
@@ -3161,7 +3161,7 @@ void Velocity_calculate_dpdx(Velocity *uvel, Cart3d_bag *data_bag) {
 		#endif
 	}
 
-	#if defined OSCILLATION
+	#ifdef OSCILLATION
 		if (params -> rank == 0) {
 			if (params -> time == 0) {
 				fid_osc = fopen("oscillation.dat","w"); }

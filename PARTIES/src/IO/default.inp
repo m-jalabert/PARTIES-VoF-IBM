@@ -66,12 +66,12 @@ CFG(flow, startup_time, 0.0, atof)		// starting time to release the particle (in
 CFGArray(flow, startup_velocity, "{0.0, 0.0, 0.0}", GVG_DOUBLE)  // Prescribed velocity which acts on the particle during startup time
 CFG(flow, startup_init, 0.0, atof)		// 0 - User defined velocity and startup_time; 1,2 - Gondret testcase St=27 and St = 152
 
-// Oscillation parameters
+// Oscillation parameters                   with: L, T = length and time scale
 CFG(flow, phase_shift_factor, 0.0, atof)	// phase shift of the oscillating force = phase_shift_factor * Pi 
-CFG(flow, amplitude_mode, 1, atoi)          // Use which amplitude mode? 1: amplitude = disp_amplitude[m] * (2 * Pi * frequency)^2[1/s^2] ,   0: amplitude = acc_amplitude [m/s^2]
-CFG(flow, disp_amplitude, 0.0, atof)        // displacement-amplitude of the oscillation (dimensional in m)
-CFG(flow, acc_amplitude, 0.0, atof)         // acceleration-amplitude of the oscillation (dimensional in m/s2)
-CFG(flow, frequency, 1.0, atof)             // oscillation frequency (dimensional in Hz)
+CFG(flow, amplitude_mode, 1, atoi)          // Use which amplitude mode? 1: amplitude = disp_amplitude[L] * (2 * Pi * frequency)^2[1/T^2] ,   0: amplitude = acc_amplitude [L/T^2]
+CFG(flow, disp_amplitude, 0.0, atof)        // displacement-amplitude of the oscillation [L]
+CFG(flow, acc_amplitude, 0.0, atof)         // acceleration-amplitude of the oscillation [L/T^2]
+CFG(flow, frequency, 1.0, atof)             // oscillation frequency [1/T]
 CFG(flow, oscillation_frame, 1.0, atof)     // define observer: 0 = inertial (fixed) frame; 1 = non-inertial (accelerated) frame
 
 
