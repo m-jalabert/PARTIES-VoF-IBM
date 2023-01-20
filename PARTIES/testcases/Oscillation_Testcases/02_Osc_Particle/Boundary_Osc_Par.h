@@ -11,7 +11,7 @@
 #undef  DIRTY_FIX  // if 1 fix is one; to disable put 0
 
 
-#define PERIODIC_NOSLIP_BOX
+#undef PERIODIC_NOSLIP_BOX
 #undef PERIODIC_FREESLIP_BOX
 #undef XPERIODIC_FREESLIP_BOX
 #undef PERIODIC_SHEAR_FLOW
@@ -121,14 +121,14 @@
 /*                                X-Boundaries                                */
 /******************************************************************************/
 	#undef  LEFT_WALL_VELOCITY_NOSLIP
-	#undef LEFT_WALL_VELOCITY_FREESLIP
-	#define  LEFT_INFLOW
+	#define LEFT_WALL_VELOCITY_FREESLIP
+	#undef  LEFT_INFLOW
 	#undef  LEFT_OUTFLOW
 
 	#undef  RIGHT_WALL_VELOCITY_NOSLIP
-	#undef RIGHT_WALL_VELOCITY_FREESLIP
+	#define RIGHT_WALL_VELOCITY_FREESLIP
 	#undef  RIGHT_INFLOW
-	#define  RIGHT_OUTFLOW
+	#undef  RIGHT_OUTFLOW
 
 	#undef  XPERIODIC
 
@@ -137,25 +137,27 @@
 /*                                Z-Boundaries                                */
 /******************************************************************************/
 	#undef  BACK_WALL_VELOCITY_NOSLIP
-	#undef  BACK_WALL_VELOCITY_FREESLIP
+	#define  BACK_WALL_VELOCITY_FREESLIP
 
 	#undef  FRONT_WALL_VELOCITY_NOSLIP
-	#undef  FRONT_WALL_VELOCITY_FREESLIP
+	#define  FRONT_WALL_VELOCITY_FREESLIP
 
-	#define ZPERIODIC
+	#undef ZPERIODIC
 
 
 /******************************************************************************/
 /*                                Y-Boundaries                                */
 /******************************************************************************/
-	#define BOTTOM_WALL_VELOCITY_NOSLIP
-	#undef  BOTTOM_WALL_VELOCITY_FREESLIP
+	#undef BOTTOM_WALL_VELOCITY_NOSLIP
+	#define  BOTTOM_WALL_VELOCITY_FREESLIP
 	#undef  BOTTOM_WALL_SCHUMANN
 	#undef  BOTTOM_WALL_VELOCITY
-	#define TOP_WALL_VELOCITY_NOSLIP
-	#undef  TOP_WALL_VELOCITY_FREESLIP
+
+	#undef TOP_WALL_VELOCITY_NOSLIP
+	#define  TOP_WALL_VELOCITY_FREESLIP
 	#undef  TOP_WALL_SCHUMANN
 	#undef  TOP_WALL_VELOCITY
+
 	#undef YPERIODIC
 #endif
 
@@ -169,9 +171,9 @@
 #undef  BICG_SOLVE // nouniform mesh
 #undef  TEST
 
-#define OSCILLATION        		// Oscillation force for oscillating the domain/fluid container in x-direction
+#undef OSCILLATION        		// Oscillation force 
 
-#undef OSCILLATING_PARTICLE		// Oscillation of the particle in x-direction with prescribed u-velocity
+#define OSCILLATING_PARTICLE		// Particle oscillates with prescribed u-velocity
 
 #undef STOKES_2ND_PROBLEM		// Oscillating boundary layer due to oscillating Top_Wall
 								// Required: 	#define  TOP_WALL_VELOCITY
@@ -181,7 +183,7 @@
 /*                                   Output                                   */
 /******************************************************************************/
 #undef  OUTPUT2D
-#undef SLICE_OUTPUT	// 2D-slice output of the flow field; output into subfolder './trn'
+#undef SLICE_OUTPUT
 
 
 /******************************************************************************/
@@ -214,8 +216,7 @@
 
 // defines some output quantities should be handeled differently
 #undef SCALAR_DEBUG	// prints the difference at the Lagrangian points to stdout
-#define POST_PROCESS    //Ed ibm force make field in x direction
-
+#undef POST_PROCESS    //Ed ibm force make field in x direction
 
 						/* Now some predefined BC for a single conc field*/
 

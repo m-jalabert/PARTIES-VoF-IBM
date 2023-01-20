@@ -61,12 +61,19 @@ CFG(flow, Kf, 2.3, atof)     			 // maximum forced wave number
 CFG(flow, Ds, 1e7, atof)     			 // Characteristic dissipation value for the random turbulent process
 CFG(flow, t_release, -2.0, atof)
 CFG(flow, per_fr, 1.5, atof)
-CFG(flow, amplitude, 0.0, atof)			// Amplitude for oscillation due to ISS vibration
-CFG(flow, tref, 0.0, atof)			// reference time for sinus function of oscillation (ISS)
+
 CFG(flow, startup_time, 0.0, atof)		// starting time to release the particle (in STARTUP flag)
 CFGArray(flow, startup_velocity, "{0.0, 0.0, 0.0}", GVG_DOUBLE)  // Prescribed velocity which acts on the particle during startup time
 CFG(flow, startup_init, 0.0, atof)		// 0 - User defined velocity and startup_time; 1,2 - Gondret testcase St=27 and St = 152
-CFG(flow, phase_shift_factor, 0.0, atof)	// phase shift of the oscillating force = phase_shift_factor * Pi
+
+// Oscillation parameters                   with: L, T = length and time scale
+CFG(flow, phase_shift_factor, 0.0, atof)	// phase shift of the oscillating force = phase_shift_factor * Pi 
+CFG(flow, amplitude_mode, 1, atoi)          // Use which amplitude mode? 1: amplitude = disp_amplitude[L] * (2 * Pi * frequency)^2[1/T^2] ,   0: amplitude = acc_amplitude [L/T^2]
+CFG(flow, disp_amplitude, 0.0, atof)        // displacement-amplitude of the oscillation [L]
+CFG(flow, acc_amplitude, 0.0, atof)         // acceleration-amplitude of the oscillation [L/T^2]
+CFG(flow, frequency, 1.0, atof)             // oscillation frequency [1/T]
+CFG(flow, oscillation_frame, 1.0, atof)     // define observer: 0 = inertial (fixed) frame; 1 = non-inertial (accelerated) frame
+
 
 //------------------------------------------------------------------------------
 // Initialization types:
@@ -225,13 +232,13 @@ CFG(output, output_vfv, NO, atoi)     // particle indicator function
 CFG(output, output_vfw, NO, atoi)     // particle indicator function
 CFG(output, output_vfc, NO, atoi)     // particle indicator function
 
-
 // SLICE_OUTPUT
 CFG(output, slice_axis, 2, atoi)      // Specification of the axis to be sliced: 0=X, 1=Y, 2=Z
 CFG(output, slice_half, 1, atoi)      // Slice in the center of the specified slicing axis: 1=yes; 0=no -> if no, specify slice_position
 CFG(output, slice_pos, 1, atoi)       // If slice_half=0 -> grid point number for slicing position
 CFG(output, slice_p, 0, atoi)         // Specifiy if pressure field should be sliced: 0=no; 1=yes
-
+CFG(output, center_two_particles, 0, atoi)  // For two particles, specify whether the slicing should be performed in the center 
+                                            // between the particles along X-axis: 0=no; 1=yes; Only valid when slice_axis = 0
 
 /*  For statistics2d  */
 

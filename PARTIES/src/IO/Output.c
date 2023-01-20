@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <hdf5.h>
 #include <hdf5_hl.h>
+#include <math.h>
 
 
 #include "definitions.h"
@@ -1801,6 +1802,9 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 		int slice_half = params->slice_half; // determines if slice should be taken in the center of the specified slicing axis
 		int slice_pos  = params->slice_pos;  // determines the position of the slicing (number of grid cell), if not in the center
 
+		double center;
+		double dx;
+
 		// Dimensions of slice as part of a 3-D array and specification of position of slicing
 		int dim[3];
 		dim[2] = 1;
@@ -1808,10 +1812,21 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 		if (params->slice_axis==0){ // slice of X-axis
 			dim[0] = grid->NZ;
 			dim[1] = grid->NY;
-			if (slice_half==0){
-				i = slice_pos;
-			} else if (slice_half==1){
-				i = (grid->NX-1)/2;		// N-1 to delete ghost cell
+			if ( params->center_two_particles == 1 ) { // slice in the center of the two particles
+				dx = params->Lx / params->NXM;
+				center = (params->particle_position[0][0] + params->particle_position[1][0]) / 2;
+				i = round(center / dx);
+
+			} else {
+				if (slice_half==0){
+					i = slice_pos;
+				} else if (slice_half==1){
+					if (grid->NX % 2 == 0) {
+						i = grid->NX/2;
+					} else {
+						i = (grid->NX-1)/2;
+					}	
+				}
 			}
 
 		} else if (params->slice_axis==1){ // slice of Y-axis
@@ -1820,7 +1835,11 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 			if (slice_half==0){
 				j = slice_pos;
 			} else if (slice_half==1){
-				j = (grid->NY-1)/2;
+				if (grid->NY % 2 == 0) {
+					j = grid->NY/2;
+				} else {
+					j = (grid->NY-1)/2;
+				}	
 			}
 
 		} else if (params->slice_axis==2){ // slice of Z-axis
@@ -1829,7 +1848,11 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 			if (slice_half==0){
 				k = slice_pos;
 			} else if (slice_half==1){
-				k = (grid->NZ-1)/2;
+				if (grid->NZ % 2 == 0) {
+					k = grid->NZ/2;
+				} else {
+					k = (grid->NZ-1)/2;
+				}	
 			}
 		}
 		
@@ -1852,8 +1875,12 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 						if (slice_half==0){
 							G_data2d[j][k] = data3d[k][j][i];
 						} else if (slice_half==1){	// slicing in center
-							// calculate data exactly in the center of the x-coordinate
-							G_data2d[j][k] = (data3d[k][j][i] + data3d[k][j][i-1]) / 2;
+							// calculate data exactly in the center of the y-coordinate
+							if (grid->NZ % 2 == 0) {
+								G_data2d[j][k] = (data3d[k][j][i] + data3d[k][j][i-1]) / 2;
+							} else {
+								G_data2d[j][k] = data3d[k][j][i];
+							}	 
 						}
 					}
 				}
@@ -1873,7 +1900,11 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 							G_data2d[k][i] = data3d[k][j][i];
 						} else if (slice_half==1){	// slicing in center
 							// calculate data exactly in the center of the y-coordinate
-							G_data2d[k][i] = (data3d[k][j][i] + data3d[k][j-1][i]) / 2;
+							if (grid->NZ % 2 == 0) {
+								G_data2d[k][i] = (data3d[k][j][i] + data3d[k][j-1][i]) / 2;
+							} else {
+								G_data2d[k][i] = data3d[k][j][i];
+							}	 
 						}
 					}
 				}
@@ -1893,7 +1924,11 @@ void Output_2d_data(double** data2d, int *dim, double *x, double *y, double *z,
 							G_data2d[j][i] = data3d[k][j][i];
 						} else if (slice_half==1){	// slicing in center
 							// calculate data exactly in the center of the z-coordinate
-							G_data2d[j][i] = (data3d[k][j][i] + data3d[k-1][j][i]) / 2;  
+							if (grid->NZ % 2 == 0) {
+								G_data2d[j][i] = (data3d[k][j][i] + data3d[k-1][j][i]) / 2;
+							} else {
+								G_data2d[j][i] = data3d[k][j][i];
+							}	 
 						}
 					}
 				}

@@ -171,6 +171,16 @@ int N_read_data = 4;
 			}
 		}  // for i
 
+					
+		if (Np == 1) {
+			params -> D50 = 2 * R[0];
+			}
+		else if (Np == 2) {
+			params -> D50 = 2 * ((R[0] + R[1]) / 2);
+			}
+
+		
+
 		// Close file
 		fclose(fptr);
 	}
@@ -178,6 +188,7 @@ int N_read_data = 4;
 
 	// Broadcast particle information
 	MPI_Bcast(temp, N_read_data * Np, MPI_DOUBLE, 0, PCW);
+	MPI_Bcast(&params -> D50, 1, MPI_DOUBLE, 0, PCW);
 
 	// Create local particle linked lists
 	p_list -> start = (Particle *)malloc(sizeof(Particle));

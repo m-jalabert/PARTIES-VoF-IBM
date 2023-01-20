@@ -77,24 +77,24 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Velocity *w = data_bag -> w;
 	Pressure *p = data_bag -> p;
 
-#ifdef CONC
-	int iconc;
-	int NConc = params -> NConc;
-	Concentration **c = data_bag -> c;
-#endif
+	#ifdef CONC
+		int iconc;
+		int NConc = params -> NConc;
+		Concentration **c = data_bag -> c;
+	#endif
 
-#ifdef LES
-	Subgrid *smag = data_bag -> smag;
-	double ***nut = smag->nut;
-#endif
-#ifdef RANS
-	Rans *rans = data_bag -> rans;
-	double ***nut = rans->nut;
-#endif
+	#ifdef LES
+		Subgrid *smag = data_bag -> smag;
+		double ***nut = smag->nut;
+	#endif
+	#ifdef RANS
+		Rans *rans = data_bag -> rans;
+		double ***nut = rans->nut;
+	#endif
 
-#ifdef OUTPUT2D
-	Statistics2d *st2d = data_bag -> st2d;
-#endif
+	#ifdef OUTPUT2D
+		Statistics2d *st2d = data_bag -> st2d;
+	#endif
 
 	#ifdef SLICE_OUTPUT
 
@@ -184,17 +184,17 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	// Initial output to file. Corresponding to zero velocity.
 	Velocity_cell_center(data_bag);
 
-#ifdef VAR_VISC
-	Viscosity_set_cell_edges(data_bag);
-#endif
-	Communication_update_ghost_nodes_flow_variable(p->p_data, CONCENTRATION_PERTURBATION, 1, data_bag);
-#ifdef CONC
+	#ifdef VAR_VISC
+		Viscosity_set_cell_edges(data_bag);
+	#endif
+		Communication_update_ghost_nodes_flow_variable(p->p_data, CONCENTRATION_PERTURBATION, 1, data_bag);
+	#ifdef CONC
 
-	for (iconc=0; iconc<NConc; iconc++) {
-		Communication_update_ghost_nodes_flow_variable(c[iconc]->data, CONCENTRATION, pnodes, data_bag);
+		for (iconc=0; iconc<NConc; iconc++) {
+			Communication_update_ghost_nodes_flow_variable(c[iconc]->data, CONCENTRATION, pnodes, data_bag);
 
-	}
-#endif
+		}
+	#endif
 
 	//--------------------------------------------------------------------------
 	// Saving the initial conditions
@@ -203,11 +203,11 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	if (!params->resume) {
 		Output_h5_data(data_bag, DTRACE("Output_h5_data"));
 		Output_h5_resume(data_bag, DTRACE("Output_h5_resume"));
-#ifdef LAG_PARTICLE_RESOLVED
+		#ifdef LAG_PARTICLE_RESOLVED
 
-		ParticleOutput_h5(data_bag, params->noutput, DTRACE("ParticleOutput_h5"));
+			ParticleOutput_h5(data_bag, params->noutput, DTRACE("ParticleOutput_h5"));
 
-#endif
+		#endif
 		if (params -> rank == 0) {
 			timeFile = fopen(TIMEFILE, "a");
 			fprintf(timeFile, "%f\n", time);
@@ -270,19 +270,17 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		// Save data to file during output time steps
 		//----------------------------------------------------------------------
 
-#if defined LAG_PARTICLE_RESOLVED// && !defined SUBSTEP
+		#if defined LAG_PARTICLE_RESOLVED// && !defined SUBSTEP
 
-	#if defined PARTICLE_TRN
-		sprintf(message, "Outputting par_trn %d\n", ntime);
-		Display_progress(params, message);
-		//test_2d_output(data_bag, ntime, DTRACE("test_2d_output"));
-		ParticleOutput_h5(data_bag, ntime, DTRACE("ParticleOutput_h5"));
-	#endif
+			#if defined PARTICLE_TRN
+				sprintf(message, "Outputting par_trn %d\n", ntime);
+				Display_progress(params, message);
+				ParticleOutput_h5(data_bag, ntime, DTRACE("ParticleOutput_h5"));
+			#endif
 
-		ParticleOutput_dat(data_bag->lag->p_mobile_list, grid, params, DTRACE("ParticleOutput_dat"));
+			ParticleOutput_dat(data_bag->lag->p_mobile_list, grid, params, DTRACE("ParticleOutput_dat"));
 
-	#endif
-
+		#endif
 
 		// Regular monitoring  inside the following block
 
@@ -291,28 +289,29 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		     (time > params->output_time) ) {
 
 
-#ifdef CONC
-		//----------------------------------------------------------------------
-		// Output concentration data
-		//----------------------------------------------------------------------
-	//	T1 = MPI_Wtime();
-		// Integrate (in time) deposited height (from particles
+			#ifdef CONC
+				//----------------------------------------------------------------------
+				// Output concentration data
+				//----------------------------------------------------------------------
+				//	T1 = MPI_Wtime();
+				// Integrate (in time) deposited height (from particles
 
-	//	Post_processing_conc(data_bag);
+				//	Post_processing_conc(data_bag);
 
-	//	T2 = MPI_Wtime();
-	//	timer->Wtime_output += T2 - T1;
-#endif
+				//	T2 = MPI_Wtime();
+				//	timer->Wtime_output += T2 - T1;
+			#endif
 
-		Output_h5_data(data_bag, DTRACE("Output_h5_data"));
-		Output_h5_resume(data_bag, DTRACE("Output_h5_resume"));
+			Output_h5_data(data_bag, DTRACE("Output_h5_data"));
+			Output_h5_resume(data_bag, DTRACE("Output_h5_resume"));
 
 
-#ifdef LAG_PARTICLE_RESOLVED
+			#ifdef LAG_PARTICLE_RESOLVED
 
 				ParticleOutput_h5(data_bag, params->noutput, DTRACE("ParticleOutput_h5"));
 
-#endif
+			#endif
+
 			if (params -> rank == 0) {
 				timeFile = fopen(TIMEFILE, "a");
 				fprintf(timeFile, "%f\n", time);
@@ -323,16 +322,16 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 			params->noutput++;
 			Display_throw_warning("Runtime data has been saved successfully", params);
 
-#if defined XPERIODIC && defined OUTPUT2D
-			xzperiodic_uvel_ave(data_bag,u, v, w, grid, params);
-//			xzperiodic_saltsediment_ave(data_bag, c, grid, params);
-	#ifdef THERMAL_KADER
-			xzperiodic_thermal_ave(data_bag, c, grid, params);
-	#endif
-	#ifdef RANS
-			xzperiodic_rans_nut_ave(data_bag, data_bag->rans, grid, params);
-	#endif
-#endif
+			#if defined XPERIODIC && defined OUTPUT2D
+				xzperiodic_uvel_ave(data_bag,u, v, w, grid, params);
+				//	xzperiodic_saltsediment_ave(data_bag, c, grid, params);
+				#ifdef THERMAL_KADER
+						xzperiodic_thermal_ave(data_bag, c, grid, params);
+				#endif
+				#ifdef RANS
+						xzperiodic_rans_nut_ave(data_bag, data_bag->rans, grid, params);
+				#endif
+			#endif
 		} // Output writing
 
 
@@ -364,23 +363,23 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		 Runge Kutta sub-steps
 		 */
 		/*--------------------------------------------------------------------*/
-#ifdef RANS
-		//----------------------------------------------------------------------
-		// RANS equation integration
-		//----------------------------------------------------------------------
-	#ifdef TWO_EQUATION_MODEL11
-		int nrsteps = 4;
-		for (rk = 0; rk < tsubsteps; rk++){
 
-			params -> which_stage = rk;
+		#ifdef RANS
+			//----------------------------------------------------------------------
+			// RANS equation integration
+			//----------------------------------------------------------------------
+			#ifdef TWO_EQUATION_MODEL11
+				int nrsteps = 4;
+				for (rk = 0; rk < tsubsteps; rk++){
 
-			for (rsteps = 0; rsteps < nrsteps; rsteps++) {
-				Rans_int_equations(data_bag, dt/nrsteps, DTRACE("Rans_int_equations"));
-			}
+					params -> which_stage = rk;
 
-		} // End RK substepping
-	#endif
-#endif
+					for (rsteps = 0; rsteps < nrsteps; rsteps++) {
+						Rans_int_equations(data_bag, dt/nrsteps, DTRACE("Rans_int_equations"));
+					}
+				} // End RK substepping
+			#endif
+		#endif
 
 		//----------------------------------------------------------------------
 		// Navier-Stokes and other equations integration
@@ -390,16 +389,16 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		for (rk = 0; rk < tsubsteps; rk++){
 			if (time != 0) {
 
-#if defined LEFT_INFLOW || defined RIGHT_INFLOW
-				Inflow_velocity_profile(data_bag, DTRACE("Inflow_velocity_profile"));
-#endif
+				#if defined LEFT_INFLOW || defined RIGHT_INFLOW
+					Inflow_velocity_profile(data_bag, DTRACE("Inflow_velocity_profile"));
+				#endif
 
-#if defined LEFT_OUTFLOW || defined RIGHT_OUTFLOW
-				//--------------------------------------------------------------
-				// Impose convective boundary condition at the outlet
-				//--------------------------------------------------------------
-				Outflow_impose_convective_boundary(data_bag);
-#endif
+				#if defined LEFT_OUTFLOW || defined RIGHT_OUTFLOW
+					//--------------------------------------------------------------
+					// Impose convective boundary condition at the outlet
+					//--------------------------------------------------------------
+					Outflow_impose_convective_boundary(data_bag);
+				#endif
 
 				if (rk == 0){
 					//----------------------------------------------------------
@@ -419,15 +418,14 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 			params -> which_stage = rk;
 
-#ifdef RANS
-
-			Rans_int_equations(data_bag, dt, DTRACE("Rans_int_equations"));
-
-#endif
+			#ifdef RANS
+	
+				Rans_int_equations(data_bag, dt, DTRACE("Rans_int_equations"));
+	
+			#endif
 
 
 			Temporal_int_all_the_equations(data_bag, DTRACE("Temporal_int_all_the_equations"));
-
 
 			time += dt * BET2[rk];
 			params -> time = time;
@@ -436,15 +434,17 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		T2 = MPI_Wtime();
 		timer->Wtime_intEOM += T2 - T1;
 
-#if defined CONSTANT_MASSFLUX || defined FLUID_OSCILLATION || defined PARTICLE_OSCILLATION
+		double dpdx = params -> dp_dx;
+		double ubulk_target = params -> ubulk_target;
+
 		Velocity_calculate_dpdx(u, data_bag);
-#endif
-#ifdef LES
-		Strain_rate_magnitude(u, v, w, grid, params, smag->st_rate);
-	#ifdef SMAG_DYNAMIC
-		Dynamic_smag_coeff(data_bag);
-	#endif
-#endif
+
+		#ifdef LES
+				Strain_rate_magnitude(u, v, w, grid, params, smag->st_rate);
+			#ifdef SMAG_DYNAMIC
+				Dynamic_smag_coeff(data_bag);
+			#endif
+		#endif
 
 		//----------------------------------------------------------------------
 		// Update time
@@ -508,12 +508,13 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 			Output_h5_data(data_bag, DTRACE("Output_h5_data"));
 			Output_h5_resume(data_bag, DTRACE("Output_h5_resume"));
-#if defined LAG_PARTICLE_RESOLVED
-			ParticleOutput_h5(data_bag, params->noutput, DTRACE("ParticleOutput_h5"));
-	#ifdef PARTICLE_TRN
-			ParticleOutput_h5(data_bag, ntime, DTRACE("ParticleOutput_h5"));
-	#endif
-#endif
+
+			#if defined LAG_PARTICLE_RESOLVED
+				ParticleOutput_h5(data_bag, params->noutput, DTRACE("ParticleOutput_h5"));
+				#ifdef PARTICLE_TRN
+					ParticleOutput_h5(data_bag, ntime, DTRACE("ParticleOutput_h5"));
+				#endif
+			#endif
 
 
 			if (params -> rank == 0) {
@@ -772,14 +773,7 @@ if(which_stage == 0){
 
 	T1 = MPI_Wtime();
 	Velocity_u_set_RHS(data_bag);
-	/*if(params->ntime==1){
-	test_2d_output(data_bag-> u -> ng_rhs,'p',data_bag, which_stage, DTRACE("test_2d_output"));
-}*/
 	Velocity_v_set_RHS(data_bag);
-	/*if(params->ntime==1){
-	test_2d_output(data_bag-> v -> ng_rhs,'p',data_bag, 10+which_stage, DTRACE("test_2d_output"));
-}*/
-
 	Velocity_w_set_RHS(data_bag);
 
 
@@ -820,48 +814,45 @@ if(which_stage == 0){
 	timer->Wtime_vel_rhs += T2 - T1;
 
 
-#ifdef LAG_PARTICLE_RESOLVED
-	Tstart = MPI_Wtime();
-	//--------------------------------------------------------------------------
-	// Find intermediate velocity field
-	//--------------------------------------------------------------------------
+	#ifdef LAG_PARTICLE_RESOLVED
+		Tstart = MPI_Wtime();
+		//--------------------------------------------------------------------------
+		// Find intermediate velocity field
+		//--------------------------------------------------------------------------
 
 
 
-	T1 = MPI_Wtime();
-	Velocity_solve_explicit(u, data_bag);
-	Velocity_solve_explicit(v, data_bag);
-	Velocity_solve_explicit(w, data_bag);
-	T2 = MPI_Wtime();
-	timer->Wtime_vel_solve += T2 - T1;
+		T1 = MPI_Wtime();
+		Velocity_solve_explicit(u, data_bag);
+		Velocity_solve_explicit(v, data_bag);
+		Velocity_solve_explicit(w, data_bag);
+		T2 = MPI_Wtime();
+		timer->Wtime_vel_solve += T2 - T1;
 
 
-	//--------------------------------------------------------------------------
-	// Update boundary conditions
-	//--------------------------------------------------------------------------
-	Velocity_update_boundaries(u->data, 'u', VEL_TYPE_NORMAL, data_bag);
-	Velocity_update_boundaries(v->data, 'v', VEL_TYPE_NORMAL, data_bag);
-	Velocity_update_boundaries(w->data, 'w', VEL_TYPE_NORMAL, data_bag);
+		//--------------------------------------------------------------------------
+		// Update boundary conditions
+		//--------------------------------------------------------------------------
+		Velocity_update_boundaries(u->data, 'u', VEL_TYPE_NORMAL, data_bag);
+		Velocity_update_boundaries(v->data, 'v', VEL_TYPE_NORMAL, data_bag);
+		Velocity_update_boundaries(w->data, 'w', VEL_TYPE_NORMAL, data_bag);
 
-	//--------------------------------------------------------------------------
-	// Forcing on RHS from particle immersed boundaries
-	//--------------------------------------------------------------------------
-	#ifdef POST_PROCESS
-	if (params->which_stage == 0) {
-		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_fx_IBM);
-		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_fy_IBM);
-	}
-	#endif
-
-
+		//--------------------------------------------------------------------------
+		// Forcing on RHS from particle immersed boundaries
+		//--------------------------------------------------------------------------
+		#ifdef POST_PROCESS
+			if (params->which_stage == 0) {
+				Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_fx_IBM);
+				Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_fy_IBM);
+			}
+		#endif
 
 
 		Lagrangian_force(-1, data_bag, DTRACE("Lagrangian_force"));
 		Tend = MPI_Wtime();
 		timer->Wtime_particle_total += Tend - Tstart;
 
-
-#endif
+	#endif
 
 /*
 printf("vdata NY-3 is %2.5f\n",v->data[0][NY-3][0]);
@@ -883,10 +874,7 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 	printf("vdata 1 is %2.5f\n",v->data[0][1][0]);
 	printf("aaaa vdata 2 is %2.5f\n",v->data[0][2][0]);
 */
-/*if(params->ntime==1){
-		test_2d_output(data_bag->u->data,'u',data_bag, 1, DTRACE("test_2d_output"));
-		test_2d_output(data_bag->v->data,'v',data_bag, 1, DTRACE("test_2d_output"));
-}*/
+
 
 	T1 = MPI_Wtime();
 	Velocity_solve(u, data_bag);
@@ -895,10 +883,6 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 	T2 = MPI_Wtime();
 	timer->Wtime_vel_solve += T2 - T1;
 
-	/*if(params->ntime==1){
-			test_2d_output(data_bag->u->data,'u',data_bag, 2, DTRACE("test_2d_output"));
-			test_2d_output(data_bag->v->data,'v',data_bag, 2, DTRACE("test_2d_output"));
-	}*/
 
 
 	/*
@@ -919,29 +903,24 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
  	Velocity_update_boundaries(v->data, 'v', VEL_TYPE_NORMAL, data_bag);
  	Velocity_update_boundaries(w->data, 'w', VEL_TYPE_NORMAL, data_bag);
 
-	/*if(params->ntime==1){
-			test_2d_output(data_bag->u->data,'u',data_bag, 3, DTRACE("test_2d_output"));
-			test_2d_output(data_bag->v->data,'v',data_bag, 3, DTRACE("test_2d_output"));
-	}*/
+	#ifdef LAG_PARTICLE_RESOLVED
+		//--------------------------------------------------------------------------
+		// Correction to velocity field from particle immersed boundaries
+		//--------------------------------------------------------------------------
+		#ifndef ONE_WAY
+			Tstart = MPI_Wtime();
+			Lagrangian_force(params->N_forcing_loops, data_bag, DTRACE("Lagrangian_force"));
+			Tend = MPI_Wtime();
+			timer->Wtime_particle_total += Tend - Tstart;
 
-#ifdef LAG_PARTICLE_RESOLVED
-	//--------------------------------------------------------------------------
-	// Correction to velocity field from particle immersed boundaries
-	//--------------------------------------------------------------------------
-	#ifndef ONE_WAY
- 	Tstart = MPI_Wtime();
-	Lagrangian_force(params->N_forcing_loops, data_bag, DTRACE("Lagrangian_force"));
-	Tend = MPI_Wtime();
-	timer->Wtime_particle_total += Tend - Tstart;
-
-	//--------------------------------------------------------------------------
-	// Update boundary conditions
-	//--------------------------------------------------------------------------
- 	Velocity_update_boundaries(u->data, 'u', VEL_TYPE_NORMAL, data_bag);
- 	Velocity_update_boundaries(v->data, 'v', VEL_TYPE_NORMAL, data_bag);
- 	Velocity_update_boundaries(w->data, 'w', VEL_TYPE_NORMAL, data_bag);
+			//--------------------------------------------------------------------------
+			// Update boundary conditions
+			//--------------------------------------------------------------------------
+			Velocity_update_boundaries(u->data, 'u', VEL_TYPE_NORMAL, data_bag);
+			Velocity_update_boundaries(v->data, 'v', VEL_TYPE_NORMAL, data_bag);
+			Velocity_update_boundaries(w->data, 'w', VEL_TYPE_NORMAL, data_bag);
+		#endif
 	#endif
-#endif
 
 
 
@@ -971,16 +950,6 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 		T2 = MPI_Wtime();
 
 
-		/*
-		if (params->ntime==1){
-		test_2d_output(data_bag->u->data,'u',data_bag, nti, DTRACE("test_2d_output"));
-		test_2d_output(data_bag->v->data,'v',data_bag, nti, DTRACE("test_2d_output"));
-		test_2d_output(data_bag->w->data,'w',data_bag, nti, DTRACE("test_2d_output"));
-		test_2d_output(data_bag->p->rhs,'p',data_bag, nti, DTRACE("test_2d_output"));
-
-		nti++;
-		}
-		*/
 		timer->Wtime_p_rhs += T2 - T1;
 
 		T1 = MPI_Wtime();
@@ -1093,51 +1062,72 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 
 
 
-#ifdef LAG_PARTICLE_RESOLVED
-	Tstart = MPI_Wtime();
-	//--------------------------------------------------------------------------
-	// Integrate translational and angular velocities over particle domains
-	//--------------------------------------------------------------------------
-	T1 = MPI_Wtime();
-	// Reset integrals to zero
-	{
-		Particle *p = p_mobile_list -> start;
-		while (p != NULL) {
-			DSET_ZERO(p->Int_U, 3);
-			DSET_ZERO(p->Int_Omega, 3);
-			p = p -> next;
+	#ifdef LAG_PARTICLE_RESOLVED
+		Tstart = MPI_Wtime();
+		//--------------------------------------------------------------------------
+		// Integrate translational and angular velocities over particle domains
+		//--------------------------------------------------------------------------
+		T1 = MPI_Wtime();
+		// Reset integrals to zero
+		{
+			Particle *p = p_mobile_list -> start;
+			while (p != NULL) {
+				DSET_ZERO(p->Int_U, 3);
+				DSET_ZERO(p->Int_Omega, 3);
+				p = p -> next;
+			}
+			p = p_fixed_list -> start;
+			while (p != NULL) {
+				DSET_ZERO(p->Int_U, 3);
+				DSET_ZERO(p->Int_Omega, 3);
+				p = p -> next;
+			}
 		}
-		p = p_fixed_list -> start;
-		while (p != NULL) {
-			DSET_ZERO(p->Int_U, 3);
-			DSET_ZERO(p->Int_Omega, 3);
-			p = p -> next;
-		}
-	}
-//#ifndef ONE_WAY
-	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfu);
-	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfv);
-	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfw);
-	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfc);
+		//#ifndef ONE_WAY
+		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfu);
+		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfv);
+		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfw);
 
-	Interpolate_integrate_momentum(u, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
-	Interpolate_integrate_momentum(v, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
-	Interpolate_integrate_momentum(w, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
-	Interpolate_integrate_momentum(u, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
-	Interpolate_integrate_momentum(v, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
-	Interpolate_integrate_momentum(w, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
+		Interpolate_integrate_momentum(u, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
+		Interpolate_integrate_momentum(v, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
+		Interpolate_integrate_momentum(w, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
+		Interpolate_integrate_momentum(u, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
+		Interpolate_integrate_momentum(v, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
+		Interpolate_integrate_momentum(w, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
 
-	T2 = MPI_Wtime();
-	timer->Wtime_particle_int += T2 - T1;
-//#endif
+		T2 = MPI_Wtime();
+		timer->Wtime_particle_int += T2 - T1;
+		//#endif
 
-	//--------------------------------------------------------------------------
-	// Advect particles
-	//--------------------------------------------------------------------------
-	Lagrangian_advect_particles(data_bag, DTRACE("Lagrangian_advect_particles"));
-	Tend = MPI_Wtime();
-	timer->Wtime_particle_total += Tend - Tstart;
-#endif  // LAG_PARTICLE_RESOLVED
+		//--------------------------------------------------------------------------
+		// Advect particles
+		//--------------------------------------------------------------------------
+		Lagrangian_advect_particles(data_bag, DTRACE("Lagrangian_advect_particles"));
+
+		#ifdef SLICE_OUTPUT
+			if ( params->slice_axis == 0 && params->center_two_particles == 1 ) {
+
+				FORI3 params->particle_position[0][i] = 0;
+				FORI3 params->particle_position[1][i] = 0;
+
+				Particle *par = p_mobile_list -> start;
+				while (par != NULL) {
+					if ( par->ID == 0 ) {
+						FORI3 params->particle_position[0][i] = par->X[i];
+					}
+					if ( par->ID == 1 )	{
+						FORI3 params->particle_position[1][i] = par->X[i];
+					}
+					par = par->next;	  
+				}
+
+				MPI_Allreduce(MPI_IN_PLACE, &(params->particle_position), 6, MPI_DOUBLE, MPI_SUM, PCW);
+			} 
+		#endif
+
+		Tend = MPI_Wtime();
+		timer->Wtime_particle_total += Tend - Tstart;
+	#endif  // LAG_PARTICLE_RESOLVED
 
 #ifdef IMMERSED_BOUNDARY
 //	Communication_update_ghost_nodes_flow_variable(u->data, 'u', pnodes, data_bag);
