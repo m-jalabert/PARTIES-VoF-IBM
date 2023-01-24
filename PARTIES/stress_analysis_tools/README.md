@@ -29,4 +29,4 @@ Testing
 
 Tests can be run with:
 `python -m unittest tests/test_data_ingestion.py`
-`python -m unittest tests/test_equation.py`
+`python -m unittest tests/test_equations.py`
