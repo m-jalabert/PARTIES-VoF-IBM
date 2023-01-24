@@ -1,0 +1,39 @@
+# parties.inp file for a single rolling sphere in a poiseuille flow
+[geometry]
+xmin = 0
+xmax = 2
+ymin = 0
+ymax = 3
+zmin = 0
+zmax = 2
+
+
+[grid]
+NXM = 20
+NYM = 30
+NZM = 20
+
+
+[flow]
+Re = 1.5 
+dp_dx = 0
+startup_init = 0
+
+
+[simulation]
+time_max = 10
+output_time_interval = 1
+default_dt = 8.9e-5
+max_dt = 1
+cfl = 0.5
+
+
+[particle]
+grav = {0, -1471.5, 0}  # {a,b,c,..} notion for a list
+rho_s = 2.1;
+
+[output]
+output_vfu = 1
+output_vfv = 1
+output_vfw = 1
+output_vfc = 1
