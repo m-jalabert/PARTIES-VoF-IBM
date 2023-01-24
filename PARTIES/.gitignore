@@ -15,3 +15,5 @@ src/Include/Boundary.h
 *.err
 # Executables
 *.exe
+# Misc
+.DS_store
