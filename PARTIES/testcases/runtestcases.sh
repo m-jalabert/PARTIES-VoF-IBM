@@ -24,6 +24,10 @@ COLLISION_TESTCASE_ST_3="$test_home_path/Gondret_Testcase/test_St_3.sh"
 COLLISION_TESTCASE_ST_120="$test_home_path/Gondret_Testcase/test_St_120.sh"
 OSCILLATION_DOMAIN="$test_home_path/Oscillation_Testcases/01_Osc_Domain/Osc_Dom_testcase.sh"
 OSCILLATION_PARTICLE="$test_home_path/Oscillation_Testcases/02_Osc_Particle/Osc_Par_testcase.sh"
+RHE_VOL_IMPOSED="$test_home_path/Rheology_Testcases/Volume_Imposed_Testcase/volume_imposed_testcase.sh"
+RHE_PRES_IMPOSED="$test_home_path/Rheology_Testcases/Pressure_Imposed_Testcase/Pressure_imposed_testcase.sh"
+
+
 
 # Input no of processors
 read -p 'Enter number of processors: ' nproc
@@ -33,7 +37,6 @@ read -p 'Enter number of processors: ' nproc
 ###########################################################################
 
 # Comment out unrequired flows
-
 printf '\nPoiseuille flow\t'
 cd Poiseuille_Testcase/
 . "$POISEUILLE_FLOW" $nproc > $LOGFILE
@@ -74,6 +77,16 @@ cd Oscillation_Testcases/02_Osc_Particle/
 . "$OSCILLATION_PARTICLE" $nproc >> $LOGFILE
 print_status $?
 
+printf '\nRheology- Volume Imposed\t' 
+cd Rheology_Testcases/Volume_Imposed_Testcase/
+. "$RHE_VOL_IMPOSED" $nproc >> $LOGFILE
+print_status $?
+
+printf '\nRheology- Pressure Imposed\t' 
+cd Rheology_Testcases/Pressure_Imposed_Testcase/
+. "$RHE_PRES_IMPOSED" $nproc >> $LOGFILE
+print_status $?
+
 printf '\n'
 ###########################################################################
 #                                Clean up                                 #
@@ -87,4 +100,7 @@ rm -rf test_St_3_run
 rm -rf test_St_120_run
 rm -rf Osc_Dom_run
 rm -rf Osc_Par_run
+rm -rf Volume_Imposed_run
+rm -rf Pressure_Imposed_run
+
 rm $LOGFILE

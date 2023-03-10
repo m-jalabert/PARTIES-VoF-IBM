@@ -389,6 +389,8 @@ struct parameters {
 
 	// Particle density
 	double rho_s;
+	// rho_prImp is used only when certain pressure is to be implemented via the upper plate particles in Couette flow
+	double rho_prImp; // the density of each fixed particle on the upper plate to impose pressure 
 
 	// Gravitational acceleration
 	double *grav; // used only for the particle momentum balance!!
@@ -1257,10 +1259,19 @@ struct particle {
 	// Mass divided by particle density
 	double M;
 
-	// Moment of inertia divided by particle density
-	double I_p;
-
-	double rho_s;
+// the following variables from M1 to F_global_sum are used only for pressure imposed Couette flow
+    // same as the mass M above but used only for pressure imposed Couette flow
+    double M1; // used in calculating mass of fixed particles on upper plate for pressure imposed Couette flow
+    double Mass; //
+    double total_Mass; // Total mass of fixed particles on the top plate
+    // Local sum of forces
+    double F_local_sum;
+    // Global sum of forces
+    double F_global_sum;
+    // Moment of inertia divided by particle density
+    double I_p;
+    double rho_s;
+    double rho_prImp;// used only for pressure imposed Couette flow, represents the density of the fixed particles
 
 	double Vol_L; // Volume of marker points
 

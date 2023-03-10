@@ -134,6 +134,8 @@
 #define STUP_INIT_TIME			0
 #define STUP_INIT_GOND_ST_27	1
 #define STUP_INIT_GOND_ST_152	2
+#define STUP_INIT_SHEARFLOW     3
+#define STUP_INIT_PRIMPOSED     4
 
 // Concentration initialization options
 #define CONC_INIT_TWOLAYERS 0

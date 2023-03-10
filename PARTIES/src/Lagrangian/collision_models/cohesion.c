@@ -21,25 +21,41 @@ void cohesion(double lambda, Collision_bag *bag, Parameters *params) {
 	double D50 = params -> D50;
 	double Co = params -> Co;
 	double *n = bag -> n;
-        double  M50, grav_norm;
+    double M50, grav_norm;
 	double rho_s = params->rho_s;
+	double U0 = params ->ubulk_target; //characteristic velocity
+	double L0 = D50; //characteristic length
 	
 	// Effective radius particle-wall or particle mobile-fixed	
 	if (bag->stage == COLL_STAGE_WALL || bag->stage == COLL_STAGE_FIXED)  R_eff = p->R;
 	// Effective radius particle-particle
 	else  R_eff = p->R * p2->R / (p->R + p2->R);	
 	
-// 	Scaling with inertial force
-        grav_norm = sqrt(params->grav[0] * params->grav[0] 
+	if (rho_s == 1)
+	{   // Scaling with inertial force
+
+		// Cohesive stiffness constant
+		k_coh     = -Co * 8.0 * R_eff/ (lambda * lambda);
+
+		// Compute cohesive forces
+        VDW  =  k_coh*U0*U0*L0*L0*1*(zeta * zeta - lambda * zeta);
+		
+	}
+	else 
+	{
+		// Scaling with gravitational force
+    	grav_norm = sqrt(params->grav[0] * params->grav[0] 
                        + params->grav[1] * params->grav[1]
                        + params->grav[2] * params->grav[2]);
-	M50       = (rho_s-1) * PI * D50*D50*D50 / 6.0;
+		M50       = (rho_s-1) * PI * D50*D50*D50 / 6.0;
 
-// 	Cohesive stiffness constant
-	k_coh     = -Co * 8.0 / (lambda * lambda) ;
+		// Cohesive stiffness constant
+		k_coh     = -Co * 8.0 / (lambda * lambda) ;
 	
-// 	Compute cohesive forces
+		// Compute cohesive forces
         VDW  =  k_coh * M50 * grav_norm * R_eff * (zeta * zeta - lambda * zeta);
+	}
+
 	
 	//Cohesive_force directed from p to p2 
 	FORI3 cohesive_force[i] = n[i] * VDW; 

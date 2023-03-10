@@ -439,10 +439,12 @@ void Particle_calc_derived_data(Particle *p, MAC_grid *grid, Parameters *params)
 	// External data
 	double R = p -> R;
 	double rho_s = params -> rho_s;
+	double rho_prImp = params -> rho_prImp;// density of fixed particles, used only for pressure imposed Couette flow
 
 	// Sphere derived data
 	double R2  = R * R;
-	double M   = rho_s * 4.0 / 3.0 * PI * R2 * R;
+	double M   = rho_s * 4.0 / 3.0 * PI * R2 * R ;
+	double M1  = rho_prImp * 4.0 / 3.0 * PI * R2 * R ; // Mass of fixed particles, used only for pressure imposed Couette flow
 	double I_p = rho_s * 8.0 / 15.0 * PI * R2 * R2 * R;
 
 	// Number of Lagrangian marker points determined by grid-to-particle
@@ -456,7 +458,9 @@ void Particle_calc_derived_data(Particle *p, MAC_grid *grid, Parameters *params)
 	double Vol_L = PI * h / (3.0 * N_L) * (12.0 * R2 + h * h);
 
 	p -> rho_s = rho_s;
+	p -> rho_prImp = rho_prImp;
 	p -> M   = M;
+	p -> M1  = M1;
 	p -> I_p = I_p;
 	p -> N_L   = N_L;
 	p -> Vol_L = Vol_L;

@@ -162,6 +162,7 @@ CFG(lock, lock_smooth, YES, atoi) // initial condition of the lock ??????
 
 
 CFG(particle, rho_s, 2.5, atof)  // Particle density (relative to fluid)
+CFG(particle, rho_prImp, 2.5, atof)  // Particle density (relative to fluid)
 CFGArray(particle, grav, "{0,-1,0}", GVG_DOUBLE)  // Gravitational acceleration
 CFG(particle, e_dry_wall, 0.97, atof)  // Coefficient of restitution of wall
 CFG(particle, e_dry_particles, 0.97, atof)  // Coeff. of restitution of particles

@@ -244,14 +244,17 @@ void Lagrangian_advect_particles(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 /******************************************************************************/
 void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
-	int i;
+	int i,j;
+	int ID;
 	Particle *p;
 	Particle_list *p_list_foreign;
-	double *F, *T, *Int_U, *Int_Omega, *Int_U_old, *Int_Omega_old;
+	double *F, *Fc, *T, *Int_U, *Int_Omega, *Int_U_old, *Int_Omega_old;
 	double *F_IBM, *T_IBM, *F_rigid, *T_rigid, *X;
 	double ***u   = data_bag -> u -> data;
 	double ***v   = data_bag -> v -> data;
 	double ***w   = data_bag -> w -> data;
+	double Mass=0; 			// To be used to calculate the distributed mass for the pressure imposed couette flow set up
+	double F_local_sum=0;	// To be used to calculate the local force (on each processor) for the pressure imposed couette flow set up
 
 
 
@@ -479,10 +482,13 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 	while (p != NULL) {
 		F = p -> F;
 		T = p -> T;
+		Fc = p -> Fc; 			// To calculate the contact force for the fixed particles
 		Int_U     = p -> Int_U;
 		Int_U_old = p -> Int_U_old;
 		Int_Omega     = p -> Int_Omega;
 		Int_Omega_old = p -> Int_Omega_old;
+
+		ID = p -> ID;		// fixed particle ID used to move the upper and lower wall (fixed particles)
 
 		F_IBM = p -> F_IBM;
 		T_IBM = p -> T_IBM;
@@ -522,6 +528,51 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 		Int_Omega_old[1] = Int_Omega[1];
 		Int_Omega_old[2] = Int_Omega[2];
 
+		#ifdef DRY_COLLISION
+		// Reset collision forces if maximum Stokes number > 5
+			if (Collision_above_critical(p)) {
+				DSET_ZERO(F, 3);
+				DSET_ZERO(T, 3);
+			}
+		#endif
+			
+		//----------------------------------------------------------------------
+		// Gravitational force
+		//----------------------------------------------------------------------
+		#ifdef DRY_PARTICLES
+			// Normal gravity for dry particles
+			F[0] += p->M * params->grav[0];
+			F[1] += p->M * params->grav[1];
+			F[2] += p->M * params->grav[2];
+
+			#ifdef STOKES_DRAG
+
+				double U_inf[3]; // Modeled fluid velocity
+				//double L=5;//dimension of each Langmuir Cell
+				double U_0 = 1.0; // Mean background flow velocity
+
+				U_inf[0] = (U_0/PI)*sin(p->X[0]*PI)*cos(p->X[1]*PI);
+				U_inf[1] =  (-1)*(U_0/PI)*cos(p->X[0]*PI)*sin(p->X[1]*PI);
+					U_inf[2] =  0.0;
+					F[0] += -6.0 * PI * p->R * (p->U[0]-U_inf[0])/ params->Re;
+					F[1] += -6.0 * PI * p->R * (p->U[1]-U_inf[1])/ params->Re;
+					F[2] += -6.0 * PI * p->R * (p->U[2]-U_inf[2])/ params->Re;
+
+					T[0] +=  0.0;
+					T[1] +=  0.0;
+				T[2] +=  0.0;
+				//T[2] += -8.0 * PI * p->R * p->R * (p->Omega[2]+shear_rate)/ params->Re;
+			#endif  // Stokes drag
+
+		#else
+
+    		F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
+			F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+			F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+
+
+		#endif
+
 		p = p -> next;
 	}
 }
@@ -539,13 +590,16 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 	int i;
+	int ID; 		// fixed particle ID used to move the upper and lower wall (fixed particles)
 	Particle *p;
 	Collision *pc;
 	Particle_list *p_mobile_list_foreign, *p_fixed_list_foreign;
-	double dt_iM, dt_iI;
+	double dt_iM, dt_iI, dt_iM1;
 	double *X, *X_old, *U, *U_old, *Omega, *Omega_old;
 	double *F, *T, *Fc, *Fc_old, *Tc, *Tc_old;
 	double *F_coll, *T_coll;
+	double F_local_sum=0, F_global_sum=0;	// To calculate total force on each processor locally and communicate to find the global sum of all forces
+	double  Mass=0, total_Mass=0;			// To calculate loacl mass on each processor and calculate the global mass from all processors
 
 	Parameters *params = data_bag -> params;
 	MAC_grid   *grid   = data_bag -> grid;
@@ -660,10 +714,18 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 			params->startup_flag = 0;
 		}
 		if (params->startup_flag) {
-			DSET_ZERO(Omega, 3);
-			if(params->startup_init == STUP_INIT_TIME) FORI3 U[i] = params->startup_velocity[i];
-			if(params->startup_init == STUP_INIT_GOND_ST_27) U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret St=27
-			if(params->startup_init == STUP_INIT_GOND_ST_152) U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret St=152
+			if(params->startup_init == STUP_INIT_TIME) {
+				DSET_ZERO(Omega, 3);
+				FORI3 U[i] = params->startup_velocity[i];
+			}
+			if(params->startup_init == STUP_INIT_GOND_ST_27) {
+				DSET_ZERO(Omega, 3);
+				U[1] = 0.518 * ( exp(-40 * params->time) - 1 );
+				}  // Gondret St=27
+			if(params->startup_init == STUP_INIT_GOND_ST_152) {
+				DSET_ZERO(Omega, 3);
+				U[1] = 0.585 * ( exp(-40 * params->time) - 1 ); 
+				} // Gondret St=152
 //			U[1]=1;
 //			Omega[2]=0;
 //			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
@@ -683,22 +745,166 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		Rotate_particle(p, params);
 
 		p = p -> next;
-	}
+	}	
+
+	if(params->startup_init == STUP_INIT_PRIMPOSED)
+		{
+			p = p_fixed_list -> start;
+			while (p != NULL) {
+				F = p -> F;
+				Fc = p -> Fc;
+				T = p -> T;
+				Fc_old = p -> Fc_old;
+
+				#ifdef STARTUP
+					if (params->startup_flag) {
+						if(params->startup_init == STUP_INIT_PRIMPOSED && ( (p -> ID ) % 2 == 1 ) )
+							{
+								#ifdef DRY_PARTICLES
+									//F[1] += (p->M) * params->grav[1];
+									Mass = Mass + (p->M1) ;
+									F[1] = Mass * (-9.81);
+								#else
+									// Reduced gravity for submerged particles
+									F[1] += p->M1 * (1.0 - 1.0 / p->rho_prImp) * params->grav[1];
+								#endif
+								Mass = Mass + p->M1;
+								F_local_sum += ( 2.0 * bet * F[1] + gam * Fc[1] + zet * Fc_old[1]) ;
+							}
+					}
+				#endif
+				p = p -> next;
+			}
+
+				MPI_Allreduce(&F_local_sum, &F_global_sum, 1, MPI_DOUBLE, MPI_SUM, PCW);
+				MPI_Allreduce(&Mass, &total_Mass, 1, MPI_DOUBLE, MPI_SUM, PCW);
+		}	
 
 	// Update old forces for fixed particles
-	p = p_fixed_list -> start;
-	while (p != NULL) {
-		FORI3 p->Fc_old[i] = p->Fc[i];
-		FORI3 p->Tc_old[i] = p->Tc[i];
-#ifdef POST_PROCESS
-		FORI3 p->Fc_norm_old[i] = p->Fc_norm[i];
-		FORI3 p->Fc_tan_old[i]  = p->Fc_tan[i];
-		FORI3 p->Fl_norm_old[i] = p->Fl_norm[i];
-		FORI3 p->Fl_tan_old[i]  = p->Fl_tan[i];
-#endif
-		p = p -> next;
-	}
+	if(params->startup_init == STUP_INIT_PRIMPOSED || STUP_INIT_SHEARFLOW)
+		{
+			p = p_fixed_list -> start;
+			while (p != NULL) 
+				{
 
+					X = p -> X;
+					U = p -> U;
+					Omega = p -> Omega;
+					X_old = p -> X_old;
+					U_old = p -> U_old;
+					Omega_old = p -> Omega_old;
+					ID = p -> ID;
+					F = p -> F;
+					T = p -> T;
+					Fc = p -> Fc;
+					Tc = p -> Tc;
+
+					Fc_old = p -> Fc_old;
+					Tc_old = p -> Tc_old;
+					dt_iM = dt / p -> M;
+					dt_iM1 = dt / p -> M1;
+					dt_iI = dt / p -> I_p;
+
+					X_old[0] = X[0];
+					X_old[1] = X[1];
+					X_old[2] = X[2];
+
+					FORI3 p -> Rotn_old[0][i] = p -> Rotn[0][i];
+					FORI3 p -> Rotn_old[1][i] = p -> Rotn[1][i];
+					FORI3 p -> Rotn_old[2][i] = p -> Rotn[2][i];
+
+					pc = p -> particle_collision;
+					while (pc != NULL) 
+					{
+						FORI3 pc->zeta_t_old[i] = pc->zeta_t[i];
+						pc = pc -> next;
+					}
+					pc = p -> wall_collision;
+					while (pc != NULL) 
+					{
+						FORI3 pc->zeta_t_old[i] = pc->zeta_t[i];
+						pc = pc -> next;
+					}
+
+					U_old[0] = U[0];
+					U_old[1] = U[1];
+					U_old[2] = U[2];
+
+					Fc_old[0] = Fc[0];
+					Fc_old[1] = Fc[1];
+					Fc_old[2] = Fc[2];
+
+					#ifdef POST_PROCESS
+						FORI3 p->Fc_norm_old[i] = p->Fc_norm[i];
+						FORI3 p->Fc_tan_old[i]  = p->Fc_tan[i];
+						FORI3 p->Fl_norm_old[i] = p->Fl_norm[i];
+						FORI3 p->Fl_tan_old[i]  = p->Fl_tan[i];
+					#endif
+
+					Omega_old[0] = Omega[0];
+					Omega_old[1] = Omega[1];
+					Omega_old[2] = Omega[2];
+
+					Tc_old[0] = Tc[0];
+					Tc_old[1] = Tc[1];
+					Tc_old[2] = Tc[2];
+
+					#ifdef STARTUP
+						if (params->startup_flag) 
+						{
+							DSET_ZERO(Omega, 3);
+							if(params->startup_init == STUP_INIT_SHEARFLOW && ( (p -> ID ) % 2 == 0 ) )
+								{
+									U[0] = - params->ubulk_target ;
+								}
+							if(params->startup_init == STUP_INIT_SHEARFLOW && ( (p -> ID ) % 2 == 1 ) )
+								{
+									U[0] =  params->ubulk_target ;
+								}
+						}
+					#endif
+
+					#ifdef STARTUP
+						if (params->startup_flag) 
+						{
+							DSET_ZERO(Omega, 3);
+							if(params->startup_init == STUP_INIT_PRIMPOSED && ( (p -> ID ) % 2 == 0 ) )
+								{
+									U[0] = - params->ubulk_target ;
+								}
+							if(params->startup_init == STUP_INIT_PRIMPOSED && ( (p -> ID ) % 2 == 1 ) )
+								{
+									U[0] = params->ubulk_target ;
+									U[1] = U_old[1] + (dt / total_Mass )* F_global_sum ;
+									U[2] = 0;
+								}
+						}
+					#endif
+
+			    X[0] = X_old[0] + dt * bet * ( U[0] + U_old[0] );
+				X[1] = X_old[1] + dt * bet * ( U[1] + U_old[1] );
+				X[2] = X_old[2] + dt * bet * ( U[2] + U_old[2] );
+
+				p = p -> next;
+
+		       	}
+		}					
+
+	else{
+		// Update old forces for fixed particles
+		p = p_fixed_list -> start;
+		while (p != NULL) {
+			FORI3 p->Fc_old[i] = p->Fc[i];
+			FORI3 p->Tc_old[i] = p->Tc[i];
+			#ifdef POST_PROCESS
+					FORI3 p->Fc_norm_old[i] = p->Fc_norm[i];
+					FORI3 p->Fc_tan_old[i]  = p->Fc_tan[i];
+					FORI3 p->Fl_norm_old[i] = p->Fl_norm[i];
+					FORI3 p->Fl_tan_old[i]  = p->Fl_tan[i];
+			#endif
+			p = p -> next;
+		}
+	}
 #ifdef STARTUP
 	MPI_Allreduce(MPI_IN_PLACE, &(params->startup_flag), 1, MPI_INT, MPI_MIN, PCW);
 #endif
@@ -801,10 +1007,18 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 			params->startup_flag = 0;
 		}
 		if (params->startup_flag) {
-			DSET_ZERO(Omega, 3);
-			if(params->startup_init == STUP_INIT_TIME) FORI3 U[i] = params->startup_velocity[i];
-			if(params->startup_init == STUP_INIT_GOND_ST_27) U[1] = 0.518 * ( exp(-40 * params->time) - 1 );  // Gondret St=27
-			if(params->startup_init == STUP_INIT_GOND_ST_152) U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret St=152
+			if(params->startup_init == STUP_INIT_TIME) {
+				DSET_ZERO(Omega, 3);
+				FORI3 U[i] = params->startup_velocity[i];
+			}
+			if(params->startup_init == STUP_INIT_GOND_ST_27) {
+				DSET_ZERO(Omega, 3);
+				U[1] = 0.518 * ( exp(-40 * params->time) - 1 );
+				}  // Gondret St=27
+			if(params->startup_init == STUP_INIT_GOND_ST_152) {
+				DSET_ZERO(Omega, 3);
+				U[1] = 0.585 * ( exp(-40 * params->time) - 1 ); 
+				} // Gondret St=152
 //			U[1]=1;
 //			Omega[2]=0;
 //			U[1] = 0.585 * ( exp(-40 * params->time) - 1 );  // Gondret2
@@ -833,37 +1047,131 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 	MPI_Allreduce(MPI_IN_PLACE, &(params->startup_flag), 1, MPI_INT, MPI_MIN, PCW);
 #endif
 
-	// Store collision force acting over entire timestep for fixed particles
-	p = p_fixed_list -> start;
-	while (p != NULL) {
-		Fc = p -> Fc;
-		Tc = p -> Tc;
-		Fc_old = p -> Fc_old;
-		Tc_old = p -> Tc_old;
-		F_coll = p -> F_coll;
-		T_coll = p -> T_coll;
-#ifdef SUBSTEP
-		FORI3 F_coll[i] += bet * (Fc[i] + Fc_old[i]) / 15.0;
-		FORI3 T_coll[i] += bet * (Tc[i] + Tc_old[i]) / 15.0;
-	#ifdef POST_PROCESS
-		FORI3 p->Fc_norm_cum[i] += bet * (p->Fc_norm[i] + p->Fc_norm_old[i]) / 15.0;
-		FORI3 p->Fc_tan_cum[i]  += bet * (p->Fc_tan[i]  + p->Fc_tan_old[i]) / 15.0;
-		FORI3 p->Fl_norm_cum[i] += bet * (p->Fl_norm[i] + p->Fl_norm_old[i]) / 15.0;
-		FORI3 p->Fl_tan_cum[i]  += bet * (p->Fl_tan[i]  + p->Fl_tan_old[i]) / 15.0;
-	#endif
-#else
-		FORI3 F_coll[i] += bet * (Fc[i] + Fc_old[i]);
-		FORI3 T_coll[i] += bet * (Tc[i] + Tc_old[i]);
-	#ifdef POST_PROCESS
-		FORI3 p->Fc_norm_cum[i] += bet * (p->Fc_norm[i] + p->Fc_norm_old[i]);
-		FORI3 p->Fc_tan_cum[i]  += bet * (p->Fc_tan[i]  + p->Fc_tan_old[i]);
-		FORI3 p->Fl_norm_cum[i] += bet * (p->Fl_norm[i] + p->Fl_norm_old[i]);
-		FORI3 p->Fl_tan_cum[i]  += bet * (p->Fl_tan[i]  + p->Fl_tan_old[i]);
-	#endif
-#endif
-		p = p -> next;
-	}
+	if(params->startup_init == STUP_INIT_PRIMPOSED || STUP_INIT_SHEARFLOW)
+		{
+			MPI_Allreduce(&F_local_sum, &F_global_sum, 1, MPI_DOUBLE, MPI_SUM, PCW);
+			//return F_global_sum;
+			MPI_Allreduce(&Mass, &total_Mass, 1, MPI_DOUBLE, MPI_SUM, PCW);		
 
+			// Store collision force acting over entire timestep for fixed particles
+			p = p_fixed_list -> start;
+			while (p != NULL) 
+			{
+				X = p -> X;
+				U = p -> U;
+				Omega = p -> Omega;
+				X_old = p -> X_old;
+				U_old = p -> U_old;
+				Omega_old = p -> Omega_old;
+
+				F = p -> F;
+				T = p -> T;
+				Fc = p -> Fc;
+				Tc = p -> Tc;
+				Fc_old = p -> Fc_old;
+				Tc_old = p -> Tc_old;
+
+				F_coll = p -> F_coll;
+				T_coll = p -> T_coll;
+
+				dt_iM = dt / p -> M;
+				dt_iM1 = dt / p -> M1;
+				dt_iI = dt / p -> I_p;
+
+
+			// Store collision force acting over entire timestep
+			#ifdef SUBSTEP
+					FORI3 F_coll[i] += bet * (Fc[i] + Fc_old[i]) / 15.0;
+					FORI3 T_coll[i] += bet * (Tc[i] + Tc_old[i]) / 15.0;
+				#ifdef POST_PROCESS
+					FORI3 p->Fc_norm_cum[i] += bet * (p->Fc_norm[i] + p->Fc_norm_old[i]) / 15.0;
+					FORI3 p->Fc_tan_cum[i]  += bet * (p->Fc_tan[i]  + p->Fc_tan_old[i]) / 15.0;
+					FORI3 p->Fl_norm_cum[i] += bet * (p->Fl_norm[i] + p->Fl_norm_old[i]) / 15.0;
+					FORI3 p->Fl_tan_cum[i]  += bet * (p->Fl_tan[i]  + p->Fl_tan_old[i]) / 15.0;
+				#endif
+			#else
+					FORI3 F_coll[i] += bet * (Fc[i] + Fc_old[i]);
+					FORI3 T_coll[i] += bet * (Tc[i] + Tc_old[i]);
+				#ifdef POST_PROCESS
+					FORI3 p->Fc_norm_cum[i] += bet * (p->Fc_norm[i] + p->Fc_norm_old[i]);
+					FORI3 p->Fc_tan_cum[i]  += bet * (p->Fc_tan[i]  + p->Fc_tan_old[i]);
+					FORI3 p->Fl_norm_cum[i] += bet * (p->Fl_norm[i] + p->Fl_norm_old[i]);
+					FORI3 p->Fl_tan_cum[i]  += bet * (p->Fl_tan[i]  + p->Fl_tan_old[i]);
+				#endif
+			#endif
+
+			#ifdef STARTUP
+			if (params->startup_flag) 
+			{
+				DSET_ZERO(Omega, 3);
+				if(params->startup_init == STUP_INIT_SHEARFLOW && ( (p -> ID) % 2 == 0 ) )
+				{
+					U[0] = - params->ubulk_target ;
+				}
+				if(params->startup_init == STUP_INIT_SHEARFLOW && ( (p -> ID) % 2 == 1 ) )
+				{
+					U[0] = params->ubulk_target ;
+				}
+			}
+			#endif
+
+			#ifdef STARTUP
+			if (params->startup_flag) 
+			{
+				DSET_ZERO(Omega, 3);
+				if(params->startup_init == STUP_INIT_PRIMPOSED && ( (p -> ID ) % 2 == 0 ) )
+				{
+					U[0] = - params->ubulk_target ;
+					U[1] = 0;
+				}
+				if(params->startup_init == STUP_INIT_PRIMPOSED && ( (p -> ID ) % 2 == 1 ) )
+				{
+					U[0] = params->ubulk_target ;
+					U[1] = U_old[1] + (dt  / total_Mass )* F_global_sum ;
+					U[2] = 0;
+				}
+			}
+			#endif
+
+			X[0] = X_old[0] + dt * bet * ( U[0] + U_old[0] );
+			X[1] = X_old[1] + dt * bet * ( U[1] + U_old[1] );
+			X[2] = X_old[2] + dt * bet * ( U[2] + U_old[2] );
+
+			p = p -> next;
+			}
+		}
+	else{
+		// Store collision force acting over entire timestep for fixed particles
+		p = p_fixed_list -> start;
+		while (p != NULL) {
+			Fc = p -> Fc;
+			Tc = p -> Tc;
+			Fc_old = p -> Fc_old;
+			Tc_old = p -> Tc_old;
+			F_coll = p -> F_coll;
+			T_coll = p -> T_coll;
+			#ifdef SUBSTEP
+					FORI3 F_coll[i] += bet * (Fc[i] + Fc_old[i]) / 15.0;
+					FORI3 T_coll[i] += bet * (Tc[i] + Tc_old[i]) / 15.0;
+				#ifdef POST_PROCESS
+					FORI3 p->Fc_norm_cum[i] += bet * (p->Fc_norm[i] + p->Fc_norm_old[i]) / 15.0;
+					FORI3 p->Fc_tan_cum[i]  += bet * (p->Fc_tan[i]  + p->Fc_tan_old[i]) / 15.0;
+					FORI3 p->Fl_norm_cum[i] += bet * (p->Fl_norm[i] + p->Fl_norm_old[i]) / 15.0;
+					FORI3 p->Fl_tan_cum[i]  += bet * (p->Fl_tan[i]  + p->Fl_tan_old[i]) / 15.0;
+				#endif
+			#else
+					FORI3 F_coll[i] += bet * (Fc[i] + Fc_old[i]);
+					FORI3 T_coll[i] += bet * (Tc[i] + Tc_old[i]);
+				#ifdef POST_PROCESS
+					FORI3 p->Fc_norm_cum[i] += bet * (p->Fc_norm[i] + p->Fc_norm_old[i]);
+					FORI3 p->Fc_tan_cum[i]  += bet * (p->Fc_tan[i]  + p->Fc_tan_old[i]);
+					FORI3 p->Fl_norm_cum[i] += bet * (p->Fl_norm[i] + p->Fl_norm_old[i]);
+					FORI3 p->Fl_tan_cum[i]  += bet * (p->Fl_tan[i]  + p->Fl_tan_old[i]);
+				#endif
+			#endif
+			p = p -> next;
+		}
+	}	
 	//--------------------------------------------------------------------------
 	// Evaluate collision forces based on final position and velocity for
 	// p_mobile.  Transfer new collision parameters to fixed particles.
@@ -989,21 +1297,17 @@ void Lagrangian_collect_forces(Particle_list *p_list, Particle_list *p_list_fore
  Applies forcing onto the fluid flow field using the immersed boundary method to
  achieve the desired velocity, given by the particle's current position and
  velocity.
-
  This forcing can be carried out at two stages in the program, both of which
  occur before the pressure projection step:
-
      1. Forcing before implicit viscous terms
           - Forcing is applied to the velocity RHS term (vel -> ng_rhs)
           - Uses intermediate velocity field found using explicit viscous terms
           - Specify 'force_iter' to be a negative number
-
      2. Forcing after implicit viscous terms
           - Forcing is applied directly to the velocity field (vel -> data)
           - Uses intermediate velocity field found using implicit viscous terms
           - Specify 'force_iter' to be a positive number (including zero).  This
             is the number of times the forcing will be applied this step.
-
  */
 /******************************************************************************/
 void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace) {
@@ -1091,9 +1395,9 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
 				DSET_ZERO(p->F, 3);
 				DSET_ZERO(p->T, 3);
 			}
-			#ifndef ONE_WAY
-				Lagrangian_force_individual(p, corrector, data_bag);
-			#endif
+#ifndef ONE_WAY
+			Lagrangian_force_individual(MOBILE, p, corrector, data_bag);
+#endif
 			p = p -> next;
 		}
 
@@ -1106,9 +1410,9 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
 				DSET_ZERO(p->F, 3);
 				DSET_ZERO(p->T, 3);
 			}
-			#ifndef ONE_WAY
-				Lagrangian_force_individual(p, corrector, data_bag);
-			#endif
+#ifndef ONE_WAY
+			Lagrangian_force_individual(FIXED, p, corrector, data_bag);
+#endif
 			p = p -> next;
 		}
 
@@ -1154,7 +1458,6 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
 /******************************************************************************/
 /*
  Calculates forcing between an individual particle and the velocity field:
-
      1. Interpolate velocity field onto each Lagrangian marker
      2. Calculate force required for marker to achieve desired velocity (of
         rigid body motion)
@@ -1162,7 +1465,7 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
      4. Spread the Lagrangian force onto the Eulerian fluid velocity field
  */
 /******************************************************************************/
-void Lagrangian_force_individual(Particle *p, int corrector, Cart3d_bag *data_bag) {
+void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_bag *data_bag) {
 
 	int i, j, k, mv;
 	double r[3];
@@ -1414,13 +1717,26 @@ void Lagrangian_force_individual(Particle *p, int corrector, Cart3d_bag *data_ba
 		}
 	}
 #ifdef POST_PROCESS
-	for (k = k_start; k < k_end; k++) {
-		for (j = j_start; j < j_end; j++) {
-			for (i = i_start; i < i_end; i++) {
-				fx_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+	#ifdef STARTUP
+		// to exclude fibm forces due to the fixed particles, acting as walls. (only in volume imposed and pressure imposed setups)
+		if ((p_type == MOBILE) || (params->startup_init != STUP_INIT_PRIMPOSED &&  params->startup_init != STUP_INIT_SHEARFLOW)){
+			for (k = k_start; k < k_end; k++) {
+				for (j = j_start; j < j_end; j++) {
+					for (i = i_start; i < i_end; i++) {
+						fx_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+					}
+				}
+			}			
+		}
+	#else
+		for (k = k_start; k < k_end; k++) {
+			for (j = j_start; j < j_end; j++) {
+				for (i = i_start; i < i_end; i++) {
+					fx_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+				}
 			}
 		}
-	}
+	#endif
 #endif
 
 
@@ -1530,13 +1846,26 @@ void Lagrangian_force_individual(Particle *p, int corrector, Cart3d_bag *data_ba
 		}
 	}
 #ifdef POST_PROCESS
-	for (k = k_start; k < k_end; k++) {
-		for (j = j_start; j < j_end; j++) {
-			for (i = i_start; i < i_end; i++) {
-				fy_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+	#ifdef STARTUP
+		// to exclude fibm forces due to the fixed particles, acting as walls. (only in volume imposed and pressure imposed setups)
+		if ((p_type == MOBILE) || (params->startup_init != STUP_INIT_PRIMPOSED &&  params->startup_init != STUP_INIT_SHEARFLOW)){
+			for (k = k_start; k < k_end; k++) {
+				for (j = j_start; j < j_end; j++) {
+					for (i = i_start; i < i_end; i++) {
+						fy_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+					}
+				}
+			}			
+		}
+	#else
+		for (k = k_start; k < k_end; k++) {
+			for (j = j_start; j < j_end; j++) {
+				for (i = i_start; i < i_end; i++) {
+					fy_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+				}
 			}
 		}
-	}
+	#endif
 #endif
 
 
@@ -2032,7 +2361,6 @@ double *mat_mat(int m, int n, int p, int q, double **A, double **B) { //double A
 /*
  Generates 'N_L' points evenly distributed over the surface of a sphere of
  radius 'R' centered on 'X' = {xc, yc, zc}.
-
  Based on the algorithm of Paul Leopardi: 'A partition of the unit sphere into
  regions of equal area and small diameter,' Electronic Transactions on Numerical
  Analysis, 2006.
@@ -2099,17 +2427,13 @@ void Lagrangian_generate_points_Leopardi(Particle *p, MAC_grid *grid) {
 	/*
 	 This algorithm works by dividing the surface of the sphere into 'N_L'
 	 regions of equal area, denoted here as 'A_r'.
-
 	 The first two regions are the north and south polar caps.  The rest of the
 	 sphere is divided into 'n' rings, or annuli.  Each annulus has a north and
 	 south colatitude (polar angle).
-
 	 Each annulus is furthermore divided into 'm' regions having an area of
 	 exactly 'A_r'.
-
 	 The points are placed in the area centroid of the regions (as opposed to
 	 the colatitude centroid).
-
 	 We use the physics system for spherical coordinate notation:
 	 - theta: polar angle (angle from z-axis)
 	 - phi: azimuthal angle (angle in x-y plane)
@@ -2237,23 +2561,15 @@ void Lagrangian_generate_points_Leopardi(Particle *p, MAC_grid *grid) {
 		/*--------------------------------------------------------------------*/
 		/*
 		 Calculate point coordinates
-
 		 Here we loop through all the regions within this annulus using the
 		 polar coordinate 'phi', while 'theta' will be our azimuthal angle.
-
 		 We could calculate the central colatitude in this annulus
-
 		     theta = 2.0 * asin(sqrt(AC / (4.0 * PI)));
-
 		 and then get the values
-
 		     R_sin_theta = R * sin(theta);
 		     R_cos_theta = R * cos(theta);
-
 		 Or we could evaluate
-
 		     sin( 2.0 * asin( sqrt(AC / (4.0 * PI)) ) )
-
 		 by hand to get the following:
 		 */
 		/*--------------------------------------------------------------------*/
@@ -2310,7 +2626,6 @@ void Lagrangian_generate_points_Leopardi(Particle *p, MAC_grid *grid) {
 /*
  Generates 'N_L' points evenly distributed over the surface of a sphere of
  radius 'R' centered on 'X' = {xc, yc, zc}.
-
  Based on the algorithm of Paul Leopardi: 'A partition of the unit sphere into
  regions of equal area and small diameter,' Electronic Transactions on Numerical
  Analysis, 2006.

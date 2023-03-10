@@ -10,7 +10,7 @@ void Lagrangian_collect_forces(Particle_list *p_list, Particle_list *p_list_fore
 		int type, Parameters *params, Debug_trace *dtrace);
 
 void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace);
-void Lagrangian_force_individual(Particle *p, int corrector, Cart3d_bag *data_bag);
+void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_bag *data_bag);
 
 void Lagrangian_flag_points(Cart3d_bag *data_bag, Debug_trace *dtrace);
 void Lagrangian_flag_points_individual(Particle *p, Particle *p2, MAC_grid *grid);
