@@ -457,6 +457,7 @@ struct parameters {
 	int sedim_rate_output;
 	int ImportBottomInterface;
 
+	int *chunk_size;
 
 	int output_vfu;
 	int output_vfv;
