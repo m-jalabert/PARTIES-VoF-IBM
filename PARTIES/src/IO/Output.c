@@ -999,10 +999,17 @@ void Output_h5_3d_variable(double *data_start, int ndim, hsize_t *dim,
 	dcpl_id = H5Pcreate(H5P_DATASET_CREATE);
 	assert(dcpl_id >= 0);
 	assert(H5Pset_fill_time(dcpl_id, H5D_FILL_TIME_NEVER) >= 0);
+	
+	if (memcmp(params -> chunk_size, (int[3]){0}, sizeof(params -> chunk_size)) != 0) {
+            hsize_t chunk_dims[3] = {params -> chunk_size[0],
+                                     params -> chunk_size[1],
+                                     params -> chunk_size[2]};
+            H5Pset_chunk(dcpl_id, 3, chunk_dims);
+        }
 
 	// Create dataset using defined dataspace and fieldname
 	dataset = H5Dcreate(file_id, fieldname, H5T_NATIVE_DOUBLE, dataspace,
-	                    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	                    H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
 	assert(dataset >= 0);
 
 	// Create property list for collective dataset write

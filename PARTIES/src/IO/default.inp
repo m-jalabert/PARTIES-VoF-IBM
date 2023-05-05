@@ -228,6 +228,8 @@ CFGArray(output, conc_output_stokes_diss_rate, "{0}" , GVG_INT)		// Switch for O
 CFGArray(output, conc_output_integral, "{0}" , GVG_INT)
 CFGArray(output, conc_output_Q_int, "{0}" , GVG_INT)
 
+CFGArray(output, chunk_size, "{0, 0, 0}", GVG_INT)  // chunk dims for 3D data in Data_*.h5 files
+
 CFG(output, output_vfu, NO, atoi)     // particle indicator function
 CFG(output, output_vfv, NO, atoi)     // particle indicator function
 CFG(output, output_vfw, NO, atoi)     // particle indicator function
