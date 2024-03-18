@@ -169,7 +169,7 @@
 #undef  BICG_SOLVE // nouniform mesh
 #undef  TEST
 
-#define OSCILLATION        		// Oscillation force for oscillating the domain/fluid container in x-direction
+#undef OSCILLATION        		// Oscillation force for oscillating the domain/fluid container in x-direction
 
 #undef OSCILLATING_PARTICLE		// Oscillation of the particle in x-direction with prescribed u-velocity
 
@@ -180,6 +180,7 @@
 /******************************************************************************/
 /*                                   Output                                   */
 /******************************************************************************/
+#define POST_PROCESS    // Output IBM forcign fields
 #undef  OUTPUT2D
 #undef SLICE_OUTPUT	// 2D-slice output of the flow field; output into subfolder './trn'
 
@@ -214,7 +215,6 @@
 
 // defines some output quantities should be handeled differently
 #undef SCALAR_DEBUG	// prints the difference at the Lagrangian points to stdout
-#define POST_PROCESS    //Ed ibm force make field in x direction
 
 
 						/* Now some predefined BC for a single conc field*/
