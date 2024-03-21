@@ -781,7 +781,7 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		}	
 
 	// Update old forces for fixed particles
-	if(params->startup_init == STUP_INIT_PRIMPOSED || STUP_INIT_SHEARFLOW)
+	if(params->startup_init == STUP_INIT_PRIMPOSED || params->startup_init == STUP_INIT_SHEARFLOW)
 		{
 			p = p_fixed_list -> start;
 			while (p != NULL) 
@@ -1047,7 +1047,7 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 	MPI_Allreduce(MPI_IN_PLACE, &(params->startup_flag), 1, MPI_INT, MPI_MIN, PCW);
 #endif
 
-	if(params->startup_init == STUP_INIT_PRIMPOSED || STUP_INIT_SHEARFLOW)
+	if(params->startup_init == STUP_INIT_PRIMPOSED || params->startup_init == STUP_INIT_SHEARFLOW)
 		{
 			MPI_Allreduce(&F_local_sum, &F_global_sum, 1, MPI_DOUBLE, MPI_SUM, PCW);
 			//return F_global_sum;
