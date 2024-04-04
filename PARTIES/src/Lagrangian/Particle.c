@@ -205,6 +205,7 @@ void Particle_initialize(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	}
 	else {
 		ParticleInput_h5(data_bag, DTRACE("ParticleInput_h5"));
+		Particle_initialize_volume_fraction(data_bag, DTRACE("Particle_initialize_volume_fraction"));
 	}
 
 	//--------------------------------------------------------------------------
@@ -357,6 +358,37 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 }
 
 
+/******************************************************************************/
+/*
+ * Initializes volume fraction fields.
+ */
+/******************************************************************************/
+void Particle_initialize_volume_fraction(Cart3d_bag *data_bag, Debug_trace *dtrace)
+{
+	MAC_grid *grid = data_bag->grid;
+	Parameters *params = data_bag->params;
+	Lagrangian *lag = data_bag->lag;
+
+	Particle_list *p_mobile_list = lag->p_mobile_list;
+	Particle_list *p_fixed_list = lag->p_fixed_list;
+
+	Particle_MPI_update(p_mobile_list, data_bag, DTRACE("Particle_MPI_update"));
+	Particle_MPI_update(p_fixed_list, data_bag, DTRACE("Particle_MPI_update"));
+
+	Memory_reset_noghost_variable(grid, params, lag->ng_vfu);
+	Memory_reset_noghost_variable(grid, params, lag->ng_vfv);
+	Memory_reset_noghost_variable(grid, params, lag->ng_vfw);
+
+	Interpolate_add_to_volume_fraction('u', p_mobile_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('v', p_mobile_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('w', p_mobile_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('u', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('v', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('w', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+
+	Particle_list_remove(p_mobile_list, FOREIGN, grid, params, DTRACE("Particle_MPI_update"));
+	Particle_list_remove(p_fixed_list, FOREIGN, grid, params, DTRACE("Particle_MPI_update"));
+}
 
 
 /******************************************************************************/
