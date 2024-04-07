@@ -9,6 +9,7 @@ void Particle_initialize(Cart3d_bag *data_bag, Debug_trace *dtrace);
 void Particle_initialize_MPI_datatype();
 void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace);
 void Particle_initialize_nonessential_data(Particle *p);
+void Particle_initialize_volume_fraction(Cart3d_bag *data_bag, Debug_trace *dtrace);
 void Particle_calc_derived_data(Particle *p, MAC_grid *grid, Parameters *params);
 void Particle_destroy(Particle *p);
 void Particle_list_destroy(Particle_list *p_list);
