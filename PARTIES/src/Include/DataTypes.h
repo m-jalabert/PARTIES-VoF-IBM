@@ -14,6 +14,24 @@ extern MPI_Datatype MPI_PARTICLE;
 extern MPI_Datatype MPI_COLLISION;
 
 /******************************************************************************/
+/*                               VOF-PLIC	                                  */
+/******************************************************************************/
+#ifdef VOF_PLIC    // only compile if VOF_PLIC definied in Boundary.h
+
+struct volume_fraction {
+
+	double ***F; 										// The main cell-centered volume fraction array e.g. F[i][j][k] in 3D
+	double ***F_smooth;         						// Smoothed volume fraction
+    double ***kappa;									// Curvature
+	double ***normal_x, ***normal_y, ***normal_z;       // Interface normal
+
+};
+typedef struct volume_fraction VolumeFraction;
+
+#endif  // VOF_PLIC
+
+
+/******************************************************************************/
 /*                             LSOLVER_TRANSPOSE                              */
 /******************************************************************************/
 struct lsolver_transpose {
@@ -1433,6 +1451,9 @@ struct cart3d_bag {
 	Subgrid *smag;
 	Rans *rans;
 	Fourier *fourier;
+	#ifdef VOF_PLIC
+    VolumeFraction *vof; // New pointer for the volume-fraction data
+    #endif
 
 };
 typedef struct cart3d_bag Cart3d_bag;
