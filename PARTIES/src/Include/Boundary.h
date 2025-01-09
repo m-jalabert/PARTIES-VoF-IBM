@@ -163,26 +163,25 @@
 /*                                Simulation -FlowSolver                      */
 /******************************************************************************/
 
-#undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
+#define  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
+#undef FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE
 #undef  BICG_SOLVE // nouniform mesh
 #undef  TEST
 
-#undef OSCILLATION        		// Oscillation force for oscillating the domain/fluid container in x-direction
-
-#undef OSCILLATING_PARTICLE		// Oscillation of the particle in x-direction with prescribed u-velocity
-
-#undef STOKES_2ND_PROBLEM		// Oscillating boundary layer due to oscillating Top_Wall
-								// Required: 	#define  TOP_WALL_VELOCITY
-
 
 /******************************************************************************/
 /*                                   Output                                   */
 /******************************************************************************/
-#define POST_PROCESS    // Output IBM forcign fields
 #undef  OUTPUT2D
-#undef SLICE_OUTPUT	// 2D-slice output of the flow field; output into subfolder './trn'
+
+
+/******************************************************************************/
+/* 						Volume of Fluid - PLIC with CSF					      */
+/******************************************************************************/
+#undef VoF_PLIC
+
 
 
 /******************************************************************************/
@@ -191,14 +190,14 @@
 #undef CONC             // Turn on Concentration
 #undef BOUSSINESQ       // Boussinesq approximation
 #undef IBM_SCALAR
-#define VOF_SCALAR
-#define VOF_VELOCITY
+#undef VOF_SCALAR
+#undef VOF_VELOCITY
 #undef VOF_SCALAR_DEBUG
-#define VOF_SMOOTH_VELO
+#undef VOF_SMOOTH_VELO
 #undef VOF_SCALAR_NODIV // if defined we do non-conservative scheme
 #undef VOF_NO_VOLUME  // the volume fraction is not used only possible with VOF_SMOOTH_VELO is enabled
 #undef VOF_PROJECT
-#define VOF_PP_VFPRIME
+#undef VOF_PP_VFPRIME
 //#undef  CONC_CLIP        // not supported Clip concentration to max 1
 
 
@@ -215,6 +214,7 @@
 
 // defines some output quantities should be handeled differently
 #undef SCALAR_DEBUG	// prints the difference at the Lagrangian points to stdout
+#undef POST_PROCESS    //Ed ibm force make field in x direction
 
 
 						/* Now some predefined BC for a single conc field*/
@@ -239,7 +239,7 @@
 /******************************************************************************/
 /*                                 Particles                                  */
 /******************************************************************************/
-#define LAG_PARTICLE_RESOLVED  // Turn on Lagrangian particles
+#undef LAG_PARTICLE_RESOLVED  // Turn on Lagrangian particles
 #undef  PARTICLE_TRN           // Save Particle_*.h5 files for every timestep in
                                //     subfolder './trn'
 #define  SUBSTEP                // Resolve particle collisions with sub-timesteps
@@ -247,8 +247,10 @@
 #undef  FORCES_DAT             // Print out 'forces.dat' - F acting on particle // error here
 #define  DRY_COLLISION          // Turn off fluid forces for large St collisions
 #undef ROUGH_COLLISION        // Start collision at surface roughness
-#define LAG_MARKER_FLAG        // Turn off all competing Lag markers
+#undef  LAG_MARKER_FLAG        // Turn off all competing Lag markers
 #undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
+
+#undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
 
 #undef ONE_WAY					// Turns on one-way coupling, i.e. no feedback from the particles on the fluid
 #undef TURB_FORCING			// Turns on the EP turbulent forcing
@@ -315,18 +317,16 @@
 /*                                Logic checks                                */
 /******************************************************************************/
 
-#if defined SLICE_OUTPUT && !defined POST_PROCESS
-	#warning 'SLICE_OUTPUT' defined, but not 'POST_PROCESS'. Defining 'POST_PROCESS'...
-	#define POST_PROCESS
-#endif
-
-
 //------------------------------------------------------------------------------
 // Oscillation
 //------------------------------------------------------------------------------
 
-#if defined STOKES_2ND_PROBLEM && !defined TOP_WALL_VELOCITY
-	#error 'STOKES_2ND_PROBLEM' only works together with 'TOP_WALL_VELOCITY'
+#if defined FLUID_OSCILLATION || defined PARTICLE_OSCILLATION
+
+	#if defined FLUID_OSCILLATION && defined PARTICLE_OSCILLATION
+        #error Both oscillations (acting on fluid and on particle) are specified
+	#endif // defined
+
 #endif
 
 
@@ -398,11 +398,6 @@
 //------------------------------------------------------------------------------
 // Particles
 //------------------------------------------------------------------------------
-
-#if defined PARTICLE_TRN && !defined LAG_PARTICLE_RESOLVED  
-	#error 'PARTICLE_TRN' only works together with 'LAG_PARTICLE_RESOLVED'
-#endif
-
 #if defined ACTM && defined DEM
 	#error Incompatible collision models 'ACTM' and 'DEM'
 #endif
