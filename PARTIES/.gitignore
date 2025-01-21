@@ -17,3 +17,4 @@ src/Include/Boundary.h
 *.exe
 # Misc
 .DS_store
+post_processing/h5ToVTK/
