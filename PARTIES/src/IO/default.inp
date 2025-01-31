@@ -86,6 +86,30 @@ CFG(flow, oscillation_frame, 1.0, atof)     // define observer: 0 = inertial (fi
 CFG(flow, vel_init_type, 0, atoi)  // Type of initial velocity profile
 CFG(flow, vel_init_y0, 0.0, atof)  // y-coordinate to start velocity profile
 
+/******************************************************************************/ 
+/*                                VOF_PLIC                                    */
+/*----------------------------------------------------------------------------*/
+/*    Volume-of-Fluid (VOF) parameters for a two-phase flow.                  */
+/******************************************************************************/
+// Non-dimensional parameters for two-phase flow 
+CFG(vof, Ri, 0.0, atof)          // Richardson number for buoyancy
+CFG(vof, Bo, 0.0, atof)          // Bond number for surface tension effects
+
+// Fluid properties (dimensionless) 
+// E.g. rho = F + (1-F)*rho_2/rho_1, etc.
+CFG(vof, rho1, 1.0, atof)        // Primary fluid (F=1)
+CFG(vof, rho2, 0.1, atof)        // Secondary fluid (F=0)
+CFG(vof, mu1, 0.01, atof)        // Viscosity fluid 1
+CFG(vof, mu2, 0.001, atof)       // Viscosity fluid 2
+CFG(vof, sigma, 0.0, atof)       // Surface tension coefficient
+
+// Interface initialization 
+CFG(vof, init_type, 0, atoi)     // 0=no interface init, 1=sphere/bubble, 2=user-defined
+
+// Possibly advanced flags
+CFG(vof, plic_enabled, 1, atoi)  // 1 = use PLIC reconstruction
+CFG(vof, csf_model, 1, atoi)     // 1 = continuum surface force, etc.
+
 
 /******************************************************************************/
 /*                                    CONC                                    */

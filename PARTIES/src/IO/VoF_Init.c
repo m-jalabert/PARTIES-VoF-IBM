@@ -27,7 +27,7 @@
 /******************************************************************************/
 /*
  This function initializes the volume fraction field for a bubble, based on 
- Basilisk test case. The Basilisk test case is a 2D bubble in a 3D domain for us.
+ Basilisk test case. The Basilisk test case is a 2D bubble but built in 3D.
  */
 /******************************************************************************/
 void VoF_init_bubble(Cart3d_bag *data_bag)

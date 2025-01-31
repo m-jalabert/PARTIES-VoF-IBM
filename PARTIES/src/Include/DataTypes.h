@@ -24,6 +24,9 @@ struct volume_fraction {
 	double ***F_smooth;         						// Smoothed volume fraction
     double ***kappa;									// Curvature
 	double ***normal_x, ***normal_y, ***normal_z;       // Interface normal
+	double ***alpha;  									// plane intercept for the PLIC plane in each cell
+	int ***cell_interface_flag; 						// e.g. 0=no interface, 1=interface, etc.
+
 
 };
 typedef struct volume_fraction VolumeFraction;
@@ -347,6 +350,37 @@ struct parameters {
 	double per_fr;
 
 
+
+	/*--------------------------------- VOF-PLIC -----------------------------*/
+
+	// Bond number 
+	double Bo;
+
+	// Richardson number
+	double Ri;
+
+	// Surface Tension coefficient 
+	double sigma;
+
+	// Densities of the two phases
+	double rho1, rho2;
+
+	// Viscosities of the two phases
+	double mu1, mu2;
+
+	// Interface initialization type // 0=none, 1=sphere, etc.	
+	int init_type;
+
+	// If PLIC is enabled 
+	int plic_enabled;
+
+	// If CSF model is enabled
+	int csf_model;
+
+
+
+
+
 	/*--------------------------------- CONC ---------------------------------*/
 	// Number of concentration fields
 	int NConc;
@@ -662,6 +696,34 @@ struct viscosity  {
 
 };
 typedef struct viscosity Viscosity;
+
+/******************************************************************************/
+/*                                 VISCOSITY-VOF                              */
+/******************************************************************************/
+/* Strucutre holding the information for all the immersed node for each quantity */
+struct viscosity_vof  {
+
+	double ***mu;
+	double ***muX;
+	double ***muY;
+	double ***muZ;
+
+};
+typedef struct viscosity_vof Viscosity_vof;
+
+/******************************************************************************/
+/*                                 Density-VOF                              */
+/******************************************************************************/
+/* Strucutre holding the information for all the immersed node for each quantity */
+struct density_vof  {
+
+	double ***rho;
+	double ***rhoX;
+	double ***rhoY;
+	double ***rhoZ;
+
+};
+typedef struct density_vof Density_vof;
 
 
 /******************************************************************************/
@@ -1453,6 +1515,8 @@ struct cart3d_bag {
 	Fourier *fourier;
 	#ifdef VOF_PLIC
     VolumeFraction *vof; // New pointer for the volume-fraction data
+	Viscosity_vof  *vof_viscosity;
+	Density_vof    *vof_density;
     #endif
 
 };
