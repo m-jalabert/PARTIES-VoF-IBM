@@ -151,6 +151,28 @@ void Output_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Output_h5_flow_variable(smag->IMM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 #endif
 
+#ifdef VOF_PLIC
+    //--------------------------------------------------------------------------
+    // VOF data (necessary for resuming)
+    //--------------------------------------------------------------------------
+    VolumeFraction *vof = data_bag->vof;
+    
+    sprintf(fieldname, "%s/F", groupname);
+    Output_h5_flow_variable(vof->F, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    
+    sprintf(fieldname, "%s/alpha", groupname);
+    Output_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    
+    // sprintf(fieldname, "%s/normal_x", groupname);
+    // Output_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    
+    // sprintf(fieldname, "%s/normal_y", groupname);
+    // Output_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    
+    // sprintf(fieldname, "%s/normal_z", groupname);
+    // Output_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+#endif
+
 	//--------------------------------------------------------------------------
 	// Close HDF5 file handles
 	//--------------------------------------------------------------------------
@@ -386,6 +408,52 @@ void Output_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 	} // end for iconc
 #endif
+
+#ifdef VOF_PLIC
+	//--------------------------------------------------------------------------
+	// VOF data
+	//--------------------------------------------------------------------------
+	sprintf(groupname, "/VOF");
+	Output_h5_create_group(file_id, groupname, params, DTRACE("Output_h5_create_group"));
+
+	if (verbose) Display_progress(params, "Output.c: write VOF data\n");
+
+	VolumeFraction *vof = data_bag->vof;
+
+	// Write volume fraction F
+	sprintf(fieldname, "%s/F", groupname);
+	Output_h5_flow_variable(vof->F, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// Write smoothed volume fraction F_smooth
+	// sprintf(fieldname, "%s/F_smooth", groupname);
+	// Output_h5_flow_variable(vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// Write interface normals
+	// sprintf(fieldname, "%s/normal_x", groupname);
+	// Output_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// sprintf(fieldname, "%s/normal_y", groupname);
+	// Output_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// sprintf(fieldname, "%s/normal_z", groupname);
+	// Output_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// Write plane intercept alpha
+	sprintf(fieldname, "%s/alpha", groupname);
+	Output_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// Write curvature kappa
+	// sprintf(fieldname, "%s/kappa", groupname);
+	// Output_h5_flow_variable(vof->kappa, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// Write mixture density
+	sprintf(fieldname, "%s/rho", groupname);
+	Output_h5_flow_variable(vof->rho, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+	// Write mixture viscosity
+	sprintf(fieldname, "%s/mu", groupname);
+	Output_h5_flow_variable(vof->mu, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+#endif // VOF_PLIC
 
 
 #if defined LAG_PARTICLE_RESOLVED

@@ -37,6 +37,7 @@
 #include "Velocity.h"
 #include "post_processing.h"
 #include "EPforcing.h"
+#include "VolumeFraction.h"
 
 
 #define TIMEFILE "timesteps.dat"
@@ -389,6 +390,11 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		for (rk = 0; rk < tsubsteps; rk++){
 			if (time != 0) {
 
+				// If we're running the advection test, force the analytical velocity field.
+				if (params->vel_init_type == VEL_INIT_ADVECTION_TEST) {
+					Inflow_velocity_profile(data_bag, DTRACE("Inflow_velocity_profile"));
+				}
+
 				#if defined LEFT_INFLOW || defined RIGHT_INFLOW
 					Inflow_velocity_profile(data_bag, DTRACE("Inflow_velocity_profile"));
 				#endif
@@ -559,18 +565,27 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Velocity *v = data_bag -> v;
 	Velocity *w = data_bag -> w;
 	Pressure *p = data_bag -> p;
+
+#ifdef VOF_PLIC
+	VolumeFraction *vof = data_bag -> vof;
+#endif
+
 #ifdef TURB_FORCING
 	Fourier *fourier = data_bag -> fourier;
 #endif
+
 #ifdef CONC
 	Concentration **c = data_bag -> c;
 #endif
+
 #ifdef LES
 	Subgrid *smag = data_bag -> smag;
 #endif
+
 #ifdef RANS
 	Rans *rans = data_bag -> rans;
 #endif
+
 #ifdef LAG_PARTICLE_RESOLVED
 	Particle_list *p_mobile_list = data_bag -> lag -> p_mobile_list;
 	Particle_list *p_fixed_list  = data_bag -> lag -> p_fixed_list;
@@ -651,6 +666,26 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Viscosity_set_cell_edges(data_bag);
 #endif
 
+
+ #ifdef VOF_PLIC
+
+         // Boundary conditions for F
+         VOF_set_boundary_values(vof->F, data_bag);
+
+         // Reconstruct interface
+         VOF_reconstruct_interface(data_bag);
+
+         // Geometry-based flux computation and RK update
+         VOF_set_advection(data_bag);
+         VOF_update_F(data_bag);
+
+         // Reconstruct again if needed
+         VOF_reconstruct_interface(data_bag);
+
+         // If using mixture laws for density/viscosity
+         VOF_update_density_viscosity(data_bag);
+    
+ #endif 
 
 	/*------------------------------------------------------------------------*/
 	/*
@@ -953,7 +988,12 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 		timer->Wtime_p_rhs += T2 - T1;
 
 		T1 = MPI_Wtime();
+
+#ifdef VOF_PLIC // Pressure solved with CG method for VOF
+		Pressure_solve_cg(data_bag);
+#else
 		Pressure_solve(p, grid, params);
+#endif
 		//printf(" Iteration of Poisson solver: %d\n", poisson_iters);
 		T2 = MPI_Wtime();
 		timer->Wtime_p_solve += T2 - T1;

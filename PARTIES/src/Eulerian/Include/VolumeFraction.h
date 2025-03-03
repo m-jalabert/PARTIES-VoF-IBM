@@ -3,58 +3,70 @@
 
 #include "DataTypes.h"
 
-//#ifdef VOF_PLIC // Only compile if VOF_PLIC is defined in Boundary.h 
-
 // "Constructor"-style function (similar to Conc_create)
 VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params);
 
 // "Destructor"-style function (similar to Conc_destroy)
-void VoF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params);
-
-// Main routine to advance the volume fraction (akin to Conc_int_equations)
-void VoF_int_equations(Cart3d_bag *data_bag, Debug_trace *dtrace);
+void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params);
 
 // Additional prototypes: boundary updates, advection, etc.
-void VoF_set_boundary_values(VolumeFraction *vof, MAC_grid *grid, Parameters *params);
-
+void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag);
 
 /**
- * 1) Reconstruct interface (PLIC)
+ *    Reconstruct interface (PLIC)
  *    We solve for alpha in each interface cell so that the plane
  *    is consistent with the local volume fraction F[i][j][k] and normal.
  */
-void VoF_reconstruct_interface (Cart3d_bag *data_bag);
+void VOF_reconstruct_interface(Cart3d_bag *data_bag);
 
 /**
- * 2) Compute fluxes across cell faces & update F
- *    This is the main geometric VOF advection step (dimension-splitting).
+ *    VoF_set_advection
+ *
+ * Computes convective terms for VOF advection using PLIC-reconstructed interface
+ * Geometry-aware advection based on face fluxes calculated using interface normals
  */
-void VoF_advection (Cart3d_bag *data_bag, double dt);
+void VOF_set_advection(Cart3d_bag *data_bag); 
 
 /**
- * 3) Compute curvature (kappa)
+ *    VOF_set_RHS
+ *
+ * Updates the volume-fraction field `F` using a 3-stage Runge–Kutta (RK3) scheme.
+ */
+void VOF_update_F(Cart3d_bag *data_bag);
+
+/**
+ *    Compute curvature (kappa)
  *    Possibly using height-function or simpler approach. Fill vof->kappa.
  */
-void VoF_compute_curvature (Cart3d_bag *data_bag);
+void VOF_compute_curvature (Cart3d_bag *data_bag);
 
 /**
- * 4) Apply surface tension (CSF)
+ *    Apply surface tension (CSF)
  *    Add sigma * kappa * grad(F) / rho to momentum or velocity body force
  */
-void VoF_apply_surface_tension (Cart3d_bag *data_bag);
+void VOF_apply_surface_tension (Cart3d_bag *data_bag);
 
 /**
- * 5) Update density/viscosity fields
- *    Use F to define local fluid properties if needed:
- *    rho(i,j,k) = F(i,j,k)*rho1 + (1-F(i,j,k))*rho2
+ * Updates the dimensionless density and viscosity fields in the domain,
+ * using the piecewise mixing laws:
+ *
+ *   (1)  rho_tilde(F) = F + (1 - F)* (rho2 / rho1)
+ *
+ *   (2)  rho_tilde / mu_tilde = F
+ *           + (1 - F)* (rho2 * mu1) / (rho1 * mu2)
  */
-void VoF_update_density_viscosity (Cart3d_bag *data_bag);
+void VOF_update_density_viscosity (Cart3d_bag *data_bag);
+
+
+
 
 //Below are all the low-level functions implemented from Basilisk's geometry.h file used to compute the interface normals and to reconstruct the interface (PLIC)
 
-// Utility macros and inline functions
-static inline double clampDouble(double val, double lower, double upper);
-static inline double signDouble(double val);
+
+// Basic functions
+double clampDouble(double val, double lower, double upper);
+double minDouble(double a, double b);
+double maxDouble(double a, double b);
 
 // Function declarations
 double line_alpha_1D(double c, PointType n);
@@ -157,9 +169,20 @@ PointType VoF_facet_normal_3D(
     int k,
     Cart3d_bag *data_bag);
 
+    
+/**
+ * VOF_InterfaceArea_3D
+ *
+ * Computes the surface area of the interface in 3D. This is analogous to
+ * Basilisk's "interface_area()" function but specialized to a 3D uniform-grid
+ * PARTIES code. 
+ *
+ * This does NOT do boundary checks for ghost layers; we assume your code 
+ * has them or is guaranteed in-bounds for i±1, j±1, k±1.
+ ******************************************************************************/
+double VOF_InterfaceArea_3D(Cart3d_bag *data_bag);
 
 
-//#endif // VOF_PLIC
 #endif // VOLUMEFRACTION_H
 
 

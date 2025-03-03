@@ -22,10 +22,21 @@ struct volume_fraction {
 
 	double ***F; 										// The main cell-centered volume fraction array e.g. F[i][j][k] in 3D
 	double ***F_smooth;         						// Smoothed volume fraction
+	double ***mu; 										// Cell-centered Viscosity
+	double ***rho; 										// Cell-centered Density
     double ***kappa;									// Curvature
 	double ***normal_x, ***normal_y, ***normal_z;       // Interface normal
 	double ***alpha;  									// plane intercept for the PLIC plane in each cell
-	int ***cell_interface_flag; 						// e.g. 0=no interface, 1=interface, etc.
+
+	double ***conv; 									// Convective term storage for advection equation [k][j][i]
+	double ***conv_old; 							    // Storage for previous stage's convective term		
+	double ***ng_rhs;									// Right-hand side of the volume fraction equation
+
+	double ***F_old;  									// to store previous stage or previous timestep
+    double ***ng_F;   									// separate ghosted copy 
+
+
+
 
 
 };
@@ -194,6 +205,12 @@ struct pressure {
 	double ***p_data_avg;
 #endif
 
+    // Arrays for CG-based solver
+    double ***res;       // Residual r
+    double ***d;         // Search direction d
+    double ***Ad;        // A*d
+
+
 	fft *xfft, *zfft;
 	pres_transpose *remap;
 	fftw_real *work, *work1;
@@ -353,31 +370,22 @@ struct parameters {
 
 	/*--------------------------------- VOF-PLIC -----------------------------*/
 
-	// Bond number 
-	double Bo;
+    double Bo;          // Bond number
+    double Ri;          // Richardson number
+    double sigma;       // Surface tension coefficient
+    double rho1, rho2;  // Phase densities
+    double mu1, mu2;    // Phase viscosities
+    
+    // VOF/PLIC control parameters
+    int init_type;       // Initialization type
+    
+    // Contact angle parameters 
+    double contact_angle;     // Static contact angle (degrees)
+    int wall_adhesion_model;  // 0=none, 1=constant angle
 
-	// Richardson number
-	double Ri;
-
-	// Surface Tension coefficient 
-	double sigma;
-
-	// Densities of the two phases
-	double rho1, rho2;
-
-	// Viscosities of the two phases
-	double mu1, mu2;
-
-	// Interface initialization type // 0=none, 1=sphere, etc.	
-	int init_type;
-
-	// If PLIC is enabled 
-	int plic_enabled;
-
-	// If CSF model is enabled
-	int csf_model;
-
-
+	// Test cases parameters
+	// Rider & Kothe Advection testcase (1998) 
+	int advection_test_time;     // Parameter for Time Reversal
 
 
 
@@ -697,34 +705,6 @@ struct viscosity  {
 };
 typedef struct viscosity Viscosity;
 
-/******************************************************************************/
-/*                                 VISCOSITY-VOF                              */
-/******************************************************************************/
-/* Strucutre holding the information for all the immersed node for each quantity */
-struct viscosity_vof  {
-
-	double ***mu;
-	double ***muX;
-	double ***muY;
-	double ***muZ;
-
-};
-typedef struct viscosity_vof Viscosity_vof;
-
-/******************************************************************************/
-/*                                 Density-VOF                              */
-/******************************************************************************/
-/* Strucutre holding the information for all the immersed node for each quantity */
-struct density_vof  {
-
-	double ***rho;
-	double ***rhoX;
-	double ***rhoY;
-	double ***rhoZ;
-
-};
-typedef struct density_vof Density_vof;
-
 
 /******************************************************************************/
 /*                                   SCALAR                                   */
@@ -841,10 +821,10 @@ typedef struct immersed Immersed;
 /* Structure holding the grid information */
 struct mac_grid {
 
-	double *xc, *yc, *zc;
-	double *xu, *yv, *zw;
-	int NX, NY, NZ, NT;
-	int NI, NJ, NK;
+	double *xc, *yc, *zc;	// Arrays storing the cell center coordinates in the x, y, and z directions.
+	double *xu, *yv, *zw;	// Arrays storing the staggered grid coordinates where velocity components (u, v, w) are stored.
+	int NX, NY, NZ, NT;     // Number of computational grid cells in the x, y, and z directions.
+	int NI, NJ, NK;			// Number of grid points including ghost cells.
 	double **interface_position;
 	int   **interface_y_index;
 	double *finer_1d_interface_x, *finer_1d_interface_y;
@@ -873,13 +853,13 @@ struct mac_grid {
 	// Number of ghost and noghost nodes, for cycling through with a single loop
 	int total_nodes, ng_total_nodes;
 
-	double *dx_u, *dy_v, *dz_w;
+	double *dx_u, *dy_v, *dz_w; // Grid spacing at velocity cell locations (staggered grid).
 	double dy_min;			// global minimum
-	double *dx_c, *dy_c, *dz_c;
+	double *dx_c, *dy_c, *dz_c; // Grid spacing at cell center locations.
 
-	double *idx_u, *idy_v, *idz_w;
-	double *idx_c, *idy_c, *idz_c;
-	double *i2dx_c, *i2dy_c, *i2dz_c;
+	double *idx_u, *idy_v, *idz_w; // Inverse of the grid spacing at velocity cell locations.
+	double *idx_c, *idy_c, *idz_c; // Inverse of the grid spacing at cell center locations.
+	double *i2dx_c, *i2dy_c, *i2dz_c; // Stores second-order inverse grid spacings for certain derivative calculations.
 #ifndef GRID_UNIFORM
 	double *wc2vN, *wc2vS, *wc2uW, *wc2uE, *wc2wB, *wc2wF;
 #endif
@@ -1515,8 +1495,6 @@ struct cart3d_bag {
 	Fourier *fourier;
 	#ifdef VOF_PLIC
     VolumeFraction *vof; // New pointer for the volume-fraction data
-	Viscosity_vof  *vof_viscosity;
-	Density_vof    *vof_density;
     #endif
 
 };

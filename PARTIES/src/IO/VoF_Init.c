@@ -11,6 +11,7 @@
 #include "Display.h"
 #include "Array.h"
 #include "Cart3d.h"
+#include "VolumeFraction.h"  
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -19,15 +20,15 @@
 
 
 
-#ifdef VOF_PLIC
-#include "VolumeFraction.h"  // So we can see the VoF_create, etc.
-#endif
+
+
+
 
 
 /******************************************************************************/
 /*
  This function initializes the volume fraction field for a bubble, based on 
- Basilisk test case. The Basilisk test case is a 2D bubble but built in 3D.
+ Rider & Kothe (1998) test case. 
  */
 /******************************************************************************/
 void VoF_init_bubble(Cart3d_bag *data_bag)
@@ -37,28 +38,23 @@ void VoF_init_bubble(Cart3d_bag *data_bag)
     
     MAC_grid    *grid   = data_bag->grid;
     Parameters  *params = data_bag->params;
-    VolumeFraction *vof = data_bag->vof; // store convenience pointer
-
-    // If the user didn't enable PLIC or set init_type != 1, do nothing
-    if (!params->plic_enabled || params->init_type != 1)
-        return;
+    VolumeFraction *vof = data_bag->vof; // 
 
     double ***F = vof->F;  // cell-centered volume fraction array
 
-    // Retrieve bubble center and radius from params
-    x_c = 1.0;
-    y_c = 0.0;
-    z_c = 0.0;
-    R   = 0.25;
 
-    // We assume 2D if (zmax - zmin) = 0 or NZ=1, but code can be 3D if needed
-    // We get the cell-centered coordinates from grid->xc, grid->yc, grid->zc
+    x_c = 0.4;
+    y_c = 0.55;
+    z_c = 0.4;
+    R   = 0.15;
+
+
     double *xc = grid->xc;
     double *yc = grid->yc;
-    double *zc = grid->zc; // in 2D, you might not even loop over z if NZ=1
+    double *zc = grid->zc; 
 
     // Indices of your local domain portion
-    int Is = grid->G_Is; // or L_Is, depending on your code’s usage
+    int Is = grid->G_Is; 
     int Ie = grid->G_Ie;
     int Js = grid->G_Js;
     int Je = grid->G_Je;
@@ -88,10 +84,5 @@ void VoF_init_bubble(Cart3d_bag *data_bag)
         }
     }
 
-    // Optionally handle boundary or ghost cells, or do synchronization if you do
-    // multi-process. For example, you may want to call:
-    // VoF_set_boundary_values(vof, grid, params);
-
-    // That’s it for the bubble initialization
     printf("VOF bubble initialized (rank=%d)\n", params->rank);
 }

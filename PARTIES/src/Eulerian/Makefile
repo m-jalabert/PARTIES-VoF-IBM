@@ -13,7 +13,7 @@ OBJ_DIR   := ../$(OBJ_ROOT_DIR)/$(LOCAL_DIR)
 
 $(OBJ_DIR)/Velocity.o : lsolver/msolve_direct.c lsolver/msolve_cg.c lsolver/msolve_bicg.c lsolver/direct_solver.c
 
-$(OBJ_DIR)/Pressure.o : lsolver/psolve_fft.c
+$(OBJ_DIR)/Pressure.o : lsolver/psolve_fft.c lsolver/psolve_cg.c
 
 $(OBJ_DIR)/Conc.o : lsolver/csolve_direct.c
 

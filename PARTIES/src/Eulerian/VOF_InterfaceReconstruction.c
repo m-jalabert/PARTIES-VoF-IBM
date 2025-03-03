@@ -1,8 +1,8 @@
 /******************************************************************************
  * VOF_InterfaceReconstruction.c
- *
+ * Interface Reconstruction functions for the Volume-Of-Fluid (VOF) method using PLIC 
  * Conversion of Basilisk geometry.h/myc2D.h/myc.h/fractions.h functions into 
- * PARTIES style for Volume-Of-Fluid (VOF) computations.
+ * PARTIES style for VOF computations.
  ******************************************************************************/
 
 #include "VolumeFraction.h"  
@@ -29,6 +29,77 @@
 
 
 #ifdef VOF_PLIC
+
+
+/******************************************************************************/ 
+/* 
+   This function creates (allocates) a VolumeFraction structure and all its 
+   associated arrays. 
+*/ 
+/******************************************************************************/ 
+VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params) {
+    VolumeFraction *vof;
+    
+    /* Allocate memory for the VolumeFraction structure */
+    vof = (VolumeFraction *) malloc(sizeof(VolumeFraction));
+    Memory_check_allocation(vof);  // Check that allocation succeeded
+
+    /* Allocate cell-centered (flow) variables with ghost cells */
+    vof->F            = Memory_allocate_flow_variable(grid, params);
+    vof->F_smooth     = Memory_allocate_flow_variable(grid, params);
+    vof->mu           = Memory_allocate_flow_variable(grid, params);
+    vof->rho          = Memory_allocate_flow_variable(grid, params);
+    vof->kappa        = Memory_allocate_flow_variable(grid, params);
+    vof->normal_x     = Memory_allocate_flow_variable(grid, params);
+    vof->normal_y     = Memory_allocate_flow_variable(grid, params);
+    vof->normal_z     = Memory_allocate_flow_variable(grid, params);
+    vof->alpha        = Memory_allocate_flow_variable(grid, params);
+
+    /* Allocate convective term arrays.
+       Here we allocate the “current” convective term with ghost cells and a
+       copy for the previous RK stage (conv_old). */
+    vof->conv       = Memory_allocate_flow_variable(grid, params);
+    vof->conv_old   = Memory_allocate_flow_variable(grid, params);
+
+    /* Allocate no-ghost (ng) arrays for the right-hand side and field copies.
+       These arrays hold data that do not include ghost cells. */
+    vof->ng_rhs = Memory_allocate_noghost_variable(grid, params);
+    vof->F_old  = Memory_allocate_noghost_variable(grid, params);
+    vof->ng_F   = Memory_allocate_noghost_variable(grid, params);
+
+    return vof;
+}
+
+/******************************************************************************/ 
+/* 
+   This function deallocates (frees) all memory associated with the 
+   VolumeFraction structure.
+*/ 
+/******************************************************************************/ 
+void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params) {
+    /* Free all cell-centered (flow) variables allocated with ghost cells */
+    Memory_free_flow_variable(grid, params, vof->F);
+    Memory_free_flow_variable(grid, params, vof->F_smooth);
+    Memory_free_flow_variable(grid, params, vof->mu);
+    Memory_free_flow_variable(grid, params, vof->rho);
+    Memory_free_flow_variable(grid, params, vof->kappa);
+    Memory_free_flow_variable(grid, params, vof->normal_x);
+    Memory_free_flow_variable(grid, params, vof->normal_y);
+    Memory_free_flow_variable(grid, params, vof->normal_z);
+    Memory_free_flow_variable(grid, params, vof->alpha);
+
+    /* Free the convective term arrays (with ghost cells) */
+    Memory_free_flow_variable(grid, params, vof->conv);
+    Memory_free_flow_variable(grid, params, vof->conv_old);
+
+    /* Free the no-ghost arrays */
+    Memory_free_noghost_variable(grid, params, vof->ng_rhs);
+    Memory_free_noghost_variable(grid, params, vof->F_old);
+    Memory_free_noghost_variable(grid, params, vof->ng_F);
+
+    /* Finally, free the structure itself */
+    free(vof);
+}
 
 
 /******************************************************************************
@@ -122,15 +193,15 @@ void VOF_reconstruct_interface(Cart3d_bag *data_bag)
 /******************************************************************************
  * Utility inline or macro definitions
  ******************************************************************************/
-static inline double clampDouble(double val, double lower, double upper) {
+double clampDouble(double val, double lower, double upper) {
     if (val < lower) return lower;
     if (val > upper) return upper;
     return val;
 }
-static inline double minDouble(double a, double b) {
+double minDouble(double a, double b) {
     return (a < b) ? a : b;
 }
-static inline double maxDouble(double a, double b) {
+double maxDouble(double a, double b) {
     return (a > b) ? a : b;
 }
 #define SWAP_DOUBLE(a,b) do { double tmp_ = (a); (a) = (b); (b) = tmp_; } while(0)
@@ -1792,8 +1863,170 @@ PointType VoF_facet_normal_3D(
 }
 
 
+/******************************************************************************
+ * VOF_OutputFacets_3D
+ *
+ * This function generates interface facets for visualization in **3D only**.
+ * It is a direct conversion of Basilisk's `output_facets()` function but 
+ * tailored for PARTIES, which strictly works in three dimensions.
+ *
+ * Each **partially filled cell** (0 < F < 1) is processed:
+ *  1) Compute the **interface normal**:
+ *      - If face fractions `sx, sy, sz` exist => use `VoF_facet_normal_3D(...)`
+ *      - Otherwise, fallback to `mycs3D(...)`
+ *  2) Compute **alpha** using `plane_alpha_3D(...)`
+ *  3) Call `facets_3D(...)` to retrieve facet coordinates.
+ *  4) Print facets to the file `fp`, making them usable for visualization.
+ *
+ * Only **3D cells** are considered, making this a streamlined function.
+ ******************************************************************************/
+void VoF_output_facets_3D(
+    Cart3d_bag *data_bag,    // Contains grid, params, and volume fraction data
+    FILE       *fp,          // Output file pointer
+    double     ***sx,        // Optional surface fraction x
+    double     ***sy,        // Optional surface fraction y
+    double     ***sz         // Optional surface fraction z
+)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    VolumeFraction *vof    = data_bag->vof;
+
+    double ***F = vof->F;  // Volume fraction array
+
+    // Domain bounds
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    // Cell center coordinates
+    double *xc = grid->xc;
+    double *yc = grid->yc;
+    double *zc = grid->zc;
+
+    // Loop over local domain
+    for (int k = Ks; k < Ke; k++) {
+      for (int j = Js; j < Je; j++) {
+        for (int i = Is; i < Ie; i++) {
+          double cval = F[k][j][i];
+
+          // Only process partially filled cells (0 < F < 1)
+          if (cval > 1e-6 && cval < 1.0 - 1e-6) {
+
+            // 1) Compute the interface normal
+            PointType normal;
+            if (sx && sy && sz) {
+                normal = VoF_facet_normal_3D(F, sx, sy, sz, i, j, k, data_bag);
+            } else {
+                normal = mycs3D(F, i, j, k);
+            }
+
+            // 2) Compute alpha
+            double alpha_val = 0.0;
+            plane_alpha_3D(cval, normal, &alpha_val);
+
+            // 3) Retrieve facet vertices in 3D
+            PointType v[12];
+            int m = facets_3D(normal, alpha_val, v, 1.0);  // 1.0 => unit cell
+
+            // 4) Scale and output facet coordinates
+            double Dx = (i + 1 < grid->NX) ? xc[i + 1] - xc[i] : 1.0;
+            double Dy = (j + 1 < grid->NY) ? yc[j + 1] - yc[j] : 1.0;
+            double Dz = (k + 1 < grid->NZ) ? zc[k + 1] - zc[k] : 1.0;
+
+            for (int ii = 0; ii < m; ii++) {
+                double X = xc[i] + v[ii].x * Dx;
+                double Y = yc[j] + v[ii].y * Dy;
+                double Z = zc[k] + v[ii].z * Dz;
+                fprintf(fp, "%g %g %g\n", X, Y, Z);
+            }
+            if (m > 0)
+                fputc('\n', fp);  // Separate facets for gnuplot
+          } 
+        }
+      }
+    }
+
+    fflush(fp);
+}
 
 
+/******************************************************************************
+ * VOF_InterfaceArea_3D
+ *
+ * Computes the surface area of the interface in 3D. This is analogous to
+ * Basilisk's "interface_area()" function but specialized to a 3D uniform-grid
+ * PARTIES code. 
+ *
+ * Steps:
+ *   1) Loops over local domain cells. 
+ *   2) If cell is partially filled (0<F<1), compute a local normal from 
+ *      mycs3D(...) or fallback, then compute alpha with plane_alpha_3D(...).
+ *   3) Use plane_area_center(...) to get the local dimensionless "area" measure. 
+ *   4) Multiply by the local cell face area (dx*dy if the interface is mostly
+ *      oriented in z, etc. Basilisk uses pow(Delta, dimension-1)= Delta^2).
+ *   5) Accumulate into a global "area" variable.
+ *
+ * This does NOT do boundary checks for ghost layers; we assume your code 
+ * has them or is guaranteed in-bounds for i±1, j±1, k±1.
+ ******************************************************************************/
+double VOF_InterfaceArea_3D(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    VolumeFraction *vof    = data_bag->vof;
+
+    double ***F = vof->F;  // volume fraction array
+
+    // domain bounds
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    // cell-centered coordinates
+    double *xc = grid->xc; 
+    double *yc = grid->yc;
+    double *zc = grid->zc; 
+
+    double area = 0.0;
+
+    // Loop over each cell in local domain
+    for (int k = Ks; k < Ke; k++) {
+      for (int j = Js; j < Je; j++) {
+        for (int i = Is; i < Ie; i++) {
+          double cval = F[k][j][i];
+
+          // Only partial cells
+          if (cval > 1e-6 && cval < 1.0 - 1e-6) {
+
+            // 1) Compute normal => mycs3D(...) or fallback
+            PointType n = mycs3D(F, i, j, k);
+
+            // 2) Compute alpha => plane_alpha_3D
+            double alpha_val = 0.0;
+            plane_alpha_3D(cval, n, &alpha_val);
+
+            // 3) "Dimensionless" measure => plane_area_center(n, alpha_val, &p)
+            PointType p = {0., 0., 0.};
+            double measure = plane_area_center(n, alpha_val, &p);
+
+            // 4) Multiply by local cell cross-sectional area => Basilisk uses Delta^2
+            // If your grid is uniform => dx[i], dy[j], pick some approach. 
+            // For demonstration we approximate interface area in each cell as measure*(dx*dy).
+            double dx = (i+1 < grid->NX)? (xc[i+1] - xc[i]) : 1.0;
+            double dy = (j+1 < grid->NY)? (yc[j+1] - yc[j]) : 1.0;
+            // We assume the main orientation is (dx*dy) => partial approach 
+            // (This is a simplification if the interface is not axis-aligned, but matches Basilisk's Delta^2 logic)
+
+            double local_area = measure * (dx * dy);
+
+            // 5) Accumulate
+            area += local_area;
+          }
+        }
+      }
+    }
+
+    return area;
+}
 
 
 

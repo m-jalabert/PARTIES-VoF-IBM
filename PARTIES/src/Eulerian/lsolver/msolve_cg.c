@@ -63,76 +63,156 @@ double innerProd(double ***vec1, double ***vec2, char component, MAC_grid *grid,
 
 
 
+#ifdef VOF_PLIC
+// Define a macro for harmonic averaging of viscosity
+#define HARMONIC(mu1, mu2) (2.0 * (mu1) * (mu2) / ((mu1) + (mu2) + 1e-12))
+#endif
+
 /******************************************************************************/
-/*
- Completes matrix-vector multiplication between 'A' matrix and input vector 'x'
- */
-/******************************************************************************/
-void matVec(double ***Ax, double ***x, char component, MAC_grid *grid, Parameters *params) {
-
-	int i, j, k;
-
-	int NX = grid -> NX;
-	int NY = grid -> NY;
-	int NZ = grid -> NZ;
-
-	// Processor start and end indices
-	int Is = grid -> G_Is;
-	int Js = grid -> G_Js;
-	int Ks = grid -> G_Ks;
-
-	int Ie = min(grid->G_Ie, grid->NX-1);
-	int Je = min(grid->G_Je, grid->NY-1);
-	int Ke = min(grid->G_Ke, grid->NZ-1);
-
-	// We are not solving for the nodes on the boundaries unless periodic
-	if (component == 'u') {
-		Is = max(Is, 1);
+// Completes matrix-vector multiplication A*x, where A is defined as
+//
+//    A(x) = (rho^{k-1}/(alpha_k*dt))*x
+//           - 1/Re * Div( 2*mu^{k-1}*D*(x) )
+//
+// For the velocity component being solved (e.g. u), we include only the 
+// diagonal (pure second derivative) terms in the implicit operator.
+// For example, in the u-direction, the implicit viscous term is approximated by
+//
+//   (∇·τ)_x ≈ d/dx ( mu * du/dx ) + d/dy ( mu * du/dy ) + d/dz ( mu * du/dz )
+//
+// The viscosity is cell-centered; face values are computed via a harmonic average.
+// Standard second order central differences are used.
+// dt is the time step, alpha_k = BETA[which_stage].
+// The density is also cell–centered and taken from the previous time step.
+// 
+/******************************************************************************/ 
+void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag) {
+    int i, j, k;
+    
+    MAC_grid *grid   = data_bag->grid;
+    Parameters *params = data_bag->params;
+    int NX = grid->NX;
+    int NY = grid->NY;
+    int NZ = grid->NZ;
+    
+    // Processor start and end indices for interior nodes.
+    int Is = grid->G_Is;
+    int Js = grid->G_Js;
+    int Ks = grid->G_Ks;
+    int Ie = min(grid->G_Ie, NX-1);
+    int Je = min(grid->G_Je, NY-1);
+    int Ke = min(grid->G_Ke, NZ-1);
+    
+    // Exclude boundaries (unless periodic)
+    if (component == 'u') {
+        Is = max(Is, 1);
 #ifdef XPERIODIC
-		Ie = grid->G_Ie;
+        Ie = grid->G_Ie;
 #endif
-	}
-	if (component == 'v') {
-		Js = max(Js, 1);
+    }
+    if (component == 'v') {
+        Js = max(Js, 1);
 #ifdef YPERIODIC
-		Je = grid->G_Je;
+        Je = grid->G_Je;
 #endif
-	}
-	if (component == 'w') {
-		Ks = max(Ks, 1);
+    }
+    if (component == 'w') {
+        Ks = max(Ks, 1);
 #ifdef ZPERIODIC
-		Ke = grid->G_Ke;
+        Ke = grid->G_Ke;
 #endif
-	}
+    }
+    
+    // Grid spacing. Assume grid->idx_c[1] equals 1/dx, so:
+    double dx = 1.0 / grid->idx_c[1];
+    double dy = 1.0 / grid->idy_c[1];
+    double dz = 1.0 / grid->idz_c[1];
+    
+    // Retrieve parameters:
+    double Re = params->Re;
+    const double BET[] = { BETA }; 
+    int stage = params->which_stage;
+    double alpha_k = BET[stage];
+    double dt = params->dt;
 
-	// Grid spacing (assuming uniform)
-	double iddx = grid -> idx_c[1];
-	double iddy = grid -> idy_c[1];
-	double iddz = grid -> idz_c[1];
-	iddx = iddx * iddx;
-	iddy = iddy * iddy;
-	iddz = iddz * iddz;
+    
+#ifdef VOF_PLIC
+    // Access density and viscosity fields (assumed stored in data_bag)
+	double ***rho = data_bag->vof->rho; // density at time k-1, cell-centered
+    double ***mu  = data_bag->vof->mu;  // viscosity at time k-1, cell-centered
 
-	double iRe = 1.0 / params -> Re;
-	const double BET[] = {BETA};
-	double idtimeb = 1.0 / (BET[params -> which_stage] * params -> dt);
+    
+    // Loop over the interior cells
+    for (k = Ks; k < Ke; k++) {
+        for (j = Js; j < Je; j++) {
+            for (i = Is; i < Ie; i++) {
 
-	double ac = idtimeb + 2.0 * iRe * (iddx + iddy + iddz);
-	double ax = -iRe * iddx;
-	double ay = -iRe * iddy;
-	double az = -iRe * iddz;
-
-	for (k = Ks; k < Ke; k++) {
-		for (j = Js; j < Je; j++) {
-			for (i = Is; i < Ie; i++) {
-				Ax[k][j][i] = ac * x[k][j][i]
-				            + ax * ( x[k][j][i-1] + x[k][j][i+1] )
-				            + ay * ( x[k][j-1][i] + x[k][j+1][i] )
-				            + az * ( x[k-1][j][i] + x[k+1][j][i] );
-			}
-		}
-	}
+				// Time-term coefficient
+				double factor_time = rho[k][j][i] / (alpha_k * dt);
+                // Start with the time-derivative term
+                double Ax_val = factor_time * x[k][j][i];
+                
+                // Compute the viscous term:
+                // We use second order central differences.
+                // For the x–direction:
+                double mu_ip = HARMONIC(mu[k][j][i],   mu[k][j][i+1]);
+                double mu_im = HARMONIC(mu[k][j][i-1], mu[k][j][i]);
+                double flux_xp = mu_ip * (x[k][j][i+1] - x[k][j][i]);
+                double flux_xm = mu_im * (x[k][j][i]   - x[k][j][i-1]);
+                double dFlux_dx = (flux_xp - flux_xm) / (dx * dx);
+                
+                // For the y–direction:
+                double mu_jp = HARMONIC(mu[k][j][i],   mu[k][j+1][i]);
+                double mu_jm = HARMONIC(mu[k][j-1][i], mu[k][j][i]);
+                double flux_yp = mu_jp * (x[k][j+1][i] - x[k][j][i]);
+                double flux_ym = mu_jm * (x[k][j][i]   - x[k][j-1][i]);
+                double dFlux_dy = (flux_yp - flux_ym) / (dy * dy);
+                
+                // For the z–direction:
+                double mu_kp = HARMONIC(mu[k][j][i],   mu[k+1][j][i]);
+                double mu_km = HARMONIC(mu[k-1][j][i], mu[k][j][i]);
+                double flux_zp = mu_kp * (x[k+1][j][i] - x[k][j][i]);
+                double flux_zm = mu_km * (x[k][j][i]   - x[k-1][j][i]);
+                double dFlux_dz = (flux_zp - flux_zm) / (dz * dz);
+                
+                // Combine the three directional contributions.
+                // Note that the full viscous term is divided by (rho * Re)
+                double visc_term = (dFlux_dx + dFlux_dy + dFlux_dz) / Re;
+                
+                // Subtract the viscous term from the time-derivative term:
+                Ax[k][j][i] = Ax_val - visc_term;
+            }
+        }
+    }
+    
+#else  // If VOF_PLIC is not defined, revert to the old constant-coefficient version.
+    // Grid spacing for the constant-coefficient laplacian (squared)
+    double iddx = grid->idx_c[1] * grid->idx_c[1];
+    double iddy = grid->idy_c[1] * grid->idy_c[1];
+    double iddz = grid->idz_c[1] * grid->idz_c[1];
+    
+    double iRe_const = 1.0 / params->Re;
+    double idtimeb = 1.0 / (BET[params->which_stage] * dt);
+    
+    double ac = idtimeb + 2.0 * iRe_const * (iddx + iddy + iddz);
+    double ax = -iRe_const * iddx;
+    double ay = -iRe_const * iddy;
+    double az = -iRe_const * iddz;
+    
+    for (k = Ks; k < Ke; k++) {
+        for (j = Js; j < Je; j++) {
+            for (i = Is; i < Ie; i++) {
+                Ax[k][j][i] = ac * x[k][j][i]
+                            + ax * ( x[k][j][i-1] + x[k][j][i+1] )
+                            + ay * ( x[k][j-1][i] + x[k][j+1][i] )
+                            + az * ( x[k-1][j][i] + x[k+1][j][i] );
+            }
+        }
+    }
+    
+#endif // VOF_PLIC
 }
+
 
 
 
@@ -242,7 +322,7 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag) {
 
 
 
-	matVec(Ad, data, component, grid, params);
+	matVec(Ad, data, component, data_bag);
 
 	for (k = Ks; k < Ke; k++) {
 		for (j = Js; j < Je; j++) {
@@ -303,7 +383,7 @@ double rmax =0.0;
 		}
 */
 		// Ad = A * d
-		matVec(Ad, d, component, grid, params);
+		matVec(Ad, d, component, data_bag);
 
 		/* if(component == 'v'){
 			if(component == 'v'){

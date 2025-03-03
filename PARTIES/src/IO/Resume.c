@@ -134,6 +134,39 @@ void Resume_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	}
 #endif
 
+#ifdef VOF_PLIC
+    //--------------------------------------------------------------------------
+    // VOF data (critical for interface reconstruction)
+    //--------------------------------------------------------------------------
+    VolumeFraction *vof = data_bag->vof;
+
+    // Read volume fraction F
+    sprintf(fieldname, "%s/F", groupname);
+    Resume_h5_flow_variable(vof->F, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+    Communication_update_ghost_nodes_flow_variable(vof->F, VOLUME_FRACTION, pnodes, data_bag);
+
+    // Read plane intercept alpha
+    sprintf(fieldname, "%s/alpha", groupname);
+    Resume_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+    Communication_update_ghost_nodes_flow_variable(vof->alpha, VOLUME_FRACTION, pnodes, data_bag);
+
+    // // Read interface normals
+    // sprintf(fieldname, "%s/normal_x", groupname);
+    // Resume_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+    // Communication_update_ghost_nodes_flow_variable(vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
+
+    // sprintf(fieldname, "%s/normal_y", groupname);
+    // Resume_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+    // Communication_update_ghost_nodes_flow_variable(vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
+
+    // sprintf(fieldname, "%s/normal_z", groupname);
+    // Resume_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+    // Communication_update_ghost_nodes_flow_variable(vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
+
+    // Recompute derived fields (rho/mu) from F after loading
+    VOF_update_density_viscosity(data_bag);
+#endif
+
 	//--------------------------------------------------------------------------
 	// 3D data
 	//--------------------------------------------------------------------------
@@ -275,6 +308,58 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Rans_eddy_viscosity(rans, u, params, grid);
 	Communication_update_ghost_nodes_flow_variable(rans->nut, 'c', pnodes, data_bag);
 #endif
+
+#ifdef VOF_PLIC
+    //--------------------------------------------------------------------------
+    // VOF-PLIC data
+    //--------------------------------------------------------------------------
+    if (data_bag->vof != NULL) {
+        sprintf(groupname, "/VOF");
+
+        // Volume fraction (F)
+        sprintf(fieldname, "%s/F", groupname);
+        Resume_h5_flow_variable(data_bag->vof->F, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->F, VOLUME_FRACTION, pnodes, data_bag);
+
+        // // Smoothed volume fraction (F_smooth)
+        // sprintf(fieldname, "%s/F_smooth", groupname);
+        // Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
+
+        // Viscosity (mu)
+        sprintf(fieldname, "%s/mu", groupname);
+        Resume_h5_flow_variable(data_bag->vof->mu, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->mu, VOLUME_FRACTION, pnodes, data_bag);
+
+        // Density (rho)
+        sprintf(fieldname, "%s/rho", groupname);
+        Resume_h5_flow_variable(data_bag->vof->rho, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->rho, VOLUME_FRACTION, pnodes, data_bag);
+
+        // // Curvature (kappa)
+        // sprintf(fieldname, "%s/kappa", groupname);
+        // Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->kappa, VOLUME_FRACTION, pnodes, data_bag);
+
+        // // Interface normals (normal_x, normal_y, normal_z)
+        // sprintf(fieldname, "%s/normal_x", groupname);
+        // Resume_h5_flow_variable(data_bag->vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
+
+        // sprintf(fieldname, "%s/normal_y", groupname);
+        // Resume_h5_flow_variable(data_bag->vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
+
+        // sprintf(fieldname, "%s/normal_z", groupname);
+        // Resume_h5_flow_variable(data_bag->vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
+
+        // Plane intercept (alpha)
+        sprintf(fieldname, "%s/alpha", groupname);
+        Resume_h5_flow_variable(data_bag->vof->alpha, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->alpha, VOLUME_FRACTION, pnodes, data_bag);
+    }
+#endif // VOF_PLIC
 
 	H5Fclose(file_id);
 

@@ -34,6 +34,11 @@ Pressure *Pressure_create(MAC_grid *grid, Parameters *params) {
 	new_p->p_data_avg = Memory_allocate_flow_variable(grid, params);
 #endif
 
+    // ALLOCATIONS for CG solver 
+    new_p->res     = Memory_allocate_flow_variable(grid, params);  // residual array
+    new_p->d       = Memory_allocate_flow_variable(grid, params);  // search direction
+    new_p->Ad      = Memory_allocate_flow_variable(grid, params);  // operator applied to d
+
 	new_p->project_comm_cpu_time = 0.0;
 	new_p->project_update_cpu_time = 0.0;
 	new_p->project_u_cpu_time = 0.0;
@@ -63,6 +68,11 @@ void Pressure_destroy(Pressure *p, MAC_grid *grid, Parameters *params) {
 #ifdef POST_PROCESS
 	Memory_free_flow_variable(grid, params, p->p_data_avg);
 #endif
+
+    // FREES for CG arrays 
+    Memory_free_flow_variable(grid, params, p->res);
+    Memory_free_flow_variable(grid, params, p->d);
+    Memory_free_flow_variable(grid, params, p->Ad);
 
 	free(p->idxdt);
 	free(p->idydt);
@@ -227,7 +237,18 @@ void Pressure_set_RHS(Cart3d_bag *data_bag) {
 /*
  This function updates the velocity field using projection method to get a
  divergence free velocity field
- */
+
+ - Single-phase (no #define VOF_PLIC): uses rho_f = 1.
+ - VOF multi-phase (#define VOF_PLIC in Boundary.h): uses per-cell rho from data_bag->vof->rho.
+
+ The velocity correction is:
+   u^k = u^* - 2 alpha_k dt (1/rho) ∇φ     (VOF case)
+   u^k = u^* - 2 alpha_k dt         ∇φ   (single-phase case)
+
+ The pressure update is:
+   p^k = p^{k-1} + rho * φ            (VOF)
+   p^k = p^{k-1} +       φ         (single-phase)
+*/
 /******************************************************************************/
 void Pressure_project_velocity(Cart3d_bag *data_bag) {
 
@@ -244,6 +265,12 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 	double ***v_data = data_bag -> v -> data;
 	double ***w_data = data_bag -> w -> data;
 	double ***p_data = p -> p_data;
+
+#ifdef VOF_PLIC
+    // For VOF (variable density), fetch the local density field
+    VolumeFraction *vof = data_bag->vof;
+    double ***rho       = vof->rho;
+#endif
 
 	// Start index of bottom-left-back corner on current processor
 	int Is = grid->G_Is;
@@ -352,13 +379,23 @@ if (j_end == NY-1) {
 	}
 
 	//--------------------------------------------------------------------------
-	// Update Pressure
+	// Update Pressure 
+	// p^k = p^{k-1} + rho^{k-1} * phi   (VOF)
+	// p^k = p^{k-1} + 1 * phi           (single-phase)
 	//--------------------------------------------------------------------------
 	T1 = MPI_Wtime();
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
-				p_data[k][j][i] = p_data[k][j][i] + deltap[k][j][i] ;
+
+#ifdef VOF_PLIC
+                // Multi-phase
+                p_data[k][j][i] += rho[k][j][i] * deltap[k][j][i];
+#else
+                // Single-phase
+                p_data[k][j][i] += deltap[k][j][i];
+#endif
+
 #ifdef POST_PROCESS
 				p_data_avg[k][j][i] += 2.0 * BET[params->which_stage] * p_data[k][j][i];
 #endif
@@ -376,6 +413,10 @@ if (j_end == NY-1) {
 
 	//--------------------------------------------------------------------------
 	// Update u_star to u_new (divergence free velocity field)
+	//    u^k = u^* - ( deltap[i] - deltap[i-1] ) * idxdt[i-1] / rho^k-1  (VOF)
+    //    u^k = u^* - ( deltap[i] - deltap[i-1] ) * idxdt[i-1]        (single-phase)
+    //
+    //    Repeat similarly for v, w in j, k directions.
 	//--------------------------------------------------------------------------
 	i_start = max(1, Is); // i=0 not included
 	j_start = Js;
@@ -393,7 +434,15 @@ if (j_end == NY-1) {
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
-				u_data[k][j][i] -= (deltap[k][j][i] - deltap[k][j][i-1]) * idxdt[i-1];
+
+#ifdef VOF_PLIC
+                double inv_rho = 1.0 / rho[k][j][i];
+                u_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j][i-1] )
+                                   * ( idxdt[i-1] * inv_rho );
+#else
+                u_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j][i-1] )
+                                   * idxdt[i-1];
+#endif
 			} // for i
 		} // for j
 	} // for k
@@ -426,7 +475,15 @@ if (j_end == NY-1)
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
-				v_data[k][j][i] -= (deltap[k][j][i] - deltap[k][j-1][i]) * idydt[j-1];
+				
+#ifdef VOF_PLIC
+                double inv_rho = 1.0 / rho[k][j][i];
+                v_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j-1][i] )
+                                   * ( idydt[j-1] * inv_rho );
+#else
+                v_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j-1][i] )
+                                   * idydt[j-1];
+#endif
 			} // for i
 		} // for j
 	} // for k
@@ -454,7 +511,15 @@ if (j_end == NY-1)
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
-				w_data[k][j][i] -= (deltap[k][j][i] - deltap[k-1][j][i]) * idzdt[k-1];
+
+#ifdef VOF_PLIC
+                double inv_rho = 1.0 / rho[k][j][i];
+                w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
+                                   * ( idzdt[k-1] * inv_rho );
+#else
+                w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
+                                   * idzdt[k-1];
+#endif
 			} // for i
 		} // for j
 	} // for k
@@ -878,3 +943,4 @@ void Pressure_project_velocity_vof(Cart3d_bag *data_bag) {
 #endif
 
 #include "lsolver/psolve_fft.c"
+#include "lsolver/psolve_cg.c"

@@ -11,7 +11,7 @@
 #undef  DIRTY_FIX  // if 1 fix is one; to disable put 0
 
 
-#define PERIODIC_NOSLIP_BOX
+#undef PERIODIC_NOSLIP_BOX
 #undef PERIODIC_FREESLIP_BOX
 #undef XPERIODIC_FREESLIP_BOX
 #undef PERIODIC_SHEAR_FLOW
@@ -25,6 +25,7 @@
 #undef TRIPLE_PERIODIC
 #undef TRIPLE_PERIODIC_SHEAR
 #undef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
+#define RISING_BUBBLE
 
 #ifdef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
         #define LEFT_INFLOW
@@ -33,6 +34,13 @@
         #define BOTTOM_WALL_VELOCITY_FREESLIP
         #define TOP_WALL_VELOCITY_FREESLIP
 		#define TOP_WALL_OUTFLOW
+
+#elif defined RISING_BUBBLE
+		#define ZPERIODIC						// The domain is 2D in (x,y), so we set z as periodic
+		#define LEFT_WALL_VELOCITY_NOSLIP		// We want no-slip at x=0, x=2
+		#define RIGHT_WALL_VELOCITY_NOSLIP		// We want no-slip at x=0, x=2
+		#define BOTTOM_WALL_VELOCITY_FREESLIP  // We want slip at y=0, y=0.5
+		#define TOP_WALL_VELOCITY_FREESLIP		// We want slip at y=0, y=0.5
 
 #elif defined GRAVITY_CURRENT_PERIODIC
         #define LEFT_WALL_VELOCITY_NOSLIP
@@ -163,7 +171,7 @@
 /*                                Simulation -FlowSolver                      */
 /******************************************************************************/
 
-#define  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
+#undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
 #undef FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE

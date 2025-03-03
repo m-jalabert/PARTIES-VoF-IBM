@@ -104,11 +104,17 @@ CFG(vof, mu2, 0.001, atof)       // Viscosity fluid 2
 CFG(vof, sigma, 0.0, atof)       // Surface tension coefficient
 
 // Interface initialization 
-CFG(vof, init_type, 0, atoi)     // 0=no interface init, 1=sphere/bubble, 2=user-defined
+CFG(vof, init_type, 1, atoi)     // 0=no interface init, 1=sphere/bubble, 2=user-defined
 
-// Possibly advanced flags
-CFG(vof, plic_enabled, 1, atoi)  // 1 = use PLIC reconstruction
-CFG(vof, csf_model, 1, atoi)     // 1 = continuum surface force, etc.
+// Contact angle parameters 
+CFG(vof, contact_angle, 0, atoi)         // Static contact angle (degrees)
+CFG(vof, wall_adhesion_model, 45, atoi)  // 0=none, 1=constant angle
+
+// Test cases 
+// Rider & Kothe Advection testcase (1998) 
+CFG(vof, advection_test_time, 1, atoi)     // Parameter for Time Reversal
+
+
 
 
 /******************************************************************************/

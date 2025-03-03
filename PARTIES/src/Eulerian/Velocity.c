@@ -402,6 +402,12 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 	double ***explicit = data_bag -> u -> ng_explicit;
 	double ***implicit = data_bag -> u -> ng_implicit;
 
+#ifdef VOF_PLIC
+    // Retrieve the VOF volume_fraction with cell-centered rho
+    VolumeFraction *vof = data_bag->vof;
+	double ***mu = vof->mu; // cell-centered viscosity
+#endif
+
 #ifdef VAR_VISC
 	double ***nu  = data_bag -> viscosity -> nu;
 	double ***nuY = data_bag -> viscosity -> nuY;
@@ -449,6 +455,17 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				nuB = nuY[k][j][i];
 #endif // VAR_VISC
 
+#ifdef VOF_PLIC
+
+				double muE = 2.0 * mu[k][j][i] * mu[k][j][i+1] / ( mu[k][j][i] + mu[k][j][i+1] );
+				double muW = 2.0 * mu[k][j][i] * mu[k][j][i-1] / ( mu[k][j][i] + mu[k][j][i-1] );
+				double muN = 2.0 * mu[k][j][i] * mu[k][j+1][i] / ( mu[k][j][i] + mu[k][j+1][i] );
+				double muS = 2.0 * mu[k][j][i] * mu[k][j-1][i] / ( mu[k][j][i] + mu[k][j-1][i] );
+				double muF = 2.0 * mu[k][j][i] * mu[k+1][j][i] / ( mu[k][j][i] + mu[k+1][j][i] );
+				double muB = 2.0 * mu[k][j][i] * mu[k-1][j][i] / ( mu[k][j][i] + mu[k-1][j][i] );
+
+#endif
+
 
 				/*------------------------------------------------------------*/
 				/*
@@ -483,12 +500,25 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				dudzF = ( u_data[k+1][j][i] - u_data[k][j][i] ) * idz_c[k];
 				dudzB = ( u_data[k][j][i] - u_data[k-1][j][i] ) * idz_c[k-1];
 
+#ifdef VOF_PLIC
+
+				//--------------------------------------------------------------
+				// d2u/dx2, d2u/dy2, and d2u/dz2
+				//--------------------------------------------------------------
+				d2udx2 = iRe * ( muE * dudxE - muW * dudxW ) * idx_c[i-1];
+				d2udy2 = iRe * ( muN * dudyN - muS * dudyS ) * idy_v[j];
+				d2udz2 = iRe * ( muF * dudzF - muB * dudzB ) * idz_w[k];
+
+#else
+
 				//--------------------------------------------------------------
 				// d2u/dx2, d2u/dy2, and d2u/dz2
 				//--------------------------------------------------------------
 				d2udx2 = ( nuE * dudxE - nuW * dudxW ) * idx_c[i-1];
 				d2udy2 = ( nuN * dudyN - nuS * dudyS ) * idy_v[j];
 				d2udz2 = ( nuF * dudzF - nuB * dudzB ) * idz_w[k];
+
+#endif
 
 				//--------------------------------------------------------------
 				// d/dx(du/dx), d/dy(dv/dx), and d/dz(dw/dx)
@@ -499,8 +529,16 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				dwdxB = ( w_data[k][j][i]   - w_data[k][j][i-1]   ) * idx_c[i-1];
 
 				ddxdudx = d2udx2;
+
+#ifdef VOF_PLIC
+
+				ddydvdx = iRe * ( muN * dvdxN - muS * dvdxS ) * idy_v[j];
+				ddzdwdx = iRe * ( muF * dwdxF - muB * dwdxB ) * idz_w[k];
+
+#else				
 				ddydvdx = ( nuN * dvdxN - nuS * dvdxS ) * idy_v[j];
 				ddzdwdx = ( nuF * dwdxF - nuB * dwdxB ) * idz_w[k];
+#endif
 
 
 				/*------------------------------------------------------------*/
@@ -554,7 +592,12 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				explicit[k][j][i] += d2udx2 + d2udy2 + d2udz2;
 				implicit[k][j][i] = 0.0;
 
+#elif defined VOF_PLIC
+
+				implicit[k][j][i] = 0.0; //implicit terms computed by matVec
+
 #elif defined FULLY_IMPLICIT
+
 				implicit[k][j][i] = d2udx2 + d2udy2 + d2udz2;
 #else
 
@@ -627,6 +670,12 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 	double ***explicit = data_bag -> v -> ng_explicit;
 	double ***implicit = data_bag -> v -> ng_implicit;
 
+#ifdef VOF_PLIC
+    // Retrieve the VOF volume_fraction with cell-centered rho
+    VolumeFraction *vof = data_bag->vof;
+	double ***mu = vof->mu; // cell-centered viscosity
+#endif
+
 #ifdef VAR_VISC
 	double ***nu  = data_bag -> viscosity -> nu;
 	double ***nuX = data_bag -> viscosity -> nuX;
@@ -668,7 +717,16 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				nuB = nuX[k][j][i];
 #endif // VAR_VISC
 
+#ifdef VOF_PLIC
 
+				double muE = 2.0 * mu[k][j][i] * mu[k][j][i+1] / ( mu[k][j][i] + mu[k][j][i+1] );
+				double muW = 2.0 * mu[k][j][i] * mu[k][j][i-1] / ( mu[k][j][i] + mu[k][j][i-1] );
+				double muN = 2.0 * mu[k][j][i] * mu[k][j+1][i] / ( mu[k][j][i] + mu[k][j+1][i] );
+				double muS = 2.0 * mu[k][j][i] * mu[k][j-1][i] / ( mu[k][j][i] + mu[k][j-1][i] );
+				double muF = 2.0 * mu[k][j][i] * mu[k+1][j][i] / ( mu[k][j][i] + mu[k+1][j][i] );
+				double muB = 2.0 * mu[k][j][i] * mu[k-1][j][i] / ( mu[k][j][i] + mu[k-1][j][i] );
+
+#endif
 				/*------------------------------------------------------------*/
 				/*
 				 Calculate viscous terms
@@ -696,9 +754,18 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				// d2v/dx2, d2v/dy2, and d2v/dz2
 				//--------------------------------------------------------------
+
+#ifdef VOF_PLIC
+
+				d2vdx2 = iRe * ( muE * dvdxE - muW * dvdxW ) * idx_u[i];
+				d2vdy2 = iRe * ( muN * dvdyN - muS * dvdyS ) * idy_c[j-1];
+				d2vdz2 = iRe * ( muF * dvdzF - muB * dvdzB ) * idz_w[k];
+
+#else
 				d2vdx2 = ( nuE * dvdxE - nuW * dvdxW ) * idx_u[i];
 				d2vdy2 = ( nuN * dvdyN - nuS * dvdyS ) * idy_c[j-1];
 				d2vdz2 = ( nuF * dvdzF - nuB * dvdzB ) * idz_w[k];
+#endif
 
 				if(k==0){
 					if(i==99){
@@ -727,9 +794,20 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				dwdyF = ( w_data[k+1][j][i] - w_data[k+1][j-1][i] ) * idy_c[j-1];
 				dwdyB = ( w_data[k][j][i]   - w_data[k][j-1][i]   ) * idy_c[j-1];
 
+#ifdef VOF_PLIC
+
+				ddxdudy = iRe * ( muE * dudyE - muW * dudyW ) * idx_u[i];
+				ddydvdy = d2vdy2;
+				ddzdwdy = iRe * ( muF * dwdyF - muB * dwdyB ) * idz_w[k];
+
+
+#else				
+
 				ddxdudy = ( nuE * dudyE - nuW * dudyW ) * idx_u[i];
 				ddydvdy = d2vdy2;
 				ddzdwdy = ( nuF * dwdyF - nuB * dwdyB ) * idz_w[k];
+
+#endif				
 
 
 				/*------------------------------------------------------------*/
@@ -782,6 +860,10 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 				explicit[k][j][i] += d2vdx2 + d2vdy2 + d2vdz2;
 				implicit[k][j][i] = 0.0;
+
+#elif defined VOF_PLIC
+
+				implicit[k][j][i] = 0.0; //implicit terms computed by matVec				
 
 #elif defined FULLY_IMPLICIT
 				implicit[k][j][i] = d2vdx2 + d2vdy2 + d2vdz2;
@@ -858,6 +940,12 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 	double ***explicit = data_bag -> w -> ng_explicit;
 	double ***implicit = data_bag -> w -> ng_implicit;
 
+#ifdef VOF_PLIC
+    // Retrieve the VOF volume_fraction with cell-centered rho
+    VolumeFraction *vof = data_bag->vof;
+	double ***mu = vof->mu; // cell-centered viscosity
+#endif
+
 #ifdef VAR_VISC
 	double ***nu  = data_bag -> viscosity -> nu;
 	double ***nuX = data_bag -> viscosity -> nuX;
@@ -905,6 +993,17 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 				nuB = nu[k-1][j][i];
 #endif // VAR_VISC
 
+#ifdef VOF_PLIC
+
+				double muE = 2.0 * mu[k][j][i] * mu[k][j][i+1] / ( mu[k][j][i] + mu[k][j][i+1] );
+				double muW = 2.0 * mu[k][j][i] * mu[k][j][i-1] / ( mu[k][j][i] + mu[k][j][i-1] );
+				double muN = 2.0 * mu[k][j][i] * mu[k][j+1][i] / ( mu[k][j][i] + mu[k][j+1][i] );
+				double muS = 2.0 * mu[k][j][i] * mu[k][j-1][i] / ( mu[k][j][i] + mu[k][j-1][i] );
+				double muF = 2.0 * mu[k][j][i] * mu[k+1][j][i] / ( mu[k][j][i] + mu[k+1][j][i] );
+				double muB = 2.0 * mu[k][j][i] * mu[k-1][j][i] / ( mu[k][j][i] + mu[k-1][j][i] );
+
+#endif
+
 
 				/*------------------------------------------------------------*/
 				/*
@@ -942,9 +1041,17 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				// d2w/dx2, d2w/dy2 and d2w/dz2
 				//--------------------------------------------------------------
+#ifdef VOF_PLIC
+
+				d2wdx2 = iRe * ( muE * dwdxE - muW * dwdxW ) * idx_u[i];
+				d2wdy2 = iRe * ( muN * dwdyN - muS * dwdyS ) * idy_v[j];
+				d2wdz2 = iRe * ( muF * dwdzF - muB * dwdzB ) * idz_c[k-1];
+
+#else
 				d2wdx2 = ( nuE * dwdxE - nuW * dwdxW ) * idx_u[i];
 				d2wdy2 = ( nuN * dwdyN - nuS * dwdyS ) * idy_v[j];
 				d2wdz2 = ( nuF * dwdzF - nuB * dwdzB ) * idz_c[k-1];
+#endif
 
 				//--------------------------------------------------------------
 				// d/dx(du/dz), d/dy(dv/dz) and d/dz(dw/dz)
@@ -954,8 +1061,16 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 				dvdzN = ( v_data[k][j+1][i] - v_data[k-1][j+1][i] ) * idz_c[k-1];
 				dvdzS = ( v_data[k][j][i]   - v_data[k-1][j][i]   ) * idz_c[k-1];
 
+#ifdef VOF_PLIC
+
+				ddxdudz = iRe * ( muE * dudzE - muW * dudzW ) * idx_u[i];
+				ddydvdz = iRe * ( muN * dvdzN - muS * dvdzS ) * idy_v[j];
+
+#else
+
 				ddxdudz = ( nuE * dudzE - nuW * dudzW ) * idx_u[i];
 				ddydvdz = ( nuN * dvdzN - nuS * dvdzS ) * idy_v[j];
+#endif
 				ddzdwdz = d2wdz2;
 
 
@@ -1009,6 +1124,10 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 				explicit[k][j][i] += d2wdx2 + d2wdy2 + d2wdz2;
 				implicit[k][j][i] = 0.0;
+
+#elif defined VOF_PLIC
+
+				implicit[k][j][i] = 0.0; //implicit terms computed by matVec
 
 #elif defined FULLY_IMPLICIT
 				implicit[k][j][i] = d2wdx2 + d2wdy2 + d2wdz2;
@@ -1144,6 +1263,11 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 	double ***fturb   = data_bag -> u -> fturb;
 #endif
 
+#ifdef VOF_PLIC
+    VolumeFraction *vof = data_bag->vof;
+    double ***rho_data   = vof->rho;  // cell-centered
+#endif
+
 
 /*
 	// 1-D arrays
@@ -1170,10 +1294,23 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 
 				dpdx = (p_data[k][j][i] - p_data[k][j][i-1]) * idx_c[i-1];
 
+
+#ifdef VOF_PLIC //implicit term already implemented in LHS computed by matVec for CG, implicit=0 here
+
+				rhs[k][j][i] = rho_data[k][j][i] * a_dt * data[k][j][i] - 2.0 * dpdx
+				             + rho_data[k][j][i] * GAMB[rk] * explicit[k][j][i]
+				             + rho_data[k][j][i] * ZETB[rk] * explicit_old[k][j][i]
+				             + implicit[k][j][i];
+
+#else
+
 				rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdx
 				             + GAMB[rk] * explicit[k][j][i]
 				             + ZETB[rk] * explicit_old[k][j][i]
 				             + implicit[k][j][i];
+
+#endif
+
 #ifdef LAG_PARTICLE_RESOLVED
 				rhs[k][j][i] += implicit[k][j][i];
 #endif
@@ -1319,6 +1456,11 @@ void Velocity_v_set_RHS(Cart3d_bag *data_bag) {
 	double ***fturb     = data_bag -> v -> fturb;
 #endif
 
+#ifdef VOF_PLIC
+    VolumeFraction *vof = data_bag->vof;
+    double ***rho_data   = vof->rho;  // cell-centered
+#endif
+
 	// Runge Kutta coefficients
 	int rk = params -> which_stage;
 	const double BET[] = {BETA};
@@ -1350,10 +1492,26 @@ void Velocity_v_set_RHS(Cart3d_bag *data_bag) {
 
 				dpdy = (p_data[k][j][i] - p_data[k][j-1][i]) * idy_c[j-1];
 
-				rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdy
-				             + GAMB[rk] * explicit[k][j][i]
-				             + ZETB[rk] * explicit_old[k][j][i]
-				             + implicit[k][j][i];
+		  // -------------------------------------------------------------
+          // Multiply the pressure gradient by -2 / rho if VOF_PLIC is on;
+          // else do the old -2.0 * dpdy if single-phase.
+          // -------------------------------------------------------------
+#ifdef VOF_PLIC
+
+			rhs[k][j][i] = rho_data[k][j][i] * a_dt * data[k][j][i] - 2.0 * dpdy
+			+ rho_data[k][j][i] * GAMB[rk] * explicit[k][j][i]
+			+ rho_data[k][j][i] * ZETB[rk] * explicit_old[k][j][i]
+			+ implicit[k][j][i];
+
+#else
+
+		  rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdy
+					   + GAMB[rk] * explicit[k][j][i]
+					   + ZETB[rk] * explicit_old[k][j][i]
+					   + implicit[k][j][i];
+
+#endif
+
 #ifdef LAG_PARTICLE_RESOLVED
 				rhs[k][j][i] += implicit[k][j][i];
 #endif
@@ -1517,6 +1675,13 @@ void Velocity_w_set_RHS(Cart3d_bag *data_bag) {
 #ifdef TURB_FORCING
 	double ***fturb     = data_bag -> w -> fturb;
 #endif
+
+#ifdef VOF_PLIC
+    VolumeFraction *vof = data_bag->vof;
+    double ***rho_data   = vof->rho;  // cell-centered
+#endif
+
+
 	// Runge Kutta coefficients
 	int rk = params -> which_stage;
 	const double BET[] = {BETA};
@@ -1531,10 +1696,27 @@ void Velocity_w_set_RHS(Cart3d_bag *data_bag) {
 
 				dpdz = (p_data[k][j][i] - p_data[k-1][j][i]) * idz_c[k-1];
 
+		  // -------------------------------------------------------------
+          // Multiply the pressure gradient by -2 / rho if VOF_PLIC is on;
+          // else do the old -2.0 * dpdz if single-phase.
+          // -------------------------------------------------------------
+#ifdef VOF_PLIC
+
+				rhs[k][j][i] = rho_data[k][j][i] * a_dt * data[k][j][i] - 2.0 * dpdz
+				+ rho_data[k][j][i] * GAMB[rk] * explicit[k][j][i]
+				+ rho_data[k][j][i] * ZETB[rk] * explicit_old[k][j][i]
+				+ implicit[k][j][i];
+
+#else
+
 				rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdz
 				             + GAMB[rk] * explicit[k][j][i]
 				             + ZETB[rk] * explicit_old[k][j][i]
 				             + implicit[k][j][i];
+
+#endif
+
+
 #ifdef LAG_PARTICLE_RESOLVED
 				rhs[k][j][i] += implicit[k][j][i];
 #endif

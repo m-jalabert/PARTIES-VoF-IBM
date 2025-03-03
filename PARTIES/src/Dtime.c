@@ -79,6 +79,11 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 //#elif defined RANS
 //	double ***nut = data_bag->rans->nut;
 //#endif
+
+#ifdef VOF_PLIC
+    VolumeFraction *vof = data_bag->vof;  // Access VOF data
+#endif
+
 #ifdef VAR_VISC
 	double ***nu = data_bag->viscosity->nu;
 #endif
@@ -93,9 +98,6 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 		} // if
 	} // for iconc
 #endif
-
-	// Default value for constant viscosity case
-	nu_cell = iRe;
 
 	// Default value for fully-implicit case
 	viscous = 0.0;
@@ -113,8 +115,14 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 
 				convective = u_cfl * idx_u[i] + v_cfl * idy_v[j] + w_cfl * idz_w[k];
 
+#ifdef VOF_PLIC
+                nu_cell = vof->mu[k][j][i] / vof->rho[k][j][i];
+#else
 #ifdef VAR_VISC
-				nu_cell = nu[k][j][i];
+                nu_cell = nu[k][j][i];
+#else
+                nu_cell = iRe;  // 1/Re if not using variable viscosity
+#endif
 #endif
 
 #ifdef FULLY_EXPLICIT

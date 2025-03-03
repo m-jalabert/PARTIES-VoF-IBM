@@ -42,6 +42,68 @@ void Inflow_velocity_profile(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	int statusv = 0;
 	int statusw = 0;
 	char message[100];
+
+    // Check if we are running the prescribed advection test.
+    if (params->vel_init_type == VEL_INIT_ADVECTION_TEST) {
+        // Compute domain lengths. (Assumes these are set; otherwise use xmax-xmin, etc.)
+        double Lx = params->xmax - params->xmin;
+        double Ly = params->ymax - params->ymin;
+
+        // Decide on the phase: for a time reversal test, reverse after advection_test_time.
+        double phase = (params->time < params->advection_test_time) ? 1.0 : -1.0;
+
+        // Loop over the processor’s domain (or the entire domain if appropriate).
+        for (int k = grid->G_Ks; k < grid->G_Ke; k++) {
+            for (int j = grid->G_Js; j < grid->G_Je; j++) {
+                for (int i = grid->G_Is; i < grid->G_Ie; i++) {
+                    // For a staggered grid, you might use cell-center coordinates for one velocity
+                    // and staggered positions for the other. Here we assume that grid->xc and grid->yc
+                    // store the cell-center positions, and grid->xu and grid->yv store the positions
+                    // where u and v are defined, respectively.
+                    double x_u = grid->xu[i];  // u is defined at xu[]
+                    double y_c = grid->yc[j];  // use cell-center for y derivative
+                    double x_c = grid->xc[i];  // use cell-center for x derivative
+                    double y_v = grid->yv[j];  // v is defined at yv[]
+
+                    // Compute the stream function derivatives for u and v.
+                    // For u = -dψ/dy at the u–position:
+                    double sin_x_u = sin(PI * x_u / Lx);
+                    double sin_y_c = sin(PI * y_c / Ly);
+                    double cos_y_c = cos(PI * y_c / Ly);
+                    // Derivative with respect to y:
+                    double dpsi_dy = 2.0 * sin_y_c * cos_y_c * (PI / Ly) * (sin_x_u * sin_x_u);
+                    double u_val = -dpsi_dy;
+
+                    // For v = dψ/dx at the v–position:
+                    double sin_x_c = sin(PI * x_c / Lx);
+                    double cos_x_c = cos(PI * x_c / Lx);
+                    double sin_y_v = sin(PI * y_v / Ly);
+                    // Derivative with respect to x:
+                    double dpsi_dx = 2.0 * sin_x_c * cos_x_c * (PI / Lx) * (sin_y_v * sin_y_v);
+                    double v_val = dpsi_dx;
+
+                    // Set the prescribed velocities (apply phase for reversal)
+                    u_data[k][j][i] = phase * u_val;
+                    v_data[k][j][i] = phase * v_val;
+                    w_data[k][j][i] = 0.0;
+                }
+            }
+        }
+        // Update ghost nodes to ensure consistency
+        Communication_update_ghost_nodes_flow_variable(u_data, 'u', params->ghost_nodes, data_bag);
+        Communication_update_ghost_nodes_flow_variable(v_data, 'v', params->ghost_nodes, data_bag);
+        Communication_update_ghost_nodes_flow_variable(w_data, 'w', params->ghost_nodes, data_bag);
+        
+        // (Optionally) Print a debug message
+        Display_progress(params, "Prescribed advection test velocity field applied.");
+        return; // Exit the function
+    }
+
+	
+
+
+
+
 	//--------------------------------------------------------------------------
 	// Inflow at left wall
 	//--------------------------------------------------------------------------

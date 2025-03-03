@@ -11,4 +11,34 @@ double Pressure_compute_velocity_divergence(Cart3d_bag *data_bag);
 void Pressure_setup_lsys_accounting_geometry(Pressure *p, MAC_grid *grid,
 		Parameters *params);
 int Pressure_solve(Pressure *p, MAC_grid *grid, Parameters *params);
+
+// Pressure solver functions for VoF-PLIC
+
+
+/******************************************************************************/
+// Conjugate Gradient solver for the variable-coefficient Poisson system:
+//
+//     ∇ · ( (1/ρ) ∇φ ) = rhs
+//
+/******************************************************************************/
+int Pressure_solve_cg(Cart3d_bag *data_bag);
+
+/******************************************************************************/
+// Pressure_operator_variableCoeff
+// Computes: Aphi = ∇·( 1/rho * ∇phi )
+/******************************************************************************/
+void Pressure_operator_variableCoeff(
+    double ***Aphi,         // output: operator(A) * phi
+    double ***phi,          // input: phi array
+    double ***rho,       // rho at cell centers
+    MAC_grid *grid,
+    Parameters *params,
+    Cart3d_bag *data_bag );
+
+/******************************************************************************/
+// Applies physical boundary conditions for the pressure‐correction array `phi`.
+//
+/******************************************************************************/
+void Pressure_apply_BCs(double ***phi, MAC_grid *grid, Parameters *params);
+
 #endif

@@ -22,10 +22,10 @@
 #undef NOSLIP_DUCT
 #undef GRAVITY_CURRENT
 #undef GRAVITY_CURRENT_PERIODIC
-#undef TRIPLE_PERIODIC
+#define TRIPLE_PERIODIC
 #undef TRIPLE_PERIODIC_SHEAR
 #undef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
-#define RISING_BUBBLE
+#undef RISING_BUBBLE
 
 #ifdef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
         #define LEFT_INFLOW
@@ -171,7 +171,7 @@
 /*                                Simulation -FlowSolver                      */
 /******************************************************************************/
 
-#define  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
+#undef  CONSTANT_MASSFLUX  // Viscous terms solution method (default is semi-implicit FFT)
 #undef FLUID_OSCILLATION        // Oscillation force acting on the fluid due to ISS-vibration (corresponds to PARTICLE_OSCILLATION)
 #undef  FULLY_EXPLICIT
 #define CG_SOLVE

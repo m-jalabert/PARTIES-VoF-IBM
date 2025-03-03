@@ -129,6 +129,7 @@
 #define VEL_INIT_JET_3D 8
 #define VEL_INIT_LEFT_RIGHT 9
 #define VEL_INIT_NOISE 10
+#define VEL_INIT_ADVECTION_TEST 11 //Rider & Kothe (1998) Advection test for VoF-PLIC
 
 // Startup initialization options
 #define STUP_INIT_TIME			0
@@ -230,6 +231,8 @@
 #define W_VELOCITY 'g'
 
 #define P_CORRECTION 'h'
+
+#define VOLUME_FRACTION 'o'
 
 // deprecated stuff maybe ready to be deleted
 #undef TEST_OUTPUT

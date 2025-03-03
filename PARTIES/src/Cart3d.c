@@ -40,6 +40,7 @@
 #include <omp.h>
 #include "Interpolate.h"
 #include "EPforcing.h"
+#include "VolumeFraction.h"
 
 
 
@@ -174,6 +175,15 @@ int main(int argc, char **args) {
 		Display_progress(params, message);
 	}
 	data_bag -> c = c;
+#endif
+
+
+#ifdef VOF_PLIC
+    //--------------------------------------------------------------------------
+	// Create VOF-PLIC field
+	//--------------------------------------------------------------------------
+    data_bag->vof = VoF_create(grid, params);
+    Display_progress(params, "Volume Fraction initialized successfully...\n");
 #endif
 
 #ifdef LAG_PARTICLE_RESOLVED
@@ -342,10 +352,10 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 #endif
 
 	// Setup the linear system for primitive variables based on the fluid nodes
-	Cart3d_setup_lsys_accounting_geometry(data_bag);
+	//Cart3d_setup_lsys_accounting_geometry(data_bag);
 
 	// Setup linear solver
-	lsolver_transpose_setup(grid, params);
+	//lsolver_transpose_setup(grid, params);
 
 
 
@@ -477,6 +487,12 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 
 #ifdef LAG_PARTICLE_RESOLVED
 	Lagrangian_destroy(data_bag->lag, grid, params);
+#endif
+
+#ifdef VOF_PLIC
+    // Destroy Volume Fraction structure
+    VOF_destroy(data_bag->vof, grid, params);
+    Display_progress(params, "Volume Fraction freed\n");
 #endif
 
 	// NOTE: something is going wrong in this loop, PETSc throws errors
@@ -686,6 +702,39 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 	} // for iconc
 
+#endif
+
+#ifdef VOF_PLIC
+    // Initialize VOF field based on init_type
+    switch(params->init_type) {
+        case 1:  // Bubble test case
+            VoF_init_bubble(data_bag);
+            break;
+        // Add future initialization types here
+        // case 2: 
+        //    Other_init_function(data_bag);
+        //    break;
+        default:
+			if(params->rank == 0) {
+				char warning_msg[256];
+				snprintf(warning_msg, sizeof(warning_msg), 
+						"Unsupported VOF init_type: %d. Valid options are: 1 (bubble). "
+						"No VOF initialization performed.", params->init_type);
+				Display_throw_warning(warning_msg, params);
+			}
+            break;
+    }
+    
+    if(params->init_type == 1) {  // Only process if initialization was performed
+        // Set boundary values and update ghost nodes
+        VOF_set_boundary_values(data_bag->vof->F, data_bag);
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->F, VOLUME_FRACTION, 
+                                                     params->ghost_nodes, data_bag);
+        
+        // Update mixture properties (density, viscosity)
+        VOF_update_density_viscosity(data_bag);
+        Display_progress(params, "VOF initialized successfully...\n");
+    }
 #endif
 
 
