@@ -58,6 +58,9 @@ VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params) {
     /* Allocate convective term arrays.
        Here we allocate the “current” convective term with ghost cells and a
        copy for the previous RK stage (conv_old). */
+    vof->flux_x = Memory_allocate_flow_variable(grid, params);
+    vof->flux_y = Memory_allocate_flow_variable(grid, params);
+    vof->flux_z = Memory_allocate_flow_variable(grid, params);
     vof->conv       = Memory_allocate_flow_variable(grid, params);
     vof->conv_old   = Memory_allocate_flow_variable(grid, params);
 
@@ -89,6 +92,9 @@ void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params) {
     Memory_free_flow_variable(grid, params, vof->alpha);
 
     /* Free the convective term arrays (with ghost cells) */
+    Memory_free_flow_variable(grid, params, vof->flux_x);
+    Memory_free_flow_variable(grid, params, vof->flux_y);
+    Memory_free_flow_variable(grid, params, vof->flux_z);
     Memory_free_flow_variable(grid, params, vof->conv);
     Memory_free_flow_variable(grid, params, vof->conv_old);
 
@@ -100,6 +106,7 @@ void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params) {
     /* Finally, free the structure itself */
     free(vof);
 }
+
 
 
 /******************************************************************************
@@ -134,7 +141,7 @@ void VOF_reconstruct_interface(Cart3d_bag *data_bag)
 {
     MAC_grid       *grid   = data_bag->grid;
     VolumeFraction *vof    = data_bag->vof;
-    // If needed, read from data_bag->params as well
+    Parameters *params = data_bag->params;
 
     // Volume fraction array & normal+alpha arrays
     double ***F     = vof->F;
@@ -178,9 +185,11 @@ void VOF_reconstruct_interface(Cart3d_bag *data_bag)
         }
       }
     }
+    Communication_update_ghost_nodes_flow_variable(vof->normal_x, VOLUME_FRACTION, params->ghost_nodes, data_bag);
+    Communication_update_ghost_nodes_flow_variable(vof->normal_y, VOLUME_FRACTION, params->ghost_nodes, data_bag);
+    Communication_update_ghost_nodes_flow_variable(vof->normal_z, VOLUME_FRACTION, params->ghost_nodes, data_bag);
+    Communication_update_ghost_nodes_flow_variable(vof->alpha, VOLUME_FRACTION, params->ghost_nodes, data_bag);
 }
-
-
 
 
 
@@ -1117,60 +1126,104 @@ PointType mycs2D(double **c, int i, int j)
  *   A PointType representing the 3D normal (n.x, n.y, n.z).
  ******************************************************************************/
 
+/****************************************************************************** 
+ * mycs3D
+ *
+ * Computes a 3D interface normal using a Mixed Youngs and Central (MYC)
+ * scheme. This replicates Basilisk's myc3d.h logic, referencing local
+ * volume-fraction values around (i,j,k).
+ *
+ * In PARTIES, arrays are allocated as c[k][j][i], with:
+ *   - k = z-index,
+ *   - j = y-index,
+ *   - i = x-index.
+ *
+ * Thus, neighbors are accessed as c[k±1][j±1][i±1].
+ *
+ * Inputs:
+ *   c     - 3D array of volume fractions, c[k][j][i]
+ *   i, j, k  - current cell indices (x, y, z)
+ *   data_bag - to retrieve grid and parameters
+ *
+ * Returns:
+ *   A PointType representing the 3D normal (n.x, n.y, n.z).
+ ******************************************************************************/
 PointType mycs3D(double ***c, int i, int j, int k)
 {
     /**************************************************************************
      * Explanation:
-     * In Basilisk, we read offset neighbors e.g. c[-1,0,-1], c[1,0,1], etc.
-     * In PARTIES, that becomes c[i-1][j][k-1], c[i+1][j][k+1], etc.
+     * Originally in Basilisk, we might see c[i±1][j±1][k±1]. 
+     * In PARTIES, the array is c[k][j][i], so neighbors become c[k±1][j±1][i±1].
      **************************************************************************/
-    double m[4][3]; // store central scheme planes [0..2] + youngs ciam [3]
+    double m[4][3]; // store central-scheme planes [0..2] + Youngs CIAM [3]
     double m1, m2, t0, t1, t2;
     int cn;
 
-    // 1) Plane X = sign(mx)X = myY + mzZ + alpha (Central Scheme)
+    //-------------------------------------------------------------------------
+    // 1) Plane X = sign(mx)*X = my*Y + mz*Z + alpha (Central Scheme)
     //    => stored in m[0][0..2]
-    // m[0][0] = 1 or -1 depending on sum left vs sum right
-    // ...
-    m1 = c[i-1][j][k-1] + c[i-1][j][k+1] + c[i-1][j-1][k] + c[i-1][j+1][k] + c[i-1][j][k]; //everything on the left
-    m2 = c[i+1][j][k-1] + c[i+1][j][k+1] + c[i+1][j-1][k] + c[i+1][j+1][k] + c[i+1][j][k]; //everything on the right
-    m[0][0] = (m1 > m2) ? 1. : -1.; //sign of the normal component along the x-direction If more fluid is on the left, normal points right (+1). If more fluid is on the right, normal points left (−1)
+    //    (If more fluid is on i-1 side => normal points +x, else -x)
+    //-------------------------------------------------------------------------
+    // everything on the "left" side => i-1
+    // everything on the "right" side => i+1
+    m1 = c[k-1][j][i-1] + c[k+1][j][i-1] + c[k][j-1][i-1] +
+         c[k][j+1][i-1] + c[k][j][i-1]; 
+    m2 = c[k-1][j][i+1] + c[k+1][j][i+1] + c[k][j-1][i+1] +
+         c[k][j+1][i+1] + c[k][j][i+1]; 
+    m[0][0] = (m1 > m2) ? 1. : -1.;
 
-    m1 = c[i-1][j-1][k] + c[i+1][j-1][k] + c[i][j-1][k];
-    m2 = c[i-1][j+1][k] + c[i+1][j+1][k] + c[i][j+1][k];
+    // "vertical" offset in j => j-1 vs j+1
+    m1 = c[k][j-1][i-1] + c[k][j-1][i+1] + c[k][j-1][i];
+    m2 = c[k][j+1][i-1] + c[k][j+1][i+1] + c[k][j+1][i];
     m[0][1] = 0.5 * (m1 - m2);
 
-    m1 = c[i-1][j][k-1] + c[i+1][j][k-1] + c[i][j][k-1];
-    m2 = c[i-1][j][k+1] + c[i+1][j][k+1] + c[i][j][k+1];
+    // "depth" offset in k => k-1 vs k+1
+    m1 = c[k-1][j][i-1] + c[k-1][j][i+1] + c[k-1][j][i];
+    m2 = c[k+1][j][i-1] + c[k+1][j][i+1] + c[k+1][j][i];
     m[0][2] = 0.5 * (m1 - m2);
 
-    // 2) Plane Y = sign(my)Y = mxX + mzZ + alpha => m[1][0..2]
-    m1 = c[i-1][j-1][k] + c[i-1][j+1][k] + c[i-1][j][k];
-    m2 = c[i+1][j-1][k] + c[i+1][j+1][k] + c[i+1][j][k];
+    //-------------------------------------------------------------------------
+    // 2) Plane Y = sign(my)*Y = mx*X + mz*Z + alpha => m[1][0..2]
+    //-------------------------------------------------------------------------
+    m1 = c[k][j-1][i-1] + c[k][j+1][i-1] + c[k][j][i-1];
+    m2 = c[k][j-1][i+1] + c[k][j+1][i+1] + c[k][j][i+1];
     m[1][0] = 0.5 * (m1 - m2);
 
-    m1 = c[i][j-1][k-1] + c[i][j-1][k+1] + c[i+1][j-1][k] + c[i-1][j-1][k] + c[i][j-1][k]; //everything below
-    m2 = c[i][j+1][k-1] + c[i][j+1][k+1] + c[i+1][j+1][k] + c[i-1][j+1][k] + c[i][j+1][k]; //everything above
-    m[1][1] = (m1 > m2) ? 1. : -1.; //sign of the normal component along the y-direction
+    // For the sign of my
+    m1 = c[k-1][j-1][i] + c[k+1][j-1][i] + c[k][j-1][i+1] +
+         c[k][j-1][i-1] + c[k][j-1][i];
+    m2 = c[k-1][j+1][i] + c[k+1][j+1][i] + c[k][j+1][i+1] +
+         c[k][j+1][i-1] + c[k][j+1][i];
+    m[1][1] = (m1 > m2) ? 1. : -1.;
 
-    m1 = c[i][j-1][k-1] + c[i][j][k-1] + c[i][j+1][k-1];
-    m2 = c[i][j-1][k+1] + c[i][j][k+1] + c[i][j+1][k+1];
+    // Variation in the z-direction for plane Y
+    m1 = c[k-1][j-1][i] + c[k-1][j][i] + c[k-1][j+1][i];
+    m2 = c[k+1][j-1][i] + c[k+1][j][i] + c[k+1][j+1][i];
     m[1][2] = 0.5 * (m1 - m2);
 
-    // 3) Plane Z = sign(mz)Z = mxX + myY + alpha => m[2][0..2]
-    m1 = c[i-1][j][k-1] + c[i-1][j][k+1] + c[i-1][j][k];
-    m2 = c[i+1][j][k-1] + c[i+1][j][k+1] + c[i+1][j][k];
+    //-------------------------------------------------------------------------
+    // 3) Plane Z = sign(mz)*Z = mx*X + my*Y + alpha => m[2][0..2]
+    //-------------------------------------------------------------------------
+    // Variation in the x-direction for plane Z
+    m1 = c[k-1][j][i-1] + c[k+1][j][i-1] + c[k][j][i-1];
+    m2 = c[k-1][j][i+1] + c[k+1][j][i+1] + c[k][j][i+1];
     m[2][0] = 0.5 * (m1 - m2);
 
-    m1 = c[i][j-1][k-1] + c[i][j-1][k+1] + c[i][j-1][k];
-    m2 = c[i][j+1][k-1] + c[i][j+1][k+1] + c[i][j+1][k];
+    // Variation in the y-direction for plane Z
+    m1 = c[k-1][j-1][i] + c[k+1][j-1][i] + c[k][j-1][i];
+    m2 = c[k-1][j+1][i] + c[k+1][j+1][i] + c[k][j+1][i];
     m[2][1] = 0.5 * (m1 - m2);
 
-    m1 = c[i-1][j][k-1] + c[i+1][j][k-1] + c[i][j-1][k-1] + c[i][j+1][k-1] + c[i][j][k-1]; //everything behind
-    m2 = c[i-1][j][k+1] + c[i+1][j][k+1] + c[i][j-1][k+1] + c[i][j+1][k+1] + c[i][j][k+1]; //everything in front
-    m[2][2] = (m1 > m2) ? 1. : -1.; //sign of the normal component along the z-direction
+    // For the sign of mz
+    m1 = c[k-1][j][i-1] + c[k-1][j][i+1] + c[k-1][j-1][i] +
+         c[k-1][j+1][i] + c[k-1][j][i];
+    m2 = c[k+1][j][i-1] + c[k+1][j][i+1] + c[k+1][j-1][i] +
+         c[k+1][j+1][i] + c[k+1][j][i];
+    m[2][2] = (m1 > m2) ? 1. : -1.;
 
-    // 4) Normalize each set => |mx|+|my|+|mz|=1
+    //-------------------------------------------------------------------------
+    // 4) Normalize each of the three planes => |mx|+|my|+|mz| = 1
+    //-------------------------------------------------------------------------
     for (int idx = 0; idx < 3; idx++) {
         t0 = fabs(m[idx][0]) + fabs(m[idx][1]) + fabs(m[idx][2]);
         if (t0 > 1e-30) {
@@ -1180,55 +1233,67 @@ PointType mycs3D(double ***c, int i, int j, int k)
         }
     }
 
-    // 5) Choose among the three central-scheme results: max(|m[i][i]|)
-    t0 = fabs(m[0][0]);  // Normal component in X-direction
-    t1 = fabs(m[1][1]);  // Normal component in Y-direction
-    t2 = fabs(m[2][2]);  // Normal component in Z-direction
-    cn = 0;              // Default choice: X-direction
-    // Compare with Y-direction
-    if (t1 > t0) {
-        t0 = t1;
-        cn = 1; // Choose Y-direction
-    }
-    // Compare with Z-direction
-    if (t2 > t0)
-    cn = 2; // Choose Z-direction
+    //-------------------------------------------------------------------------
+    // 5) Pick among the three central-scheme results by comparing |m[i][i]|
+    //-------------------------------------------------------------------------
+    t0 = fabs(m[0][0]);  // for plane X
+    t1 = fabs(m[1][1]);  // for plane Y
+    t2 = fabs(m[2][2]);  // for plane Z
+    cn = 0; // default = X-plane
+    if (t1 > t0) { t0 = t1; cn = 1; }
+    if (t2 > t0) { cn = 2; }
 
-    // 6) Youngs-CIAM scheme => store in m[3][0..2], then compare
-    // Basilisk uses an 8/16-point stencil for x,y,z. We'll replicate that.
+    //-------------------------------------------------------------------------
+    // 6) Youngs-CIAM scheme => fill m[3][0..2], compare
+    //    Basilisk uses bigger stencils for x,y,z. We replicate that here.
+    //-------------------------------------------------------------------------
     {
         // For m[3][0]
-        double sumA = c[i-1][j-1][k-1] + c[i-1][j+1][k-1] + c[i-1][j-1][k+1] + c[i-1][j+1][k+1] +
-                      2.*(c[i-1][j-1][k] + c[i-1][j+1][k] + c[i-1][j][k-1] + c[i-1][j][k+1]) +
-                      4.*c[i-1][j][k];
-        double sumB = c[i+1][j-1][k-1] + c[i+1][j+1][k-1] + c[i+1][j-1][k+1] + c[i+1][j+1][k+1] +
-                      2.*(c[i+1][j-1][k] + c[i+1][j+1][k] + c[i+1][j][k-1] + c[i+1][j][k+1]) +
-                      4.*c[i+1][j][k];
+        double sumA = c[k-1][j-1][i-1] + c[k-1][j+1][i-1] +
+                      c[k+1][j-1][i-1] + c[k+1][j+1][i-1]
+                    + 2.*(c[k][j-1][i-1] + c[k][j+1][i-1] +
+                          c[k-1][j][i-1] + c[k+1][j][i-1])
+                    + 4.* c[k][j][i-1];
+
+        double sumB = c[k-1][j-1][i+1] + c[k-1][j+1][i+1] +
+                      c[k+1][j-1][i+1] + c[k+1][j+1][i+1]
+                    + 2.*(c[k][j-1][i+1] + c[k][j+1][i+1] +
+                          c[k-1][j][i+1] + c[k+1][j][i+1])
+                    + 4.* c[k][j][i+1];
         m[3][0] = sumA - sumB;
 
         // For m[3][1]
-        sumA = c[i-1][j-1][k-1] + c[i-1][j-1][k+1] + c[i+1][j-1][k-1] + c[i+1][j-1][k+1] +
-               2.*(c[i-1][j-1][k] + c[i+1][j-1][k] + c[i][j-1][k-1] + c[i][j-1][k+1]) +
-               4.*c[i][j-1][k];
-        sumB = c[i-1][j+1][k-1] + c[i-1][j+1][k+1] + c[i+1][j+1][k-1] + c[i+1][j+1][k+1] +
-               2.*(c[i-1][j+1][k] + c[i+1][j+1][k] + c[i][j+1][k-1] + c[i][j+1][k+1]) +
-               4.*c[i][j+1][k];
+        sumA = c[k-1][j-1][i-1] + c[k+1][j-1][i-1] +
+               c[k-1][j-1][i+1] + c[k+1][j-1][i+1]
+             + 2.*(c[k][j-1][i-1] + c[k][j-1][i+1] +
+                   c[k-1][j-1][i] + c[k][j-1][i])
+             + 4.* c[k][j-1][i];
+        sumB = c[k-1][j+1][i-1] + c[k+1][j+1][i-1] +
+               c[k-1][j+1][i+1] + c[k+1][j+1][i+1]
+             + 2.*(c[k][j+1][i-1] + c[k][j+1][i+1] +
+                   c[k-1][j+1][i] + c[k+1][j+1][i])
+             + 4.* c[k][j+1][i];
         m[3][1] = sumA - sumB;
 
-        // For m[3][2]
-        sumA = c[i-1][j-1][k-1] + c[i-1][j+1][k-1] + c[i+1][j-1][k-1] + c[i+1][j+1][k-1] +
-               2.*(c[i-1][j][k-1] + c[i+1][j][k-1] + c[i][j-1][k-1] + c[i][j+1][k-1]) +
-               4.*c[i][j][k-1];
-        sumB = c[i-1][j-1][k+1] + c[i-1][j+1][k+1] + c[i+1][j-1][k+1] + c[i+1][j+1][k+1] +
-               2.*(c[i-1][j][k+1] + c[i+1][j][k+1] + c[i][j-1][k+1] + c[i][j+1][k+1]) +
-               4.*c[i][j][k+1];
+        // Z-gradient (m[3][2]) - CORRECTED
+        sumA = c[k-1][j-1][i-1] + c[k-1][j+1][i-1] +
+            c[k-1][j-1][i+1] + c[k-1][j+1][i+1]
+            + 2.*(c[k-1][j][i-1] + c[k-1][j][i+1] +
+                c[k-1][j-1][i] + c[k-1][j+1][i])
+            + 4.* c[k-1][j][i];  // Cells at k-1 layer
+
+        sumB = c[k+1][j-1][i-1] + c[k+1][j+1][i-1] +
+            c[k+1][j-1][i+1] + c[k+1][j+1][i+1]
+            + 2.*(c[k+1][j][i-1] + c[k+1][j][i+1] +
+                c[k+1][j-1][i] + c[k+1][j+1][i])
+            + 4.* c[k+1][j][i];  // Cells at k+1 layer
+
         m[3][2] = sumA - sumB;
     }
 
-    // normalize m[3] => sum of absolute components = 1
+    // Normalize m[3] => sum of absolute components = 1
     t0 = fabs(m[3][0]) + fabs(m[3][1]) + fabs(m[3][2]);
     if (t0 < 1e-30) {
-        // fallback normal
         PointType fallback = {1.0, 0.0, 0.0};
         return fallback;
     }
@@ -1236,14 +1301,18 @@ PointType mycs3D(double ***c, int i, int j, int k)
     m[3][1] /= t0;
     m[3][2] /= t0;
 
-    // 7) compare the chosen central scheme plane m[cn] with the youngs ciam m[3]
-    // pick whichever has the largest absolute component
+    //-------------------------------------------------------------------------
+    // 7) Compare the chosen central-scheme plane m[cn] with the Youngs CIAM m[3].
+    //    Pick whichever has the largest absolute component.
+    //-------------------------------------------------------------------------
     double max_ciam = fmax(fmax(fabs(m[3][0]), fabs(m[3][1])), fabs(m[3][2]));
     double max_cen  = fmax(fmax(fabs(m[cn][0]), fabs(m[cn][1])), fabs(m[cn][2]));
     if (max_cen < max_ciam)
         cn = 3;
 
+    //-------------------------------------------------------------------------
     // 8) Return final normal
+    //-------------------------------------------------------------------------
     PointType result;
     result.x = m[cn][0];
     result.y = m[cn][1];
@@ -1880,74 +1949,74 @@ PointType VoF_facet_normal_3D(
  *
  * Only **3D cells** are considered, making this a streamlined function.
  ******************************************************************************/
-void VoF_output_facets_3D(
-    Cart3d_bag *data_bag,    // Contains grid, params, and volume fraction data
-    FILE       *fp,          // Output file pointer
-    double     ***sx,        // Optional surface fraction x
-    double     ***sy,        // Optional surface fraction y
-    double     ***sz         // Optional surface fraction z
-)
-{
-    MAC_grid       *grid   = data_bag->grid;
-    VolumeFraction *vof    = data_bag->vof;
+// void VoF_output_facets_3D(
+//     Cart3d_bag *data_bag,    // Contains grid, params, and volume fraction data
+//     FILE       *fp,          // Output file pointer
+//     double     ***sx,        // Optional surface fraction x
+//     double     ***sy,        // Optional surface fraction y
+//     double     ***sz         // Optional surface fraction z
+// )
+// {
+//     MAC_grid       *grid   = data_bag->grid;
+//     VolumeFraction *vof    = data_bag->vof;
 
-    double ***F = vof->F;  // Volume fraction array
+//     double ***F = vof->F;  // Volume fraction array
 
-    // Domain bounds
-    int Is = grid->G_Is, Ie = grid->G_Ie;
-    int Js = grid->G_Js, Je = grid->G_Je;
-    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+//     // Domain bounds
+//     int Is = grid->G_Is, Ie = grid->G_Ie;
+//     int Js = grid->G_Js, Je = grid->G_Je;
+//     int Ks = grid->G_Ks, Ke = grid->G_Ke;
 
-    // Cell center coordinates
-    double *xc = grid->xc;
-    double *yc = grid->yc;
-    double *zc = grid->zc;
+//     // Cell center coordinates
+//     double *xc = grid->xc;
+//     double *yc = grid->yc;
+//     double *zc = grid->zc;
 
-    // Loop over local domain
-    for (int k = Ks; k < Ke; k++) {
-      for (int j = Js; j < Je; j++) {
-        for (int i = Is; i < Ie; i++) {
-          double cval = F[k][j][i];
+//     // Loop over local domain
+//     for (int k = Ks; k < Ke; k++) {
+//       for (int j = Js; j < Je; j++) {
+//         for (int i = Is; i < Ie; i++) {
+//           double cval = F[k][j][i];
 
-          // Only process partially filled cells (0 < F < 1)
-          if (cval > 1e-6 && cval < 1.0 - 1e-6) {
+//           // Only process partially filled cells (0 < F < 1)
+//           if (cval > 1e-6 && cval < 1.0 - 1e-6) {
 
-            // 1) Compute the interface normal
-            PointType normal;
-            if (sx && sy && sz) {
-                normal = VoF_facet_normal_3D(F, sx, sy, sz, i, j, k, data_bag);
-            } else {
-                normal = mycs3D(F, i, j, k);
-            }
+//             // 1) Compute the interface normal
+//             PointType normal;
+//             if (sx && sy && sz) {
+//                 normal = VoF_facet_normal_3D(F, sx, sy, sz, i, j, k, data_bag);
+//             } else {
+//                 normal = mycs3D(F, i, j, k);
+//             }
 
-            // 2) Compute alpha
-            double alpha_val = 0.0;
-            plane_alpha_3D(cval, normal, &alpha_val);
+//             // 2) Compute alpha
+//             double alpha_val = 0.0;
+//             plane_alpha_3D(cval, normal, &alpha_val);
 
-            // 3) Retrieve facet vertices in 3D
-            PointType v[12];
-            int m = facets_3D(normal, alpha_val, v, 1.0);  // 1.0 => unit cell
+//             // 3) Retrieve facet vertices in 3D
+//             PointType v[12];
+//             int m = facets_3D(normal, alpha_val, v, 1.0);  // 1.0 => unit cell
 
-            // 4) Scale and output facet coordinates
-            double Dx = (i + 1 < grid->NX) ? xc[i + 1] - xc[i] : 1.0;
-            double Dy = (j + 1 < grid->NY) ? yc[j + 1] - yc[j] : 1.0;
-            double Dz = (k + 1 < grid->NZ) ? zc[k + 1] - zc[k] : 1.0;
+//             // 4) Scale and output facet coordinates
+//             double Dx = (i + 1 < grid->NX) ? xc[i + 1] - xc[i] : 1.0;
+//             double Dy = (j + 1 < grid->NY) ? yc[j + 1] - yc[j] : 1.0;
+//             double Dz = (k + 1 < grid->NZ) ? zc[k + 1] - zc[k] : 1.0;
 
-            for (int ii = 0; ii < m; ii++) {
-                double X = xc[i] + v[ii].x * Dx;
-                double Y = yc[j] + v[ii].y * Dy;
-                double Z = zc[k] + v[ii].z * Dz;
-                fprintf(fp, "%g %g %g\n", X, Y, Z);
-            }
-            if (m > 0)
-                fputc('\n', fp);  // Separate facets for gnuplot
-          } 
-        }
-      }
-    }
+//             for (int ii = 0; ii < m; ii++) {
+//                 double X = xc[i] + v[ii].x * Dx;
+//                 double Y = yc[j] + v[ii].y * Dy;
+//                 double Z = zc[k] + v[ii].z * Dz;
+//                 fprintf(fp, "%g %g %g\n", X, Y, Z);
+//             }
+//             if (m > 0)
+//                 fputc('\n', fp);  // Separate facets for gnuplot
+//           } 
+//         }
+//       }
+//     }
 
-    fflush(fp);
-}
+//     fflush(fp);
+// }
 
 
 /******************************************************************************
@@ -1969,64 +2038,64 @@ void VoF_output_facets_3D(
  * This does NOT do boundary checks for ghost layers; we assume your code 
  * has them or is guaranteed in-bounds for i±1, j±1, k±1.
  ******************************************************************************/
-double VOF_InterfaceArea_3D(Cart3d_bag *data_bag)
-{
-    MAC_grid       *grid   = data_bag->grid;
-    VolumeFraction *vof    = data_bag->vof;
+// double VOF_InterfaceArea_3D(Cart3d_bag *data_bag)
+// {
+//     MAC_grid       *grid   = data_bag->grid;
+//     VolumeFraction *vof    = data_bag->vof;
 
-    double ***F = vof->F;  // volume fraction array
+//     double ***F = vof->F;  // volume fraction array
 
-    // domain bounds
-    int Is = grid->G_Is, Ie = grid->G_Ie;
-    int Js = grid->G_Js, Je = grid->G_Je;
-    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+//     // domain bounds
+//     int Is = grid->G_Is, Ie = grid->G_Ie;
+//     int Js = grid->G_Js, Je = grid->G_Je;
+//     int Ks = grid->G_Ks, Ke = grid->G_Ke;
 
-    // cell-centered coordinates
-    double *xc = grid->xc; 
-    double *yc = grid->yc;
-    double *zc = grid->zc; 
+//     // cell-centered coordinates
+//     double *xc = grid->xc; 
+//     double *yc = grid->yc;
+//     double *zc = grid->zc; 
 
-    double area = 0.0;
+//     double area = 0.0;
 
-    // Loop over each cell in local domain
-    for (int k = Ks; k < Ke; k++) {
-      for (int j = Js; j < Je; j++) {
-        for (int i = Is; i < Ie; i++) {
-          double cval = F[k][j][i];
+//     // Loop over each cell in local domain
+//     for (int k = Ks; k < Ke; k++) {
+//       for (int j = Js; j < Je; j++) {
+//         for (int i = Is; i < Ie; i++) {
+//           double cval = F[k][j][i];
 
-          // Only partial cells
-          if (cval > 1e-6 && cval < 1.0 - 1e-6) {
+//           // Only partial cells
+//           if (cval > 1e-6 && cval < 1.0 - 1e-6) {
 
-            // 1) Compute normal => mycs3D(...) or fallback
-            PointType n = mycs3D(F, i, j, k);
+//             // 1) Compute normal => mycs3D(...) or fallback
+//             PointType n = mycs3D(F, i, j, k);
 
-            // 2) Compute alpha => plane_alpha_3D
-            double alpha_val = 0.0;
-            plane_alpha_3D(cval, n, &alpha_val);
+//             // 2) Compute alpha => plane_alpha_3D
+//             double alpha_val = 0.0;
+//             plane_alpha_3D(cval, n, &alpha_val);
 
-            // 3) "Dimensionless" measure => plane_area_center(n, alpha_val, &p)
-            PointType p = {0., 0., 0.};
-            double measure = plane_area_center(n, alpha_val, &p);
+//             // 3) "Dimensionless" measure => plane_area_center(n, alpha_val, &p)
+//             PointType p = {0., 0., 0.};
+//             double measure = plane_area_center(n, alpha_val, &p);
 
-            // 4) Multiply by local cell cross-sectional area => Basilisk uses Delta^2
-            // If your grid is uniform => dx[i], dy[j], pick some approach. 
-            // For demonstration we approximate interface area in each cell as measure*(dx*dy).
-            double dx = (i+1 < grid->NX)? (xc[i+1] - xc[i]) : 1.0;
-            double dy = (j+1 < grid->NY)? (yc[j+1] - yc[j]) : 1.0;
-            // We assume the main orientation is (dx*dy) => partial approach 
-            // (This is a simplification if the interface is not axis-aligned, but matches Basilisk's Delta^2 logic)
+//             // 4) Multiply by local cell cross-sectional area => Basilisk uses Delta^2
+//             // If your grid is uniform => dx[i], dy[j], pick some approach. 
+//             // For demonstration we approximate interface area in each cell as measure*(dx*dy).
+//             double dx = (i+1 < grid->NX)? (xc[i+1] - xc[i]) : 1.0;
+//             double dy = (j+1 < grid->NY)? (yc[j+1] - yc[j]) : 1.0;
+//             // We assume the main orientation is (dx*dy) => partial approach 
+//             // (This is a simplification if the interface is not axis-aligned, but matches Basilisk's Delta^2 logic)
 
-            double local_area = measure * (dx * dy);
+//             double local_area = measure * (dx * dy);
 
-            // 5) Accumulate
-            area += local_area;
-          }
-        }
-      }
-    }
+//             // 5) Accumulate
+//             area += local_area;
+//           }
+//         }
+//       }
+//     }
 
-    return area;
-}
+//     return area;
+// }
 
 
 

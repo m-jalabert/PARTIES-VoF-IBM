@@ -28,6 +28,8 @@ struct volume_fraction {
 	double ***normal_x, ***normal_y, ***normal_z;       // Interface normal
 	double ***alpha;  									// plane intercept for the PLIC plane in each cell
 
+
+	double ***flux_x, ***flux_y, ***flux_z;       		// fluxes for convective terms
 	double ***conv; 									// Convective term storage for advection equation [k][j][i]
 	double ***conv_old; 							    // Storage for previous stage's convective term		
 	double ***ng_rhs;									// Right-hand side of the volume fraction equation
@@ -209,6 +211,7 @@ struct pressure {
     double ***res;       // Residual r
     double ***d;         // Search direction d
     double ***Ad;        // A*d
+	double ***M_inv;	 // Preconditioner 
 
 
 	fft *xfft, *zfft;
@@ -385,7 +388,7 @@ struct parameters {
 
 	// Test cases parameters
 	// Rider & Kothe Advection testcase (1998) 
-	int advection_test_time;     // Parameter for Time Reversal
+	double advection_test_time;     // Parameter for Time Reversal
 
 
 

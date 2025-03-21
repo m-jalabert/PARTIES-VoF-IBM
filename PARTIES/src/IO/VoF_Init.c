@@ -43,10 +43,10 @@ void VoF_init_bubble(Cart3d_bag *data_bag)
     double ***F = vof->F;  // cell-centered volume fraction array
 
 
-    x_c = 0.4;
-    y_c = 0.55;
-    z_c = 0.4;
-    R   = 0.15;
+    x_c = 0.5;
+    y_c = 0.6875;
+    z_c = 0.5;
+    R   = 0.1875;
 
 
     double *xc = grid->xc;
@@ -74,15 +74,49 @@ void VoF_init_bubble(Cart3d_bag *data_bag)
                 double rSq    = R*R;
 
                 if (distSq < rSq) {
-                    // Inside the bubble => 100% fluid #1
-                    F[k][j][i] = 1.0;
-                } else {
-                    // Outside the bubble => fluid #2
+                    // Inside the bubble
                     F[k][j][i] = 0.0;
+                } else {
+                    // Outside the bubble 
+                    F[k][j][i] = 1.0;
                 }
             }
         }
     }
 
-    printf("VOF bubble initialized (rank=%d)\n", params->rank);
+}
+
+/******************************************************************************/
+// Single-cell initialization (vof->F) for debugging
+/******************************************************************************/
+void VoF_init_single_cell(Cart3d_bag *data_bag)
+{
+    MAC_grid    *grid   = data_bag->grid;
+    VolumeFraction *vof = data_bag->vof;
+
+    double ***F = vof->F;  // cell-centered volume fraction array
+
+    // Indices of your local domain portion
+    int Is = grid->G_Is; 
+    int Ie = grid->G_Ie;
+    int Js = grid->G_Js;
+    int Je = grid->G_Je;
+    int Ks = grid->G_Ks;
+    int Ke = grid->G_Ke;
+
+    // We want cell (1,1,1) to have F=0.5, everything else =0
+    // for a 3×3×3 domain, global indices go from 0..2
+    // so the "center cell" is indeed i=1, j=1, k=1 if it lies in local range
+
+    for (int k = Ks; k < Ke; k++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
+                if (i == 3 && j == 3 && k == 3)  {
+                    F[k][j][i] = 0.5;  // 
+                } else {
+                    F[k][j][i] = 0.0;
+                }
+            }
+        }
+    }
 }

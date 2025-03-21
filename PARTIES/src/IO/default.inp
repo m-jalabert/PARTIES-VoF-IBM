@@ -112,7 +112,7 @@ CFG(vof, wall_adhesion_model, 45, atoi)  // 0=none, 1=constant angle
 
 // Test cases 
 // Rider & Kothe Advection testcase (1998) 
-CFG(vof, advection_test_time, 1, atoi)     // Parameter for Time Reversal
+CFG(vof, advection_test_time, 0.5, atof)     // Parameter for Time Reversal
 
 
 

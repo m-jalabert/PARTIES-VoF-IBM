@@ -13,8 +13,7 @@
 
 /******************************************************************************/
 /*
- This function defines the inflow profile based on laminar profile
-for channel flow
+ This function defines the inflow profile
  */
 /******************************************************************************/
 void Inflow_velocity_profile(Cart3d_bag *data_bag, Debug_trace *dtrace) {
@@ -89,13 +88,11 @@ void Inflow_velocity_profile(Cart3d_bag *data_bag, Debug_trace *dtrace) {
                 }
             }
         }
-        // Update ghost nodes to ensure consistency
+        // Update ghost nodes to ensure consistency (NOT NECESSARY I THINK)
         Communication_update_ghost_nodes_flow_variable(u_data, 'u', params->ghost_nodes, data_bag);
         Communication_update_ghost_nodes_flow_variable(v_data, 'v', params->ghost_nodes, data_bag);
         Communication_update_ghost_nodes_flow_variable(w_data, 'w', params->ghost_nodes, data_bag);
         
-        // (Optionally) Print a debug message
-        Display_progress(params, "Prescribed advection test velocity field applied.");
         return; // Exit the function
     }
 

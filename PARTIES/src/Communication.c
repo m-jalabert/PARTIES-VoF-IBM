@@ -176,7 +176,7 @@ void Communication_update_ghost_nodes_x(double ***data, char component,
 #ifdef XPERIODIC
 	int NX = grid -> NX;
 
-	if (component == 'u' || component == U_VELOCITY || component == U_VELOCITY_PERTURBATION ) {
+	if (component == 'u' || component == U_VELOCITY || component == U_VELOCITY_PERTURBATION || component == FLUX_X) {
 		if (Is == 0) {
 			Is = 1;
 			pnodes_recv = pnodes + 1;
@@ -332,7 +332,7 @@ void Communication_update_ghost_nodes_y(double ***data, char component,int pnode
 	#ifdef YPERIODIC
 	int NY = grid -> NY;
 
-	if (component == 'v' || component == V_VELOCITY) {
+	if (component == 'v' || component == V_VELOCITY || component == FLUX_Y) {
 		if (Js == 0) {
 			Js = 1;
 			pnodes_recv = pnodes + 1;
@@ -993,7 +993,7 @@ void Communication_update_ghost_nodes_z(double ***data, char component,
 #ifdef ZPERIODIC
 	int NZ = grid -> NZ;
 
-	if (component == 'w' || component == W_VELOCITY) {
+	if (component == 'w' || component == W_VELOCITY || component == FLUX_Z) {
 		if (Ks == 0) {
 			Ks = 1;
 			pnodes_recv = pnodes + 1;

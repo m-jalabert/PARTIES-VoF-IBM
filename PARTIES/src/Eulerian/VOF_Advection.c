@@ -50,7 +50,10 @@ void VOF_set_advection(Cart3d_bag *data_bag)
     VolumeFraction *vof    = data_bag->vof;
 
     // Cell-centered volume fraction and conv array
-    double ***F    = vof->F;     
+    double ***F    = vof->F;
+    double ***flux_x = vof->flux_x;
+    double ***flux_y = vof->flux_y;
+    double ***flux_z = vof->flux_z;     
     double ***conv = vof->conv;  
 
     // Face velocities (MAC)
@@ -72,29 +75,17 @@ void VOF_set_advection(Cart3d_bag *data_bag)
     double *dx_c = grid -> dx_c;
     double *dy_c = grid -> dy_c;
     double *dz_c = grid -> dz_c;
-    
 
-    double ***flux_x = Memory_allocate_flow_variable(grid, params);
-    double ***flux_y = Memory_allocate_flow_variable(grid, params);
-    double ***flux_z = Memory_allocate_flow_variable(grid, params);
-
-    // Initialize them to zero
-    for (int kk = 0; kk < NZ+1; kk++){
-        for (int jj = 0; jj < NY+1; jj++){
-            for (int ii = 0; ii < NX+1; ii++){
-                if (kk < NZ && jj < NY && ii < NX+1) flux_x[kk][jj][ii] = 0.0;
-                if (kk < NZ && jj < NY+1 && ii < NX) flux_y[kk][jj][ii] = 0.0;
-                if (kk < NZ+1 && jj < NY && ii < NX) flux_z[kk][jj][ii] = 0.0;
-            }
-        }
-    }
+    Memory_reset_flow_variable(grid, params, flux_x);
+    Memory_reset_flow_variable(grid, params, flux_y);
+    Memory_reset_flow_variable(grid, params, flux_z); 
 
     /**************************************************************************
      * 2. X-direction face flux
      **************************************************************************/
     for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
-            for (int i = Is; i <= Ie; i++) { //i loops up to Ie instead of Ie-1 because flux is stored at faces, not cell centers
+            for (int i = Is; i < Ie; i++) { 
 
                 double face_vel = u->data[k][j][i];  // x-face velocity
                 double un = face_vel * dt/(dx_c[i] + SEPS); 
@@ -102,9 +93,6 @@ void VOF_set_advection(Cart3d_bag *data_bag)
                 // upwind offset
                 int ioff = -((int)s + 1)/2; 
                 int iup  = i + ioff;
-                // clamp to the domain limit
-                if (iup < Is)   iup = Is;
-                if (iup >= Ie)  iup = Ie - 1;
 
                 double c_up = F[k][j][iup];
                 double cf   = 0.0;
@@ -133,11 +121,13 @@ void VOF_set_advection(Cart3d_bag *data_bag)
         }
     }
 
+    Communication_update_ghost_nodes_flow_variable(flux_x, FLUX_X, 
+        params->ghost_nodes, data_bag);
     /**************************************************************************
      * 3. Y-direction face flux
      **************************************************************************/
     for (int k = Ks; k < Ke; k++) {
-        for (int j = Js; j <= Je; j++) {
+        for (int j = Js; j < Je; j++) {
             for (int i = Is; i < Ie; i++) {
 
                 double face_vel = v->data[k][j][i]; 
@@ -145,8 +135,6 @@ void VOF_set_advection(Cart3d_bag *data_bag)
                 double s  = (un > 0.) ? 1. : ((un < 0.) ? -1. : 0.);
                 int joff  = -((int)s + 1)/2;
                 int jup   = j + joff;
-                if (jup < Js)   jup = Js;
-                if (jup >= Je)  jup = Je - 1;
 
                 double c_up = F[k][jup][i];
                 double cf   = 0.0;
@@ -172,10 +160,14 @@ void VOF_set_advection(Cart3d_bag *data_bag)
         }
     }
 
+
+    Communication_update_ghost_nodes_flow_variable(flux_y, FLUX_Y, 
+        params->ghost_nodes, data_bag);
+
     /**************************************************************************
      * 4. Z-direction face flux
      **************************************************************************/
-    for (int k = Ks; k <= Ke; k++) {
+    for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
             for (int i = Is; i < Ie; i++) {
 
@@ -184,8 +176,6 @@ void VOF_set_advection(Cart3d_bag *data_bag)
                 double s  = (un > 0.) ? 1. : ((un < 0.) ? -1. : 0.);
                 int koff  = -((int)s + 1)/2;
                 int kup   = k + koff;
-                if (kup < Ks)   kup = Ks;
-                if (kup >= Ke)  kup = Ke - 1;
 
                 double c_up = F[kup][j][i];
                 double cf   = 0.0;
@@ -211,6 +201,10 @@ void VOF_set_advection(Cart3d_bag *data_bag)
         }
     }
 
+
+    Communication_update_ghost_nodes_flow_variable(flux_z, FLUX_Z, 
+        params->ghost_nodes, data_bag);
+
     /**************************************************************************
      * 5. Final Step: conv = dFudx + dFvdy + dFwdz
      **************************************************************************/
@@ -235,12 +229,7 @@ void VOF_set_advection(Cart3d_bag *data_bag)
         }
     }
 
-    /**************************************************************************
-     * 6. Cleanup flux arrays
-     **************************************************************************/
-    Memory_free_flow_variable(grid, params, flux_x);
-    Memory_free_flow_variable(grid, params, flux_y);
-    Memory_free_flow_variable(grid, params, flux_z);
+
 }
 
 
@@ -343,6 +332,8 @@ void VOF_update_F(Cart3d_bag *data_bag)
             }
         }
     }
+    Communication_update_ghost_nodes_flow_variable(vof->F, VOLUME_FRACTION,
+        params->ghost_nodes, data_bag);
 }
 
 
@@ -725,7 +716,7 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
     //-------------------------------------------------------------------------
     // 4) MPI ghost‐cell update
     //-------------------------------------------------------------------------
-    Communication_update_ghost_nodes_flow_variable(F,
+     Communication_update_ghost_nodes_flow_variable(F,
                                                    VOLUME_FRACTION,
                                                    params->ghost_nodes,
                                                    data_bag);

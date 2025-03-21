@@ -14,6 +14,8 @@ int Pressure_solve(Pressure *p, MAC_grid *grid, Parameters *params);
 
 // Pressure solver functions for VoF-PLIC
 
+void Pressure_compute_preconditioner(Cart3d_bag *data_bag);
+
 
 /******************************************************************************/
 // Conjugate Gradient solver for the variable-coefficient Poisson system:

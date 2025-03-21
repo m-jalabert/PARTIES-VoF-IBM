@@ -711,9 +711,9 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
             VoF_init_bubble(data_bag);
             break;
         // Add future initialization types here
-        // case 2: 
-        //    Other_init_function(data_bag);
-        //    break;
+        case 2: // Single Cell test case
+			VoF_init_single_cell(data_bag);
+			break;
         default:
 			if(params->rank == 0) {
 				char warning_msg[256];
@@ -725,16 +725,13 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
             break;
     }
     
-    if(params->init_type == 1) {  // Only process if initialization was performed
         // Set boundary values and update ghost nodes
-        VOF_set_boundary_values(data_bag->vof->F, data_bag);
-        Communication_update_ghost_nodes_flow_variable(data_bag->vof->F, VOLUME_FRACTION, 
-                                                     params->ghost_nodes, data_bag);
+         VOF_set_boundary_values(data_bag->vof->F, data_bag);
         
         // Update mixture properties (density, viscosity)
         VOF_update_density_viscosity(data_bag);
         Display_progress(params, "VOF initialized successfully...\n");
-    }
+    
 #endif
 
 

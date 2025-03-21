@@ -205,7 +205,9 @@ int Display_parameters(Parameters *params) {
 	double wall_vel = 2.0 * params->ubulk_target;
 #endif
 
-#ifdef BOTTOM_WALL_VELOCITY_NOSLIP
+#if defined YPERIODIC
+	printf("Y-Boundaries: ... periodic\n");
+#elif BOTTOM_WALL_VELOCITY_NOSLIP
 	printf("Bottom wall: .... no-slip\n");
 #elif defined BOTTOM_WALL_VELOCITY_FREESLIP
 	printf("Bottom wall: .... free-slip\n");

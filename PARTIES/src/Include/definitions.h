@@ -232,7 +232,12 @@
 
 #define P_CORRECTION 'h'
 
+#define DENSITY 'i'
 #define VOLUME_FRACTION 'o'
+
+#define FLUX_X 'p'
+#define FLUX_Y 'q'
+#define FLUX_Z 'r'
 
 // deprecated stuff maybe ready to be deleted
 #undef TEST_OUTPUT

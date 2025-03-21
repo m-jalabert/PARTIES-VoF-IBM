@@ -38,6 +38,7 @@ Pressure *Pressure_create(MAC_grid *grid, Parameters *params) {
     new_p->res     = Memory_allocate_flow_variable(grid, params);  // residual array
     new_p->d       = Memory_allocate_flow_variable(grid, params);  // search direction
     new_p->Ad      = Memory_allocate_flow_variable(grid, params);  // operator applied to d
+	new_p->M_inv   = Memory_allocate_flow_variable(grid, params);  // Preconditioner
 
 	new_p->project_comm_cpu_time = 0.0;
 	new_p->project_update_cpu_time = 0.0;
@@ -73,6 +74,7 @@ void Pressure_destroy(Pressure *p, MAC_grid *grid, Parameters *params) {
     Memory_free_flow_variable(grid, params, p->res);
     Memory_free_flow_variable(grid, params, p->d);
     Memory_free_flow_variable(grid, params, p->Ad);
+	Memory_free_flow_variable(grid, params, p->M_inv);
 
 	free(p->idxdt);
 	free(p->idydt);
@@ -190,6 +192,14 @@ void Pressure_set_RHS(Cart3d_bag *data_bag) {
 				dwdz = ( w_data[k+1][j][i] - w_data[k][j][i] ) * idzdt[k];
 #endif
 				rhs_vec[k][j][i] = dudx + dvdy + dwdz; //cos(2*PI*xc[i]/Lx) *  cos(2*PI*yc[j]/Ly) *  cos(2*PI*zc[k]/Lz);//
+                // Debug print for a sample cell (e.g., the mid-domain cell)
+                if (k == (k_start + k_end) / 2 && j == (j_start + j_end) / 2 && i == (i_start + i_end) / 2) {
+                    printf("Pressure_set_RHS sample at cell (%d,%d,%d):\n", i, j, k);
+                    printf("    dudx = %g, dvdy = %g, dwdz = %g, rhs = %g\n", dudx, dvdy, dwdz, rhs_vec[k][j][i]);
+                    printf("    Raw u = %g (at [%d,%d,%d]), Raw v = %g, Raw w = %g\n", 
+                           u_data[k][j][i], i, j, k, v_data[k][j][i], w_data[k][j][i]);
+}
+
 			} /* for i*/
 		} /* for j*/
 	} /* for k*/

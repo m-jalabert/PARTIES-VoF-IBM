@@ -47,6 +47,40 @@ static double Pressure_innerProd(double ***vec1, double ***vec2,  MAC_grid *grid
 	return totalSum;
 }
 
+void Pressure_compute_preconditioner(Cart3d_bag *data_bag)
+{
+    Pressure *p = data_bag->p;
+    MAC_grid *grid = data_bag->grid;
+    Parameters *params = data_bag->params;
+    VolumeFraction *vof = data_bag->vof;
+    double ***rho = vof->rho;
+
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    // Loop over interior cells and compute an approximate diagonal of A.
+    // For a typical central difference discretization of ∇·(1/ρ ∇φ),
+    // the diagonal a_{ijk} is roughly the sum of contributions from each face.
+    for (int k = Ks; k < Ke; k++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
+                // Here we assume uniform grid for simplicity; adjust as needed.
+                double ax = 2.0 / (rho[k][j][i] + rho[k][j][i+1]);
+                double ay = 2.0 / (rho[k][j][i] + rho[k][j+1][i]);
+                double az = 2.0 / (rho[k][j][i] + rho[k+1][j][i]);
+                
+                double aii = ax * (grid->idx_c[1]*grid->idx_c[1])
+                           + ay * (grid->idy_c[1]*grid->idy_c[1])
+                           + az * (grid->idz_c[1]*grid->idz_c[1]);
+                double eps = 1e-12;
+                p->M_inv[k][j][i] = 1.0 / (aii + eps);
+            }
+        }
+    }
+}
+
+
 /******************************************************************************/
 // Conjugate Gradient solver for the variable-coefficient Poisson system:
 //
@@ -72,25 +106,28 @@ int Pressure_solve_cg(Cart3d_bag *data_bag)
     // VoF varying density
     double ***rho = vof->rho;  
 
-
     // Some references to the arrays used for CG:
     double ***phi = p->deltap; // Our unknown "pressure correction"
     double ***rhs = p->rhs;    // The Poisson RHS
     double ***res = p->res;    // CG residual
-    double ***d   = p->d;      // CG direction
+    double ***d   = p->d;      // CG search direction
     double ***Ad  = p->Ad;     // Operator(A)*d
 
+    // Preconditioner array: inverse of diagonal of A.
+    // This array must be allocated and computed prior to the CG call.
+    double ***M_inv = p->M_inv; 
     // Convergence criteria
     double tolerance = params->CG_ETOL;   // e.g. 1e-6
-    int maxIters     = params->CG_MAXIT;  // e.g. 2000
+    int maxIters     = params->CG_MAXIT;   // e.g. 2000
 
-    // We'll store dot products here
-    double rr, rr_new, alpha, beta;
+    // Temporary vector to hold preconditioned residual
+    double ***z = Memory_allocate_flow_variable(grid, params);
 
-    // (1) Build initial residual: r = rhs - A*phi
-    //     A*phi is computed by calling Pressure_operator_variableCoeff(...)
+    // Dot product variables
+    double gamma, gamma_new, alpha, beta, rr_new;
+
+    // (1) Build initial residual: r = rhs - A*phi.
     Pressure_operator_variableCoeff(Ad, phi, rho, grid, params, data_bag);
-    // r = rhs - Ad
     {
         int i, j, k;
         int Is = grid->G_Is, Js = grid->G_Js, Ks = grid->G_Ks;
@@ -99,38 +136,44 @@ int Pressure_solve_cg(Cart3d_bag *data_bag)
             for (j = Js; j < Je; j++) {
                 for (i = Is; i < Ie; i++) {
                     res[k][j][i] = rhs[k][j][i] - Ad[k][j][i];
-                    d[k][j][i]   = res[k][j][i];
                 }
             }
         }
     }
-
-    // (2) Initial norm
-    rr = Pressure_innerProd(res, res, grid, params);
-    double initRes = sqrt(rr);
-    if (params->rank == 0) {
-        printf(" Pressure CG solver start: initial residual = %g\n", initRes);
+    // Preconditioning: z = M_inv * r, and initialize search direction d = z.
+    {
+        int i, j, k;
+        int Is = grid->G_Is, Js = grid->G_Js, Ks = grid->G_Ks;
+        int Ie = grid->G_Ie, Je = grid->G_Je, Ke = grid->G_Ke;
+        for (k = Ks; k < Ke; k++) {
+            for (j = Js; j < Je; j++) {
+                for (i = Is; i < Ie; i++) {
+                    z[k][j][i] = res[k][j][i] * M_inv[k][j][i];
+                    d[k][j][i] = z[k][j][i];
+                }
+            }
+        }
     }
-
-    // If already small, we can stop
+    // Compute initial gamma = (r,z)
+    gamma = Pressure_innerProd(res, z, grid, params);
+    double initRes = sqrt(gamma);
+    if (params->rank == 0) {
+        printf(" Pressure CG solver start: initial preconditioned residual = %g\n", initRes);
+    }
     if (initRes < tolerance) {
+        printf(" OUPSIIIII = %g\n", initRes);
+        Memory_free_flow_variable(grid, params, z);
         return 0;
     }
 
-    // (3) Main CG iteration
     int iters;
     for (iters = 1; iters <= maxIters; iters++) {
-
-        // Ad = A*d
+        // Compute Ad = A*d
         Pressure_operator_variableCoeff(Ad, d, rho, grid, params, data_bag);
-
-        // dot(d, Ad)
         double dAd = Pressure_innerProd(d, Ad, grid, params);
+        alpha = gamma / (dAd + 1e-30);
 
-        // alpha = (r,r) / (d,Ad)
-        alpha = rr / (dAd + 1e-30); // small safeguard to avoid /0
-
-        // Update: phi = phi + alpha*d   AND   r = r - alpha*Ad
+        // Update: phi = phi + alpha * d, and r = r - alpha * Ad.
         {
             int i, j, k;
             int Is = grid->G_Is, Js = grid->G_Js, Ks = grid->G_Ks;
@@ -145,22 +188,7 @@ int Pressure_solve_cg(Cart3d_bag *data_bag)
             }
         }
 
-        // New residual norm
-        rr_new = Pressure_innerProd(res, res, grid, params);
-        double resNorm = sqrt(rr_new);
-
-        // Check convergence
-        if (resNorm < tolerance) {
-            if (params->rank == 0) {
-                printf(" Pressure CG converged after %d iterations, resNorm=%g\n", iters, resNorm);
-            }
-            break;
-        }
-
-        // beta = rr_new / rr
-        beta = rr_new / (rr + 1e-30);
-
-        // d = r + beta*d
+        // Preconditioning: compute new preconditioned residual: z = M_inv * r.
         {
             int i, j, k;
             int Is = grid->G_Is, Js = grid->G_Js, Ks = grid->G_Ks;
@@ -168,32 +196,49 @@ int Pressure_solve_cg(Cart3d_bag *data_bag)
             for (k = Ks; k < Ke; k++) {
                 for (j = Js; j < Je; j++) {
                     for (i = Is; i < Ie; i++) {
-                        d[k][j][i] = res[k][j][i] + beta * d[k][j][i];
+                        z[k][j][i] = res[k][j][i] * M_inv[k][j][i];
                     }
                 }
             }
         }
-
-        // Prepare for next iteration
-        rr = rr_new;
-
-        // Optionally print every e.g. 50 iterations
-        if (params->rank == 0 && (iters % 50 == 0)) {
-            printf(" Pressure CG iteration %d, residual=%g\n", iters, resNorm);
-        }
-    } // end for
-
-    // iters is either the iteration we ended on, or maxIters+1 if we never broke
-    if (iters > maxIters) {
-        double finalRes = sqrt(rr);
+        gamma_new = Pressure_innerProd(res, z, grid, params);
+        double resNorm = sqrt(gamma_new);
         if (params->rank == 0) {
-            printf(" Pressure CG reached maxIters=%d with final resNorm=%g\n", maxIters, finalRes);
+            printf(" Pressure CG iteration %d, preconditioned residual norm = %g\n", iters, resNorm);
+        }
+        if (resNorm < tolerance) {
+            break;
+        }
+        beta = gamma_new / (gamma + 1e-30);
+
+        // Update search direction: d = z + beta * d.
+        {
+            int i, j, k;
+            int Is = grid->G_Is, Js = grid->G_Js, Ks = grid->G_Ks;
+            int Ie = grid->G_Ie, Je = grid->G_Je, Ke = grid->G_Ke;
+            for (k = Ks; k < Ke; k++) {
+                for (j = Js; j < Je; j++) {
+                    for (i = Is; i < Ie; i++) {
+                        d[k][j][i] = z[k][j][i] + beta * d[k][j][i];
+                    }
+                }
+            }
+        }
+        gamma = gamma_new;
+    } // end main loop
+
+    if (iters > maxIters) {
+        double finalRes = sqrt(gamma);
+        if (params->rank == 0) {
+            printf(" Pressure CG reached maxIters=%d with final preconditioned residual norm = %g\n", maxIters, finalRes);
         }
         iters = maxIters;
     }
 
+    Memory_free_flow_variable(grid, params, z);
     return iters;
 }
+
 
 
 
@@ -211,6 +256,7 @@ void Pressure_operator_variableCoeff(
 {
     // 1) Exchange ghost cells and apply BCs to phi.
     Communication_update_ghost_nodes_flow_variable(phi, 'h', params->ghost_nodes, data_bag);
+    Communication_update_ghost_nodes_flow_variable(rho, DENSITY, params->ghost_nodes, data_bag);
     Pressure_apply_BCs(phi, grid, params); 
     
 

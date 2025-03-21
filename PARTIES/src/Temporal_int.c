@@ -78,6 +78,9 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Velocity *w = data_bag -> w;
 	Pressure *p = data_bag -> p;
 
+	//Debugging
+	int rank = data_bag->params->rank;
+
 	#ifdef CONC
 		int iconc;
 		int NConc = params -> NConc;
@@ -667,8 +670,15 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 #endif
 
 
+
+	/*------------------------------------------------------------------------*/
+	/*
+	 VoF-PLIC method
+	 */
+	/*------------------------------------------------------------------------*/
  #ifdef VOF_PLIC
 
+		int rank = data_bag->params->rank; // if you want the MPI rank
          // Boundary conditions for F
          VOF_set_boundary_values(vof->F, data_bag);
 
@@ -683,9 +693,30 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
          VOF_reconstruct_interface(data_bag);
 
          // If using mixture laws for density/viscosity
-         VOF_update_density_viscosity(data_bag);
-    
+		 VOF_update_density_viscosity(data_bag);
+
  #endif 
+
+	/*------------------------------------------------------------------------*/
+	/*
+	 For a "pure VoF advection test," we skip the velocity solve & Poisson:
+	 */
+	/*------------------------------------------------------------------------*/
+ 		if (params->vel_init_type == VEL_INIT_ADVECTION_TEST) 
+  		{
+		
+			//Prescribed velocity test: skipping momentum solver but advancing time;
+			return;
+		}
+
+
+
+	/*------------------------------------------------------------------------*/
+	/*
+	 Momentum Solver and Poisson Solver
+	 */
+	/*------------------------------------------------------------------------*/
+		else {			
 
 	/*------------------------------------------------------------------------*/
 	/*
@@ -990,6 +1021,7 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 		T1 = MPI_Wtime();
 
 #ifdef VOF_PLIC // Pressure solved with CG method for VOF
+		Pressure_compute_preconditioner(data_bag);
 		Pressure_solve_cg(data_bag);
 #else
 		Pressure_solve(p, grid, params);
@@ -1178,7 +1210,9 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 	Array_copy_withghost(w->data, w->data_old, grid, params);
 #endif
 
-}
+		} // end of else
+
+}	// end of function
 
 
 
