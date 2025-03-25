@@ -28,62 +28,65 @@
 /******************************************************************************/
 /*
  This function initializes the volume fraction field for a bubble, based on 
- Rider & Kothe (1998) test case. 
+ Van SintAnnaland (2005) standard advection test case. 
  */
 /******************************************************************************/
 void VoF_init_bubble(Cart3d_bag *data_bag)
 {
-    
-    double x_c, y_c, z_c, R; // bubble center and radius
-    
     MAC_grid    *grid   = data_bag->grid;
     Parameters  *params = data_bag->params;
-    VolumeFraction *vof = data_bag->vof; // 
+    VolumeFraction *vof = data_bag->vof;
+    double ***F = vof->F;
 
-    double ***F = vof->F;  // cell-centered volume fraction array
+    // Bubble parameters (Van SintAnnaland 2005 test case)
+    const double x_c = 0.5, y_c = 0.6875, z_c = 0.5;
+    const double R = 0.1875;
+    
+    // Grid parameters
+    const double dx = grid->dx_c[0];  // Uniform grid assumed
+    const double dy = grid->dy_c[0];
+    const double dz = grid->dz_c[0];
+    const double cell_vol = dx * dy * dz;
 
+    // Subgrid sampling parameters (5x5x5 subcells per grid cell)
+    const int samples = 5;
+    const double sample_weight = 1.0/(samples*samples*samples);
 
-    x_c = 0.5;
-    y_c = 0.6875;
-    z_c = 0.5;
-    R   = 0.1875;
+    // Local domain indices
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
 
-
-    double *xc = grid->xc;
-    double *yc = grid->yc;
-    double *zc = grid->zc; 
-
-    // Indices of your local domain portion
-    int Is = grid->G_Is; 
-    int Ie = grid->G_Ie;
-    int Js = grid->G_Js;
-    int Je = grid->G_Je;
-    int Ks = grid->G_Ks;
-    int Ke = grid->G_Ke;
-
-    // Loop over local portion
     for (int k = Ks; k < Ke; k++) {
+        double z_min = grid->zc[k] - 0.5*dz;
         for (int j = Js; j < Je; j++) {
+            double y_min = grid->yc[j] - 0.5*dy;
             for (int i = Is; i < Ie; i++) {
-                // Coordinates of the cell center (xc[i], yc[j], zc[k])
-                double dx = xc[i] - x_c;
-                double dy = yc[j] - y_c;
-                double dz = zc[k] - z_c;
-
-                double distSq = dx*dx + dy*dy + dz*dz;
-                double rSq    = R*R;
-
-                if (distSq < rSq) {
-                    // Inside the bubble
-                    F[k][j][i] = 0.0;
-                } else {
-                    // Outside the bubble 
-                    F[k][j][i] = 1.0;
+                double x_min = grid->xc[i] - 0.5*dx;
+                
+                // Subgrid sampling to approximate exact volume fraction
+                double vol = 0.0;
+                for (int sk = 0; sk < samples; sk++) {
+                    double z_sub = z_min + (sk + 0.5)*(dz/samples);
+                    for (int sj = 0; sj < samples; sj++) {
+                        double y_sub = y_min + (sj + 0.5)*(dy/samples);
+                        for (int si = 0; si < samples; si++) {
+                            double x_sub = x_min + (si + 0.5)*(dx/samples);
+                            
+                            // Distance from bubble center
+                            double dx2 = (x_sub - x_c)*(x_sub - x_c);
+                            double dy2 = (y_sub - y_c)*(y_sub - y_c);
+                            double dz2 = (z_sub - z_c)*(z_sub - z_c);
+                            
+                            if (dx2 + dy2 + dz2 < R*R) vol += 1.0;
+                        }
+                    }
                 }
+                
+                F[k][j][i] = 1.0 - vol * sample_weight;  // Gas phase = 0.0
             }
         }
     }
-
 }
 
 /******************************************************************************/
