@@ -24,8 +24,7 @@ struct volume_fraction {
 	double ***F_smooth;         						// Smoothed volume fraction
 	double ***mu; 										// Cell-centered Viscosity
 	double ***rho; 										// Cell-centered Density
-    double ***kappa;									// Curvature
-	double ***normal_x, ***normal_y, ***normal_z;       // Interface normal
+	double ***normal_x, ***normal_y, ***normal_z;       // Interface PLIC normal
 	double ***alpha;  									// plane intercept for the PLIC plane in each cell
 
 
@@ -34,10 +33,8 @@ struct volume_fraction {
 	double ***conv_old; 							    // Storage for previous stage's convective term		
 	double ***ng_rhs;									// Right-hand side of the volume fraction equation
 
-	double ***F_old;  									// to store previous stage or previous timestep
-    double ***ng_F;   									// separate ghosted copy 
-
-
+	double ***normal_x_smooth, ***normal_y_smooth, ***normal_z_smooth;       // Curvature normals from F_smooth
+	double ***kappa;        												 // Mean curvature κ = ∇·n at cell centres        
 
 
 
@@ -314,6 +311,12 @@ struct parameters {
 	lsolver_transpose *lsolver_remap;
 
 	// Tolerance and maximum number of iterations for CG solver
+
+	//Pressure CG solver
+	double P_CG_ETOL;
+	int P_CG_MAXIT;
+
+	//Concentration and Velocity CG solver
 	double CG_ETOL;
 	int CG_MAXIT;
 
@@ -372,10 +375,9 @@ struct parameters {
 
 
 	/*--------------------------------- VOF-PLIC -----------------------------*/
-
-    double Bo;          // Bond number
-    double Ri;          // Richardson number
-    double sigma;       // Surface tension coefficient
+	
+	double sigma;      // Surface tension coefficient
+    double We;          // Weber number
     double rho1, rho2;  // Phase densities
     double mu1, mu2;    // Phase viscosities
     
@@ -592,6 +594,9 @@ struct velocity {
 	double ***d;
 	double ***ng_r;
 	double ***ng_Ad;
+	#ifdef VOF_PLIC
+	double ***M_inv; // Preconditioner
+	#endif
 #endif
 
 #ifdef BICG_SOLVE
@@ -1511,8 +1516,8 @@ struct matrix_struct {
 
 	int size;           // size = 2,3,4
 	double det;         // determinant
-	double A[4][4];     // matrix values
-	double A_inv[4][4]; // inverse matrix values
+	double A[6][6];     // matrix values
+	double A_inv[6][6]; // inverse matrix values
 
 };
 typedef struct matrix_struct MatrixType;

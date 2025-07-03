@@ -153,6 +153,9 @@ Velocity *Velocity_create(MAC_grid *grid, Parameters *params, char which_velocit
 	new_vel -> d = Memory_allocate_flow_variable(grid, params);
 	new_vel -> ng_r = Memory_allocate_noghost_variable(grid, params);
 	new_vel -> ng_Ad = Memory_allocate_noghost_variable(grid, params);
+	#ifdef VOF_PLIC
+	new_vel -> M_inv = Memory_allocate_flow_variable(grid, params);
+	#endif
 #endif
 
 #ifdef BICG_SOLVE
@@ -237,6 +240,9 @@ void Velocity_destroy(Velocity *vel, MAC_grid *grid, Parameters *params) {
 	Memory_free_flow_variable(grid, params, vel->d);
 	Memory_free_noghost_variable(grid, params, vel->ng_r);
 	Memory_free_noghost_variable(grid, params, vel->ng_Ad);
+	#ifdef VOF_PLIC
+	Memory_free_flow_variable(grid, params, vel->M_inv);
+	#endif
 #endif
 
 #ifdef BICG_SOLVE
@@ -305,10 +311,7 @@ void Velocity_cell_center(Cart3d_bag *data_bag) {
 	int Je = grid -> L_Je - 1;
 	int Ke = grid -> L_Ke - 1;
 
-	// exclude the half cell added
-//	Ie = min(Ie, NX-1);
-//	Je = min(Je, NY-1);
-//	Ke = min(Ke, NZ-1);
+
 
 	// Find u at cell center
 	for (k = Ks; k < Ke; k++) {
@@ -403,7 +406,6 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 	double ***implicit = data_bag -> u -> ng_implicit;
 
 #ifdef VOF_PLIC
-    // Retrieve the VOF volume_fraction with cell-centered rho
     VolumeFraction *vof = data_bag->vof;
 	double ***mu = vof->mu; // cell-centered viscosity
 #endif
@@ -585,7 +587,7 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				/*------------------------------------------------------------*/
 
 				explicit[k][j][i] = -(duudx + duvdy + duwdz);
-				explicit[k][j][i] += ddxdudx + ddydvdx + ddzdwdx;
+				explicit[k][j][i] += 2 * (ddxdudx + ddydvdx + ddzdwdx);
 
 #ifdef FULLY_EXPLICIT
 
@@ -594,7 +596,7 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 #elif defined VOF_PLIC
 
-				implicit[k][j][i] = 0.0; //implicit terms computed by matVec
+				implicit[k][j][i] = d2udx2 + d2udy2 + d2udz2; 
 
 #elif defined FULLY_IMPLICIT
 
@@ -767,23 +769,7 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				d2vdz2 = ( nuF * dvdzF - nuB * dvdzB ) * idz_w[k];
 #endif
 
-				if(k==0){
-					if(i==99){
-						if(j==NY-1){
-						printf("u_i+1 at i =99 is %e\n", u_data[k][j][i+1]);
-						printf("u_i at i =99 is %e\n", u_data[k][j][i]);
-						printf("u_i-1 at i =99 is %e\n", u_data[k][j][i-1]);
-						//u_data[k][j][100] =1.0;
-				}}}
 
-				if(k==0){
-					if(i==100){
-						if(j==NY-1){
-						printf("u_i+1 at i =100 is %e\n", u_data[k][j][i+1]);
-						printf("u_i at i = 100 is %e\n", u_data[k][j][i]);
-						printf("u_i-1 at i = 100 is %e\n", u_data[k][j][i-1]);
-						//u_data[k][j][100] =1.0;
-				}}}
 
 
 				//--------------------------------------------------------------
@@ -854,7 +840,7 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 				explicit[k][j][i] = -(dvudx + dvvdy + dvwdz);
 
-				explicit[k][j][i] += ddxdudy + ddydvdy + ddzdwdy;
+				explicit[k][j][i] += 2 * ( ddxdudy + ddydvdy + ddzdwdy );
 
 #ifdef FULLY_EXPLICIT
 
@@ -863,7 +849,7 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 #elif defined VOF_PLIC
 
-				implicit[k][j][i] = 0.0; //implicit terms computed by matVec				
+				implicit[k][j][i] = d2vdx2 + d2vdy2 + d2vdz2; //implicit terms computed by matVec				
 
 #elif defined FULLY_IMPLICIT
 				implicit[k][j][i] = d2vdx2 + d2vdy2 + d2vdz2;
@@ -1118,7 +1104,7 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 				/*------------------------------------------------------------*/
 
 				explicit[k][j][i] = -(dwudx + dwvdy + dwwdz);
-				explicit[k][j][i] += ddxdudz + ddydvdz + ddzdwdz;
+				explicit[k][j][i] += 2 * (ddxdudz + ddydvdz + ddzdwdz);
 
 #ifdef FULLY_EXPLICIT
 
@@ -1127,7 +1113,7 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 #elif defined VOF_PLIC
 
-				implicit[k][j][i] = 0.0; //implicit terms computed by matVec
+				implicit[k][j][i] = d2wdx2 + d2wdy2 + d2wdz2; //implicit terms computed by matVec
 
 #elif defined FULLY_IMPLICIT
 				implicit[k][j][i] = d2wdx2 + d2wdy2 + d2wdz2;
@@ -1269,14 +1255,6 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 #endif
 
 
-/*
-	// 1-D arrays
-	rhs_1d          = &rhs[Ks][Js][Is];
-	explicit_1d     = &explicit[Ks][Js][Is];
-	explicit_old_1d = &explicit_old[Ks][Js][Is];
-	implicit_1d     = &implicit[Ks][Js][Is];
-	total_nodes = (Ie - Is) * (Je - Js) * (Ke - Ks);
- */
 
 	// Runge Kutta coefficients
 	int rk = params -> which_stage;
@@ -1295,12 +1273,22 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 				dpdx = (p_data[k][j][i] - p_data[k][j][i-1]) * idx_c[i-1];
 
 
-#ifdef VOF_PLIC //implicit term already implemented in LHS computed by matVec for CG, implicit=0 here
 
-				rhs[k][j][i] = rho_data[k][j][i] * a_dt * data[k][j][i] - 2.0 * dpdx
-				             + rho_data[k][j][i] * GAMB[rk] * explicit[k][j][i]
-				             + rho_data[k][j][i] * ZETB[rk] * explicit_old[k][j][i]
+#ifdef VOF_PLIC 
+
+	#ifdef STATIC_BUBBLE_TESTCASE //inertia terms ignored for static bubble test case
+
+				rhs[k][j][i] = (rho_data[k][j][i] + rho_data[k][j][i-1]) / 2 * a_dt * data[k][j][i] - 2.0 * dpdx
 				             + implicit[k][j][i];
+
+
+	#else
+
+				rhs[k][j][i] = (rho_data[k][j][i] + rho_data[k][j][i-1]) / 2 * a_dt * data[k][j][i] - 2.0 * dpdx
+				             + (rho_data[k][j][i] + rho_data[k][j][i-1]) / 2 * GAMB[rk] * explicit[k][j][i]
+				             + (rho_data[k][j][i] + rho_data[k][j][i-1]) / 2 * ZETB[rk] * explicit_old[k][j][i]
+				             + implicit[k][j][i];
+	#endif
 
 #else
 
@@ -1343,21 +1331,7 @@ void Velocity_u_set_RHS(Cart3d_bag *data_bag) {
 	T2 = MPI_Wtime();
 	data_bag->u->rhs_p_cpu_time += T2-T1;
 
-/*
-	index = 0;
-	T1 = MPI_Wtime();
-	while ( index != total_nodes ) {
-		rhs_1d[index] += GAMB[rk] * implicit_1d[index]
-		               + ZETB[rk] * explicit_old_1d[index]
-		               + implicit_1d[index];
-#ifdef LAG_PARTICLE_RESOLVED
-		rhs_1d[index] += implicit_1d[index];
-#endif
-		explicit_old_1d[index] = explicit_1d[index++];
-	}
-	T2 = MPI_Wtime();
-	u->rhs_loop_cpu_time += T2-T1;
-*/
+
 double x_fr = params->x_fr;
 
 double xmin = params->xmin;
@@ -1496,19 +1470,29 @@ void Velocity_v_set_RHS(Cart3d_bag *data_bag) {
           // Multiply the pressure gradient by -2 / rho if VOF_PLIC is on;
           // else do the old -2.0 * dpdy if single-phase.
           // -------------------------------------------------------------
-#ifdef VOF_PLIC
 
-			rhs[k][j][i] = rho_data[k][j][i] * a_dt * data[k][j][i] - 2.0 * dpdy
-			+ rho_data[k][j][i] * GAMB[rk] * explicit[k][j][i]
-			+ rho_data[k][j][i] * ZETB[rk] * explicit_old[k][j][i]
-			+ implicit[k][j][i];
+#ifdef VOF_PLIC 
+
+	#ifdef STATIC_BUBBLE_TESTCASE //inertia terms ignored for static bubble test case
+
+				rhs[k][j][i] = (rho_data[k][j][i] + rho_data[k][j-1][i]) / 2 * a_dt * data[k][j][i] - 2.0 * dpdy
+				             + implicit[k][j][i];
+
+
+	#else
+
+				rhs[k][j][i] = (rho_data[k][j][i] + rho_data[k][j-1][i]) / 2 * a_dt * data[k][j][i] - 2.0 * dpdy
+				             + (rho_data[k][j][i] + rho_data[k][j-1][i]) / 2 * GAMB[rk] * explicit[k][j][i]
+				             + (rho_data[k][j][i] + rho_data[k][j-1][i]) / 2 * ZETB[rk] * explicit_old[k][j][i]
+				             + implicit[k][j][i];
+	#endif
 
 #else
 
-		  rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdy
-					   + GAMB[rk] * explicit[k][j][i]
-					   + ZETB[rk] * explicit_old[k][j][i]
-					   + implicit[k][j][i];
+				rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdy
+				             + GAMB[rk] * explicit[k][j][i]
+				             + ZETB[rk] * explicit_old[k][j][i]
+				             + implicit[k][j][i];
 
 #endif
 
@@ -1542,43 +1526,7 @@ void Velocity_v_set_RHS(Cart3d_bag *data_bag) {
 	} // for k
 	T2 = MPI_Wtime();
 	data_bag->v->rhs_p_cpu_time += T2-T1;
-/*
-	printf(" TOTAL RHS at top is v[0][NY-3][0]=%2.3f\n",rhs[0][NY-3][0]);
-	printf(" TOTAL RHS at top is v[0][NY-2][0]=%2.3f\n",rhs[0][NY-2][0]);
-	printf(" TOTAL RHS at top is v[0][NY-1][0]=%2.3f\n",rhs[0][NY-1][0]);
-	printf(" TOTAL RHS at bottom is v[0][1][0]=%2.3f\n",rhs[0][1][0]);
-	printf(" TOTAL RHS at bottom is v[0][2][0]=%2.3f\n",rhs[0][2][0]);
 
-
-
-	printf(" explicit RHS at top is v[0][NY-3][0]=%2.3f\n",explicit[0][NY-3][0]);
-	printf(" explicit RHS at top is v[0][NY-2][0]=%2.3f\n",explicit[0][NY-2][0]);
-	printf(" explicit RHS at top is v[0][NY-1][0]=%2.3f\n",explicit[0][NY-1][0]);
-	printf(" explicit RHS at bottom is v[0][1][0]=%2.3f\n",explicit[0][1][0]);
-	printf(" explicit RHS at bottom is v[0][2][0]=%2.3f\n",explicit[0][2][0]);
-
-
-	printf(" old explicit RHS at top is v[0][NY-3][0]=%2.3f\n",explicit_old[0][NY-3][0]);
-	printf(" old explicit RHS at top is v[0][NY-2][0]=%2.3f\n",explicit_old[0][NY-2][0]);
-	printf(" old explicit RHS at top is v[0][NY-1][0]=%2.3f\n",explicit_old[0][NY-1][0]);
-	printf(" old explicit RHS at bottom is v[0][1][0]=%2.3f\n",explicit_old[0][1][0]);
-	printf(" old explicit RHS at bottom is v[0][2][0]=%2.3f\n",explicit_old[0][2][0]);
-
-
-	printf("implicit RHS at top is v[0][NY-3][0]=%2.3f\n",implicit[0][NY-3][0]);
-	printf("implicit RHS at top is v[0][NY-2][0]=%2.3f\n",implicit[0][NY-2][0]);
-	printf("implicit RHS at top is v[0][NY-1][0]=%2.3f\n",implicit[0][NY-1][0]);
-	printf("implicit RHS at bottom is v[0][1][0]=%2.3f\n",implicit[0][1][0]);
-	printf("implicit RHS at bottom is v[0][2][0]=%2.3f\n",implicit[0][2][0]);
-
-
-		printf("pdata RHS at top is v[0][NY-3][0]=%2.3f\n",p_data[0][NY-3][0]);
-		printf("pdata RHS at top is v[0][NY-2][0]=%2.3f\n", // Characteristic dissipation value for the random turbulent processp_data[0][NY-2][0]);
-		printf("pdata RHS at top is v[0][NY-1][0]=%2.3f\n",p_data[0][NY-1][0]);
-		printf("pdata RHS at bottom is v[0][0][0]=%2.3f\n",p_data[0][0][0]);
-		printf("pdata RHS at bottom is v[0][1][0]=%2.3f\n",p_data[0][1][0]);
-		printf("pdata RHS at bottom is v[0][2][0]=%2.3f\n",p_data[0][2][0]);
-*/
 
 double xmin = params->xmin;
 double xmax = params->xmax;
@@ -1700,21 +1648,30 @@ void Velocity_w_set_RHS(Cart3d_bag *data_bag) {
           // Multiply the pressure gradient by -2 / rho if VOF_PLIC is on;
           // else do the old -2.0 * dpdz if single-phase.
           // -------------------------------------------------------------
-#ifdef VOF_PLIC
+		  #ifdef VOF_PLIC 
 
-				rhs[k][j][i] = rho_data[k][j][i] * a_dt * data[k][j][i] - 2.0 * dpdz
-				+ rho_data[k][j][i] * GAMB[rk] * explicit[k][j][i]
-				+ rho_data[k][j][i] * ZETB[rk] * explicit_old[k][j][i]
-				+ implicit[k][j][i];
-
-#else
-
-				rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdz
-				             + GAMB[rk] * explicit[k][j][i]
-				             + ZETB[rk] * explicit_old[k][j][i]
-				             + implicit[k][j][i];
-
-#endif
+		  #ifdef STATIC_BUBBLE_TESTCASE //inertia terms ignored for static bubble test case
+	  
+					  rhs[k][j][i] = (rho_data[k][j][i] + rho_data[k-1][j][i]) / 2 * a_dt * data[k][j][i] - 2.0 * dpdz
+								   + implicit[k][j][i];
+	  
+	  
+		  #else
+	  
+					  rhs[k][j][i] = (rho_data[k][j][i] + rho_data[k-1][j][i]) / 2 * a_dt * data[k][j][i] - 2.0 * dpdz
+								   + (rho_data[k][j][i] + rho_data[k-1][j][i]) / 2 * GAMB[rk] * explicit[k][j][i]
+								   + (rho_data[k][j][i] + rho_data[k-1][j][i]) / 2 * ZETB[rk] * explicit_old[k][j][i]
+								   + implicit[k][j][i];
+		  #endif
+	  
+	  #else
+	  
+					  rhs[k][j][i] = a_dt * data[k][j][i] - 2.0 * dpdz
+								   + GAMB[rk] * explicit[k][j][i]
+								   + ZETB[rk] * explicit_old[k][j][i]
+								   + implicit[k][j][i];
+	  
+	  #endif
 
 
 #ifdef LAG_PARTICLE_RESOLVED
@@ -2048,213 +2005,6 @@ void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag) {
 
 }
 #endif
-
-
-/******************************************************************************/
-/*
- This function sets value of velocity components at the boundaries
- */
-/******************************************************************************/
-/*
-void Velocity_set_boundary_values(Velocity *u, Velocity *v, Velocity *w,
-		MAC_grid *grid, Parameters *params) {
-
-	int NX, NY, NZ;
-	int i, j, k;
-	double ***u_data, ***v_data, ***w_data;
-	int Is, Js, Ks;
-	int Ie, Je, Ke;
-
-	// Get regular data array for u vel data
-	u_data = u -> data;
-	v_data = v -> data;
-	w_data = w -> data;
-
-	// Same for all quantities
-	NX = grid -> NX;
-	NY = grid -> NY;
-	NZ = grid -> NZ;
-
-	// Start index of bottom-left-back corner on current processor
-	Is = grid -> G_Is;
-	Js = grid -> G_Js;
-	Ks = grid -> G_Ks;
-
-	// End index of top-right-front corner on current processor
-	Ie = grid -> G_Ie;
-	Je = grid -> G_Je;
-	Ke = grid -> G_Ke;
-
-	//--------------------------------------------------------------------------
-	// Left wall
-	//--------------------------------------------------------------------------
-#ifdef LEFT_WALL_VELOCITY_NOSLIP
-	if (Is == 0) {
-		i = 0;
-		for (k = Ks; k < Ke; k++) {
-			for (j = Js; j < Je; j++) {
-				u_data[k][j][i] = 0.0;
-				v_data[k][j][i-1] = -v_data[k][j][i];
-				w_data[k][j][i-1] = -w_data[k][j][i];
-			}
-		}
-	}
-#endif
-#ifdef LEFT_WALL_VELOCITY_FREESLIP
-	if (Is == 0) {
-		i = 0;
-		for (k = Ks; k < Ke; k++) {
-			for (j = Js; j < Je; j++) {
-				u_data[k][j][i] = 0.0;
-				v_data[k][j][i-1] = v_data[k][j][i];
-				w_data[k][j][i-1] = w_data[k][j][i];
-			}
-		}
-	}
-#endif
-
-	//--------------------------------------------------------------------------
-	// Right wall
-	//--------------------------------------------------------------------------
-#ifdef RIGHT_WALL_VELOCITY_NOSLIP
-	if (Ie == NX) {
-		i = NX-1;
-		for (k = Ks; k < Ke; k++) {
-			for (j = Js; j < Je; j++) {
-				u_data[k][j][i] = 0.0;
-				v_data[k][j][i] = -v_data[k][j][i-1];
-				w_data[k][j][i] = -w_data[k][j][i-1];
-			}
-		}
-	}
-#endif
-#ifdef RIGHT_WALL_VELOCITY_FREESLIP
-	if (Ie == NX) {
-		i = NX-1;
-		for (k = Ks; k < Ke; k++) {
-			for (j = Js; j < Je; j++) {
-				u_data[k][j][i] = 0.0;
-				v_data[k][j][i] = v_data[k][j][i-1];
-				w_data[k][j][i] = w_data[k][j][i-1];
-			}
-		}
-	}
-#endif
-
-	//--------------------------------------------------------------------------
-	// Bottom wall
-	//--------------------------------------------------------------------------
-#ifdef BOTTOM_WALL_VELOCITY_NOSLIP
-	if (Js == 0) {
-		j = 0;
-		for (k = Ks; k < Ke; k++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k][j-1][i] = -u_data[k][j][i];
-				v_data[k][j][i] = 0.0;
-				w_data[k][j-1][i] = -w_data[k][j][i];
-			}
-		}
-	}
-#endif
-#ifdef BOTTOM_WALL_VELOCITY_FREESLIP
-	if (Js == 0) {
-		j = 0;
-		for (k = Ks; k < Ke; k++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k][j-1][i] = u_data[k][j][i];
-				v_data[k][j][i] = 0.0;
-				w_data[k][j-1][i] = w_data[k][j][i];
-			}
-		}
-	}
-#endif
-
-	//--------------------------------------------------------------------------
-	// Top wall
-	//--------------------------------------------------------------------------
-#if defined TOP_WALL_VELOCITY_NOSLIP || defined TOP_WALL_SCHUMANN
-	if (Je == NY) {
-		j = NY-1;
-		for (k = Ks; k < Ke; k++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k][j][i] = -u_data[k][j-1][i];
-				v_data[k][j][i] = 0.0;
-				w_data[k][j][i] = -w_data[k][j-1][i];
-			}
-		}
-	}
-#endif
-#ifdef TOP_WALL_VELOCITY_FREESLIP
-	if (Je == NY) {
-		j = NY-1;
-		for (k = Ks; k < Ke; k++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k][j][i] = u_data[k][j-1][i];
-				v_data[k][j][i] = 0.0;
-				w_data[k][j][i] = w_data[k][j-1][i];
-			}
-		}
-	}
-#endif
-
-	//--------------------------------------------------------------------------
-	// Back wall
-	//--------------------------------------------------------------------------
-#ifdef BACK_WALL_VELOCITY_NOSLIP
-	if (Ks == 0) {
-		k = 0;
-		for (j = Js; j < Je; j++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k-1][j][i] = -u_data[k][j][i];
-				v_data[k-1][j][i] = -v_data[k][j][i];
-				w_data[k][j][i] = 0.0;
-			}
-		}
-	}
-#endif
-#ifdef BACK_WALL_VELOCITY_FREESLIP
-	if (Ks == 0) {
-		k = 0;
-		for (j = Js; j < Je; j++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k-1][j][i] = u_data[k][j][i];
-				v_data[k-1][j][i] = v_data[k][j][i];
-				w_data[k][j][i] = 0.0;
-			}
-		}
-	}
-#endif
-
-	//--------------------------------------------------------------------------
-	// Front wall
-	//--------------------------------------------------------------------------
-#ifdef FRONT_WALL_VELOCITY_NOSLIP
-	if (Ke == NZ) {
-		k = NZ-1;
-		for (j = Js; j < Je; j++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k][j][i] = -u_data[k-1][j][i];
-				v_data[k][j][i] = -v_data[k-1][j][i];
-				w_data[k][j][i] = 0.0;
-			}
-		}
-	}
-#endif
-#ifdef FRONT_WALL_VELOCITY_FREESLIP
-	if (Ke == NZ) {
-		k = NZ-1;
-		for (j = Js; j < Je; j++) {
-			for (i = Is; i < Ie; i++) {
-				u_data[k][j][i] = u_data[k-1][j][i];
-				v_data[k][j][i] = v_data[k-1][j][i];
-				w_data[k][j][i] = 0.0;
-			}
-		}
-	}
-#endif
-
-}
-*/
 
 
 

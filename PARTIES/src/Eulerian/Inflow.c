@@ -6,6 +6,8 @@
 #include "Velocity.h"
 #include "Conc.h"
 #include "Grid.h"
+#include "Communication.h"
+#include "Memory.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>

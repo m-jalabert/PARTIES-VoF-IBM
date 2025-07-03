@@ -174,7 +174,7 @@ double MyMath_matrix_determ(MatrixType *mat) {
 
 /******************************************************************************/
 /*
- This function inverts the matrices of size 2 or 3
+ This function inverts the matrices
  */
 /******************************************************************************/
 void MyMath_matrix_inv(MatrixType *mat) {
@@ -255,7 +255,7 @@ void MyMath_matrix_inv(MatrixType *mat) {
 			printf("MyMath.c/ Error inverting the matrix. Determinent close to zero:%f\n", mat->det); 
 		} // else
 	}
-	else {// if size == 3
+	else {// if size >= 3
 		
 		MyMath_GaussJordan_matrix_inv(mat); 		
 	}

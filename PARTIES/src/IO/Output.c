@@ -162,6 +162,14 @@
      
      sprintf(fieldname, "%s/alpha", groupname);
      Output_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+     // Write mu
+     sprintf(fieldname, "%s/mu", groupname);
+     Output_h5_flow_variable(vof->mu, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+     // Write rho
+     sprintf(fieldname, "%s/rho", groupname);
+     Output_h5_flow_variable(vof->rho, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  
      // Write flux x 
      sprintf(fieldname, "%s/flux_x", groupname);
@@ -175,15 +183,34 @@
      sprintf(fieldname, "%s/flux_z", groupname);
      Output_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
      
-     // sprintf(fieldname, "%s/normal_x", groupname);
-     // Output_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+     sprintf(fieldname, "%s/normal_x", groupname);
+     Output_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
      
-     // sprintf(fieldname, "%s/normal_y", groupname);
-     // Output_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+     sprintf(fieldname, "%s/normal_y", groupname);
+     Output_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
      
-     // sprintf(fieldname, "%s/normal_z", groupname);
-     // Output_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
- #endif
+     sprintf(fieldname, "%s/normal_z", groupname);
+     Output_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+#ifdef SURFACE_TENSION
+
+     sprintf(fieldname, "%s/kappa", groupname);
+     Output_h5_flow_variable(vof->kappa, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+     sprintf(fieldname, "%s/F_smooth", groupname);
+     Output_h5_flow_variable(vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+     sprintf(fieldname, "%s/normal_x_smooth", groupname);
+     Output_h5_flow_variable(vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+     sprintf(fieldname, "%s/normal_y_smooth", groupname);
+     Output_h5_flow_variable(vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+     sprintf(fieldname, "%s/normal_z_smooth", groupname);
+     Output_h5_flow_variable(vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+ #endif // SURFACE_TENSION
+ #endif // VOF PLIC
  
      //--------------------------------------------------------------------------
      // Close HDF5 file handles
@@ -435,10 +462,7 @@
      // Write volume fraction F
      sprintf(fieldname, "%s/F", groupname);
      Output_h5_flow_variable(vof->F, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
- 
-     // Write smoothed volume fraction F_smooth
-     // sprintf(fieldname, "%s/F_smooth", groupname);
-     // Output_h5_flow_variable(vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
  
      // Write interface normals
       sprintf(fieldname, "%s/normal_x", groupname);
@@ -466,10 +490,6 @@
      sprintf(fieldname, "%s/flux_z", groupname);
      Output_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  
-     // Write curvature kappa
-     // sprintf(fieldname, "%s/kappa", groupname);
-     // Output_h5_flow_variable(vof->kappa, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
- 
      // Write mixture density
      sprintf(fieldname, "%s/rho", groupname);
      Output_h5_flow_variable(vof->rho, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
@@ -477,6 +497,29 @@
      // Write mixture viscosity
      sprintf(fieldname, "%s/mu", groupname);
      Output_h5_flow_variable(vof->mu, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+#ifdef SURFACE_TENSION
+
+      
+     // Write curvature kappa
+     sprintf(fieldname, "%s/kappa", groupname);
+     Output_h5_flow_variable(vof->kappa, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+     // Write curvature kappa
+     sprintf(fieldname, "%s/F_smooth", groupname);
+     Output_h5_flow_variable(vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+          // Write interface normals
+      sprintf(fieldname, "%s/normal_x_smooth", groupname);
+      Output_h5_flow_variable(vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+ 
+      sprintf(fieldname, "%s/normal_y_smooth", groupname);
+      Output_h5_flow_variable(vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+ 
+      sprintf(fieldname, "%s/normal_z_smooth", groupname);
+      Output_h5_flow_variable(vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+
+ #endif // SURFACE TENSION 
  #endif // VOF_PLIC
  
  

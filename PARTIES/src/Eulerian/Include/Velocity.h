@@ -30,6 +30,7 @@ void Velocity_wall_shear(Cart3d_bag *data_bag);
 void Velocity_u_streak(Cart3d_bag *data_bag);
 void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag);
 
+void Velocity_zero_initialize(Cart3d_bag *data_bag);
 
 #ifdef LAG_PARTICLE_RESOLVED
 int Velocity_solve_explicit(Velocity *vel, Cart3d_bag *data_bag);

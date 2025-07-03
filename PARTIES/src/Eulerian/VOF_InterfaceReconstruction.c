@@ -49,11 +49,14 @@ VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params) {
     vof->F_smooth     = Memory_allocate_flow_variable(grid, params);
     vof->mu           = Memory_allocate_flow_variable(grid, params);
     vof->rho          = Memory_allocate_flow_variable(grid, params);
-    vof->kappa        = Memory_allocate_flow_variable(grid, params);
     vof->normal_x     = Memory_allocate_flow_variable(grid, params);
     vof->normal_y     = Memory_allocate_flow_variable(grid, params);
     vof->normal_z     = Memory_allocate_flow_variable(grid, params);
     vof->alpha        = Memory_allocate_flow_variable(grid, params);
+    vof->kappa        = Memory_allocate_flow_variable(grid, params);
+    vof->normal_x_smooth = Memory_allocate_flow_variable(grid, params);
+    vof->normal_y_smooth = Memory_allocate_flow_variable(grid, params);
+    vof->normal_z_smooth = Memory_allocate_flow_variable(grid, params);
 
     /* Allocate convective term arrays.
        Here we allocate the “current” convective term with ghost cells and a
@@ -67,8 +70,6 @@ VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params) {
     /* Allocate no-ghost (ng) arrays for the right-hand side and field copies.
        These arrays hold data that do not include ghost cells. */
     vof->ng_rhs = Memory_allocate_noghost_variable(grid, params);
-    vof->F_old  = Memory_allocate_noghost_variable(grid, params);
-    vof->ng_F   = Memory_allocate_noghost_variable(grid, params);
 
     return vof;
 }
@@ -85,11 +86,14 @@ void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params) {
     Memory_free_flow_variable(grid, params, vof->F_smooth);
     Memory_free_flow_variable(grid, params, vof->mu);
     Memory_free_flow_variable(grid, params, vof->rho);
-    Memory_free_flow_variable(grid, params, vof->kappa);
     Memory_free_flow_variable(grid, params, vof->normal_x);
     Memory_free_flow_variable(grid, params, vof->normal_y);
     Memory_free_flow_variable(grid, params, vof->normal_z);
     Memory_free_flow_variable(grid, params, vof->alpha);
+    Memory_free_flow_variable(grid, params, vof->kappa);
+    Memory_free_flow_variable(grid, params, vof->normal_x_smooth);
+    Memory_free_flow_variable(grid, params, vof->normal_y_smooth);
+    Memory_free_flow_variable(grid, params, vof->normal_z_smooth);
 
     /* Free the convective term arrays (with ghost cells) */
     Memory_free_flow_variable(grid, params, vof->flux_x);
@@ -100,8 +104,6 @@ void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params) {
 
     /* Free the no-ghost arrays */
     Memory_free_noghost_variable(grid, params, vof->ng_rhs);
-    Memory_free_noghost_variable(grid, params, vof->F_old);
-    Memory_free_noghost_variable(grid, params, vof->ng_F);
 
     /* Finally, free the structure itself */
     free(vof);
@@ -185,10 +187,10 @@ void VOF_reconstruct_interface(Cart3d_bag *data_bag)
         }
       }
     }
-    Communication_update_ghost_nodes_flow_variable(vof->normal_x, VOLUME_FRACTION, params->ghost_nodes, data_bag);
-    Communication_update_ghost_nodes_flow_variable(vof->normal_y, VOLUME_FRACTION, params->ghost_nodes, data_bag);
-    Communication_update_ghost_nodes_flow_variable(vof->normal_z, VOLUME_FRACTION, params->ghost_nodes, data_bag);
-    Communication_update_ghost_nodes_flow_variable(vof->alpha, VOLUME_FRACTION, params->ghost_nodes, data_bag);
+    VOF_set_boundary_values(vof->normal_x, data_bag);
+    VOF_set_boundary_values(vof->normal_y, data_bag);
+    VOF_set_boundary_values(vof->normal_z, data_bag);
+    VOF_set_boundary_values(vof->alpha, data_bag);
 }
 
 
@@ -354,7 +356,11 @@ double plane_alpha_3D(double c, PointType n, double *alpha_out)
     if (n.z < 0.0) alpha += n.z;
 
     alpha -= (n.x + n.y + n.z)/2.0;
+    
+    if (alpha_out != NULL)
     *alpha_out = alpha;
+
+    return alpha;
 }
 
 /******************************************************************************
@@ -1949,74 +1955,74 @@ PointType VoF_facet_normal_3D(
  *
  * Only **3D cells** are considered, making this a streamlined function.
  ******************************************************************************/
-// void VoF_output_facets_3D(
-//     Cart3d_bag *data_bag,    // Contains grid, params, and volume fraction data
-//     FILE       *fp,          // Output file pointer
-//     double     ***sx,        // Optional surface fraction x
-//     double     ***sy,        // Optional surface fraction y
-//     double     ***sz         // Optional surface fraction z
-// )
-// {
-//     MAC_grid       *grid   = data_bag->grid;
-//     VolumeFraction *vof    = data_bag->vof;
+void VoF_output_facets_3D(
+    Cart3d_bag *data_bag,    // Contains grid, params, and volume fraction data
+    FILE       *fp,          // Output file pointer
+    double     ***sx,        // Optional surface fraction x
+    double     ***sy,        // Optional surface fraction y
+    double     ***sz         // Optional surface fraction z
+)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    VolumeFraction *vof    = data_bag->vof;
 
-//     double ***F = vof->F;  // Volume fraction array
+    double ***F = vof->F;  // Volume fraction array
 
-//     // Domain bounds
-//     int Is = grid->G_Is, Ie = grid->G_Ie;
-//     int Js = grid->G_Js, Je = grid->G_Je;
-//     int Ks = grid->G_Ks, Ke = grid->G_Ke;
+    // Domain bounds
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
 
-//     // Cell center coordinates
-//     double *xc = grid->xc;
-//     double *yc = grid->yc;
-//     double *zc = grid->zc;
+    // Cell center coordinates
+    double *xc = grid->xc;
+    double *yc = grid->yc;
+    double *zc = grid->zc;
 
-//     // Loop over local domain
-//     for (int k = Ks; k < Ke; k++) {
-//       for (int j = Js; j < Je; j++) {
-//         for (int i = Is; i < Ie; i++) {
-//           double cval = F[k][j][i];
+    // Loop over local domain
+    for (int k = Ks; k < Ke; k++) {
+      for (int j = Js; j < Je; j++) {
+        for (int i = Is; i < Ie; i++) {
+          double cval = F[k][j][i];
 
-//           // Only process partially filled cells (0 < F < 1)
-//           if (cval > 1e-6 && cval < 1.0 - 1e-6) {
+          // Only process partially filled cells (0 < F < 1)
+          if (cval > 1e-6 && cval < 1.0 - 1e-6) {
 
-//             // 1) Compute the interface normal
-//             PointType normal;
-//             if (sx && sy && sz) {
-//                 normal = VoF_facet_normal_3D(F, sx, sy, sz, i, j, k, data_bag);
-//             } else {
-//                 normal = mycs3D(F, i, j, k);
-//             }
+            // 1) Compute the interface normal
+            PointType normal;
+            if (sx && sy && sz) {
+                normal = VoF_facet_normal_3D(F, sx, sy, sz, i, j, k, data_bag);
+            } else {
+                normal = mycs3D(F, i, j, k);
+            }
 
-//             // 2) Compute alpha
-//             double alpha_val = 0.0;
-//             plane_alpha_3D(cval, normal, &alpha_val);
+            // 2) Compute alpha
+            double alpha_val = 0.0;
+            plane_alpha_3D(cval, normal, &alpha_val);
 
-//             // 3) Retrieve facet vertices in 3D
-//             PointType v[12];
-//             int m = facets_3D(normal, alpha_val, v, 1.0);  // 1.0 => unit cell
+            // 3) Retrieve facet vertices in 3D
+            PointType v[12];
+            int m = facets_3D(normal, alpha_val, v, 1.0);  // 1.0 => unit cell
 
-//             // 4) Scale and output facet coordinates
-//             double Dx = (i + 1 < grid->NX) ? xc[i + 1] - xc[i] : 1.0;
-//             double Dy = (j + 1 < grid->NY) ? yc[j + 1] - yc[j] : 1.0;
-//             double Dz = (k + 1 < grid->NZ) ? zc[k + 1] - zc[k] : 1.0;
+            // 4) Scale and output facet coordinates
+            double Dx = (i + 1 < grid->NX) ? xc[i + 1] - xc[i] : 1.0;
+            double Dy = (j + 1 < grid->NY) ? yc[j + 1] - yc[j] : 1.0;
+            double Dz = (k + 1 < grid->NZ) ? zc[k + 1] - zc[k] : 1.0;
 
-//             for (int ii = 0; ii < m; ii++) {
-//                 double X = xc[i] + v[ii].x * Dx;
-//                 double Y = yc[j] + v[ii].y * Dy;
-//                 double Z = zc[k] + v[ii].z * Dz;
-//                 fprintf(fp, "%g %g %g\n", X, Y, Z);
-//             }
-//             if (m > 0)
-//                 fputc('\n', fp);  // Separate facets for gnuplot
-//           } 
-//         }
-//       }
-//     }
+            for (int ii = 0; ii < m; ii++) {
+                double X = xc[i] + v[ii].x * Dx;
+                double Y = yc[j] + v[ii].y * Dy;
+                double Z = zc[k] + v[ii].z * Dz;
+                fprintf(fp, "%g %g %g\n", X, Y, Z);
+            }
+            if (m > 0)
+                fputc('\n', fp);  // Separate facets for gnuplot
+          } 
+        }
+      }
+    }
 
-//     fflush(fp);
-// }
+    fflush(fp);
+}
 
 
 /******************************************************************************
@@ -2038,64 +2044,64 @@ PointType VoF_facet_normal_3D(
  * This does NOT do boundary checks for ghost layers; we assume your code 
  * has them or is guaranteed in-bounds for i±1, j±1, k±1.
  ******************************************************************************/
-// double VOF_InterfaceArea_3D(Cart3d_bag *data_bag)
-// {
-//     MAC_grid       *grid   = data_bag->grid;
-//     VolumeFraction *vof    = data_bag->vof;
+double VOF_InterfaceArea_3D(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    VolumeFraction *vof    = data_bag->vof;
 
-//     double ***F = vof->F;  // volume fraction array
+    double ***F = vof->F;  // volume fraction array
 
-//     // domain bounds
-//     int Is = grid->G_Is, Ie = grid->G_Ie;
-//     int Js = grid->G_Js, Je = grid->G_Je;
-//     int Ks = grid->G_Ks, Ke = grid->G_Ke;
+    // domain bounds
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
 
-//     // cell-centered coordinates
-//     double *xc = grid->xc; 
-//     double *yc = grid->yc;
-//     double *zc = grid->zc; 
+    // cell-centered coordinates
+    double *xc = grid->xc; 
+    double *yc = grid->yc;
+    double *zc = grid->zc; 
 
-//     double area = 0.0;
+    double area = 0.0;
 
-//     // Loop over each cell in local domain
-//     for (int k = Ks; k < Ke; k++) {
-//       for (int j = Js; j < Je; j++) {
-//         for (int i = Is; i < Ie; i++) {
-//           double cval = F[k][j][i];
+    // Loop over each cell in local domain
+    for (int k = Ks; k < Ke; k++) {
+      for (int j = Js; j < Je; j++) {
+        for (int i = Is; i < Ie; i++) {
+          double cval = F[k][j][i];
 
-//           // Only partial cells
-//           if (cval > 1e-6 && cval < 1.0 - 1e-6) {
+          // Only partial cells
+          if (cval > 1e-6 && cval < 1.0 - 1e-6) {
 
-//             // 1) Compute normal => mycs3D(...) or fallback
-//             PointType n = mycs3D(F, i, j, k);
+            // 1) Compute normal => mycs3D(...) or fallback
+            PointType n = mycs3D(F, i, j, k);
 
-//             // 2) Compute alpha => plane_alpha_3D
-//             double alpha_val = 0.0;
-//             plane_alpha_3D(cval, n, &alpha_val);
+            // 2) Compute alpha => plane_alpha_3D
+            double alpha_val = 0.0;
+            plane_alpha_3D(cval, n, &alpha_val);
 
-//             // 3) "Dimensionless" measure => plane_area_center(n, alpha_val, &p)
-//             PointType p = {0., 0., 0.};
-//             double measure = plane_area_center(n, alpha_val, &p);
+            // 3) "Dimensionless" measure => plane_area_center(n, alpha_val, &p)
+            PointType p = {0., 0., 0.};
+            double measure = plane_area_center(n, alpha_val, &p);
 
-//             // 4) Multiply by local cell cross-sectional area => Basilisk uses Delta^2
-//             // If your grid is uniform => dx[i], dy[j], pick some approach. 
-//             // For demonstration we approximate interface area in each cell as measure*(dx*dy).
-//             double dx = (i+1 < grid->NX)? (xc[i+1] - xc[i]) : 1.0;
-//             double dy = (j+1 < grid->NY)? (yc[j+1] - yc[j]) : 1.0;
-//             // We assume the main orientation is (dx*dy) => partial approach 
-//             // (This is a simplification if the interface is not axis-aligned, but matches Basilisk's Delta^2 logic)
+            // 4) Multiply by local cell cross-sectional area => Basilisk uses Delta^2
+            // If your grid is uniform => dx[i], dy[j], pick some approach. 
+            // For demonstration we approximate interface area in each cell as measure*(dx*dy).
+            double dx = (i+1 < grid->NX)? (xc[i+1] - xc[i]) : 1.0;
+            double dy = (j+1 < grid->NY)? (yc[j+1] - yc[j]) : 1.0;
+            // We assume the main orientation is (dx*dy) => partial approach 
+            // (This is a simplification if the interface is not axis-aligned, but matches Basilisk's Delta^2 logic)
 
-//             double local_area = measure * (dx * dy);
+            double local_area = measure * (dx * dy);
 
-//             // 5) Accumulate
-//             area += local_area;
-//           }
-//         }
-//       }
-//     }
+            // 5) Accumulate
+            area += local_area;
+          }
+        }
+      }
+    }
 
-//     return area;
-// }
+    return area;
+}
 
 
 

@@ -12,9 +12,26 @@ void Pressure_setup_lsys_accounting_geometry(Pressure *p, MAC_grid *grid,
 		Parameters *params);
 int Pressure_solve(Pressure *p, MAC_grid *grid, Parameters *params);
 
-// Pressure solver functions for VoF-PLIC
 
+/******************************************************************************/
+// Pressure solver functions for VoF-PLIC
+/******************************************************************************/
+
+/******************************************************************************
+ * Pressure_compute_preconditioner
+ *
+ * Builds a **harmonic-average Jacobi** preconditioner for
+ *      A φ = ∇·((1/ρ) ∇φ)
+ * on a uniform Cartesian grid.  The diagonal entry is
+ *
+ *   a_ii = (c_E + c_W)/Δx² + (c_N + c_S)/Δy² + (c_T + c_B)/Δz²
+ *   with  c_F = 2 / (ρ_i + ρ_F)   (harmonic average of 1/ρ).
+ *
+ * M_inv = 1/a_ii is stored in p->M_inv.
+ ******************************************************************************/
 void Pressure_compute_preconditioner(Cart3d_bag *data_bag);
+
+
 
 
 /******************************************************************************/
@@ -24,6 +41,8 @@ void Pressure_compute_preconditioner(Cart3d_bag *data_bag);
 //
 /******************************************************************************/
 int Pressure_solve_cg(Cart3d_bag *data_bag);
+
+
 
 /******************************************************************************/
 // Pressure_operator_variableCoeff
@@ -37,8 +56,10 @@ void Pressure_operator_variableCoeff(
     Parameters *params,
     Cart3d_bag *data_bag );
 
+
+
 /******************************************************************************/
-// Applies physical boundary conditions for the pressure‐correction array `phi`.
+// Applies physical boundary conditions for pressure.
 //
 /******************************************************************************/
 void Pressure_apply_BCs(double ***phi, MAC_grid *grid, Parameters *params);

@@ -65,7 +65,7 @@ double innerProd(double ***vec1, double ***vec2, char component, MAC_grid *grid,
 
 #ifdef VOF_PLIC
 // Define a macro for harmonic averaging of viscosity
-#define HARMONIC(mu1, mu2) (2.0 * (mu1) * (mu2) / ((mu1) + (mu2) + 1e-12))
+#define HARMONIC(mu1, mu2) (2.0 * (mu1) * (mu2) / ((mu1) + (mu2) + 1e-8))
 #endif
 
 /******************************************************************************/
@@ -83,7 +83,6 @@ double innerProd(double ***vec1, double ***vec2, char component, MAC_grid *grid,
 // The viscosity is cell-centered; face values are computed via a harmonic average.
 // Standard second order central differences are used.
 // dt is the time step, alpha_k = BETA[which_stage].
-// The density is also cell–centered and taken from the previous time step.
 // 
 /******************************************************************************/ 
 void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag) {
@@ -147,8 +146,17 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag) {
         for (j = Js; j < Je; j++) {
             for (i = Is; i < Ie; i++) {
 
-				// Time-term coefficient
-				double factor_time = rho[k][j][i] / (alpha_k * dt);
+				/* pick the neighbouring cell in the negative coordinate direction */
+				int iL = (component=='u') ? i-1 : i;
+				int jL = (component=='v') ? j-1 : j;
+				int kL = (component=='w') ? k-1 : k;
+
+
+				/* face-centred density */
+				double rho_face = 0.5*( rho[k][j][i] + rho[kL][jL][iL] );
+
+				/* time-term coefficient */
+				double factor_time = rho_face / (alpha_k * dt);
                 // Start with the time-derivative term
                 double Ax_val = factor_time * x[k][j][i];
                 
@@ -176,7 +184,7 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag) {
                 double dFlux_dz = (flux_zp - flux_zm) / (dz * dz);
                 
                 // Combine the three directional contributions.
-                // Note that the full viscous term is divided by (rho * Re)
+                
                 double visc_term = (dFlux_dx + dFlux_dy + dFlux_dz) / Re;
                 
                 // Subtract the viscous term from the time-derivative term:
@@ -339,17 +347,6 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag) {
 	 Conjugate-gradient solve
 	 */
 	/*------------------------------------------------------------------------*/
-/*
-
-	if(component == 'v'){
-		printf("My name is r [0][NY-3][0]=%2.3f\n",r[0][NY-3][0]);
-		printf("My name is r [0][NY-2][0]=%2.3f\n",r[0][NY-2][0]);
-		printf("My name is r [0][NY-1][0]=%2.3f\n",r[0][NY-1][0]);
-		printf("My name is r [0][1][0]=%2.3f\n",	r[0][1][0]);
-		printf("My name is r [0][2][0]=%2.3f\n",	r[0][2][0]);
-		printf("My name is r [0][3][0]=%2.3f\n",	r[0][3][0]);
-
-	}*/
 	rr = innerProd(r, r, component, grid, params);
 
 	int yproc = params-> yproccoord;
@@ -371,47 +368,17 @@ double rmax =0.0;
 		// Update boundary cells for 'd'
 		Velocity_update_boundaries(d, component, VEL_TYPE_CG, data_bag);
 
-/*
-		if(component == 'v'){
-			printf("My name is d [0][NY-3][0]=%2.3f\n",	d[0][NY-3][0]);
-			printf("My name is d [0][NY-2][0]=%2.3f\n",	d[0][NY-2][0]);
-			printf("My name is d [0][NY-1][0]=%2.3f\n",	d[0][NY-1][0]);
-			printf("My name is d [0][0][0]=%2.3f\n",	d[0][0][0]);
-			printf("My name is d [0][1][0]=%2.3f\n",	d[0][1][0]);
-			printf("My name is d [0][2][0]=%2.3f\n",	d[0][2][0]);
 
-		}
-*/
 		// Ad = A * d
 		matVec(Ad, d, component, data_bag);
 
-		/* if(component == 'v'){
-			if(component == 'v'){
-				printf("My name is Ad [0][NY-3][0]=%2.3f\n",	Ad[0][NY-3][0]);
-				printf("My name is Ad [0][NY-2][0]=%2.3f\n",	Ad[0][NY-2][0]);
-				printf("My name is Ad [0][NY-1][0]=%2.3f\n",	Ad[0][NY-1][0]);
-				printf("My name is Ad [0][0][0]=%2.3f\n",	Ad[0][0][0]);
-				printf("My name is Ad [0][1][0]=%2.3f\n",	Ad[0][1][0]);
-				printf("My name is Ad [0][2][0]=%2.3f\n",	Ad[0][2][0]);
 
-			}
-
-		}*/
 
 		dAd = innerProd(d, Ad, component, grid, params);
 
 		alpha = rr / (dAd + EPS);
 
-		// x = x + alpha * d;
-		// r = r - alpha * Ad;
 
-
-		/* if(component == 'v'){
-			printf("d[0][NY-1][0]=%2.3f\n",	d[0][NY-1][0]);
-			printf("d[0][NY-2][0]=%2.3f\n",	d[0][NY-2][0]);
-			printf("d[0][1][0]=%2.3f\n",	d[0][1][0]);
-
-		}*/
 
 		for (k = Ks; k < Ke; k++) {
 			for (j = Js; j < Je; j++) {
@@ -427,15 +394,7 @@ double rmax =0.0;
 				}
 			}
 		}
-		//printf("imax = %d, jmax=%d, kmax=%d \n",imax,jmax,kmax);
 
-/*
-		if(component == 'v'){
-			if (j==NY-1){
-				if(k==0){
-				if(i==0){
-			printf("My name is r [0][0][0]=%e at iteration %d\n",r[k][j][i],iters);}}}}
-*/
 		rr_old = rr;
 		rr = innerProd(r, r, component, grid, params);
  		RMS = sqrt(in_tot * rr);

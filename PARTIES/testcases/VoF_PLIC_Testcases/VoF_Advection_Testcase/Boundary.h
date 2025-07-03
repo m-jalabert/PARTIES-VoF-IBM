@@ -17,16 +17,15 @@
 #undef PERIODIC_SHEAR_FLOW
 #undef PERIODIC_DOUBLE_SHEAR_FLOW
 #undef DOUBLE_PERIODIC_FREESLIP_BOX
-#define NOSLIP_BOX
+#undef NOSLIP_BOX
 #undef FREESLIP_DUCT
 #undef NOSLIP_DUCT
 #undef GRAVITY_CURRENT
 #undef GRAVITY_CURRENT_PERIODIC
-#undef TRIPLE_PERIODIC
+#define TRIPLE_PERIODIC
 #undef TRIPLE_PERIODIC_SHEAR
 #undef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
 #undef RISING_BUBBLE
-#undef FREESLIP_BOX
 
 #ifdef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
         #define LEFT_INFLOW
@@ -37,12 +36,11 @@
 		#define TOP_WALL_OUTFLOW
 
 #elif defined RISING_BUBBLE
-		#define BACK_WALL_VELOCITY_FREESLIP
-		#define FRONT_WALL_VELOCITY_FREESLIP
+		#define ZPERIODIC						// The domain is 2D in (x,y), so we set z as periodic
 		#define LEFT_WALL_VELOCITY_NOSLIP		// We want no-slip at x=0, x=2
 		#define RIGHT_WALL_VELOCITY_NOSLIP		// We want no-slip at x=0, x=2
-		#define BOTTOM_WALL_VELOCITY_NOSLIP  // We want slip at y=0, y=0.5
-		#define TOP_WALL_VELOCITY_NOSLIP		// We want slip at y=0, y=0.5
+		#define BOTTOM_WALL_VELOCITY_FREESLIP  // We want slip at y=0, y=0.5
+		#define TOP_WALL_VELOCITY_FREESLIP		// We want slip at y=0, y=0.5
 
 #elif defined GRAVITY_CURRENT_PERIODIC
         #define LEFT_WALL_VELOCITY_NOSLIP
@@ -115,14 +113,6 @@
 	#define FRONT_WALL_VELOCITY_NOSLIP
 	#define BOTTOM_WALL_VELOCITY_NOSLIP
 	#define TOP_WALL_VELOCITY_NOSLIP
-
-#elif defined FREESLIP_BOX
-	#define LEFT_WALL_VELOCITY_FREESLIP
-	#define RIGHT_WALL_VELOCITY_FREESLIP
-	#define BACK_WALL_VELOCITY_FREESLIP
-	#define FRONT_WALL_VELOCITY_FREESLIP
-	#define BOTTOM_WALL_VELOCITY_FREESLIP
-	#define TOP_WALL_VELOCITY_FREESLIP	
 
 #elif defined TRIPLE_PERIODIC
 		#define XPERIODIC
@@ -199,9 +189,9 @@
 /* 						Volume of Fluid - PLIC with CSF					      */
 /******************************************************************************/
 #define VOF_PLIC
-#define SURFACE_TENSION
+#undef SURFACE_TENSION
 #undef STATIC_BUBBLE_TESTCASE
-#define VOF_GRAVITY
+#undef VOF_GRAVITY
 
 
 
@@ -302,7 +292,7 @@
 // Continuously moves top wall from params->ymax to params->vel_init_y0 over the
 // time interval {0, time_max}.  Only usable for dry simulations.
 #undef  DOWNWARD_MOVING_WALL
-#undef GRID_UNIFORM
+#define GRID_UNIFORM
 #undef RETRACTION  // give a number here the Lagrangian points are shifted by xx dx inside
 #undef MASKING_OUTSIDE // the ibm heating is only applied inside the particle
 

@@ -92,19 +92,17 @@ CFG(flow, vel_init_y0, 0.0, atof)  // y-coordinate to start velocity profile
 /*    Volume-of-Fluid (VOF) parameters for a two-phase flow.                  */
 /******************************************************************************/
 // Non-dimensional parameters for two-phase flow 
-CFG(vof, Ri, 0.0, atof)          // Richardson number for buoyancy
-CFG(vof, Bo, 0.0, atof)          // Bond number for surface tension effects
+CFG(vof, We, 1.0, atof)          // Weber number 
 
 // Fluid properties (dimensionless) 
 // E.g. rho = F + (1-F)*rho_2/rho_1, etc.
 CFG(vof, rho1, 1.0, atof)        // Primary fluid (F=1)
-CFG(vof, rho2, 0.1, atof)        // Secondary fluid (F=0)
-CFG(vof, mu1, 0.01, atof)        // Viscosity fluid 1
-CFG(vof, mu2, 0.001, atof)       // Viscosity fluid 2
-CFG(vof, sigma, 0.0, atof)       // Surface tension coefficient
+CFG(vof, rho2, 1.0, atof)        // Secondary fluid (F=0)
+CFG(vof, mu1, 1.0, atof)        // Viscosity fluid 1
+CFG(vof, mu2, 1.0, atof)       // Viscosity fluid 2
 
 // Interface initialization 
-CFG(vof, init_type, 1, atoi)     // 0=no interface init, 1=sphere/bubble, 2=user-defined
+CFG(vof, init_type, 0, atoi)     // 1=Advection test case, 2=Stationary Bubble test case
 
 // Contact angle parameters 
 CFG(vof, contact_angle, 0, atoi)         // Static contact angle (degrees)
@@ -233,6 +231,8 @@ CFG(particle, N_impheating_loops, 1, atoi)  // Implicit loops for enforcing conc
 /*----------------------------------------------------------------------------*/
 /*    Linear system of equation-solver properties                             */
 /******************************************************************************/
+CFG(lsolve, P_CG_ETOL, 1e-7, atof) // Error tolerance for pressure conjugate-gradient solver
+CFG(lsolve, P_CG_MAXIT, 300, atoi)  // Max iterations for pressure conjugate-gradient solver
 CFG(lsolve, CG_ETOL, 1e-9, atof) // Error tolerance for conjugate-gradient solver
 CFG(lsolve, CG_MAXIT, 120, atoi)  // Max iterations for conjugate-gradient solver
 

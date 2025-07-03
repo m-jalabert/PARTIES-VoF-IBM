@@ -150,22 +150,67 @@ void Resume_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
     Resume_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
     Communication_update_ghost_nodes_flow_variable(vof->alpha, VOLUME_FRACTION, pnodes, data_bag);
 
-    // // Read interface normals
-    // sprintf(fieldname, "%s/normal_x", groupname);
-    // Resume_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-    // Communication_update_ghost_nodes_flow_variable(vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
+     // Read interface normals
+     sprintf(fieldname, "%s/normal_x", groupname);
+     Resume_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+     Communication_update_ghost_nodes_flow_variable(vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
 
-    // sprintf(fieldname, "%s/normal_y", groupname);
-    // Resume_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-    // Communication_update_ghost_nodes_flow_variable(vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
+     sprintf(fieldname, "%s/normal_y", groupname);
+     Resume_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+     Communication_update_ghost_nodes_flow_variable(vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
 
-    // sprintf(fieldname, "%s/normal_z", groupname);
-    // Resume_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-    // Communication_update_ghost_nodes_flow_variable(vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
+     sprintf(fieldname, "%s/normal_z", groupname);
+     Resume_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+     Communication_update_ghost_nodes_flow_variable(vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
 
-    // Recompute derived fields (rho/mu) from F after loading
-    VOF_update_density_viscosity(data_bag);
-#endif
+	#ifdef SURFACE_TENSION
+
+	// Curvature (kappa)
+    sprintf(fieldname, "%s/kappa", groupname);
+    Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+    Communication_update_ghost_nodes_flow_variable(data_bag->vof->kappa, VOLUME_FRACTION, pnodes, data_bag);	
+
+     // Write F_smooth
+     sprintf(fieldname, "%s/F_smooth", groupname);
+	 Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+	 Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
+
+    // Write interface normals
+     sprintf(fieldname, "%s/normal_x_smooth", groupname);
+	 Resume_h5_flow_variable(data_bag->vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+	 Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x_smooth, VOLUME_FRACTION, pnodes, data_bag);
+ 
+     sprintf(fieldname, "%s/normal_y_smooth", groupname);
+	 Resume_h5_flow_variable(data_bag->vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+	 Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y_smooth, VOLUME_FRACTION, pnodes, data_bag);
+      
+ 
+     sprintf(fieldname, "%s/normal_z_smooth", groupname);
+	 Resume_h5_flow_variable(data_bag->vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+	 Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z_smooth, VOLUME_FRACTION, pnodes, data_bag);
+
+    #endif // SURFACE TENSION 
+ 
+	 // Read or recompute additional VOF fields if needed (e.g., mu, rho)
+	 sprintf(fieldname, "%s/mu", groupname);
+	 Resume_h5_flow_variable(vof->mu, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+	 
+	 sprintf(fieldname, "%s/rho", groupname);
+	 Resume_h5_flow_variable(vof->rho, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+ 
+	 // Read fluxes if necessary
+	 sprintf(fieldname, "%s/flux_x", groupname);
+	 Resume_h5_flow_variable(vof->flux_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+ 
+	 sprintf(fieldname, "%s/flux_y", groupname);
+	 Resume_h5_flow_variable(vof->flux_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+ 
+	 sprintf(fieldname, "%s/flux_z", groupname);
+	 Resume_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+ 
+	 // Recompute derived fields such as density and viscosity from F, if necessary.
+	 VOF_update_density_viscosity(data_bag);
+ #endif // VOF_PLIC
 
 	//--------------------------------------------------------------------------
 	// 3D data
@@ -321,10 +366,10 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
         Resume_h5_flow_variable(data_bag->vof->F, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
         Communication_update_ghost_nodes_flow_variable(data_bag->vof->F, VOLUME_FRACTION, pnodes, data_bag);
 
-        // // Smoothed volume fraction (F_smooth)
-        // sprintf(fieldname, "%s/F_smooth", groupname);
-        // Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
+        // Smoothed volume fraction (F_smooth)
+        sprintf(fieldname, "%s/F_smooth", groupname);
+        Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
 
         // Viscosity (mu)
         sprintf(fieldname, "%s/mu", groupname);
@@ -336,28 +381,52 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
         Resume_h5_flow_variable(data_bag->vof->rho, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
         Communication_update_ghost_nodes_flow_variable(data_bag->vof->rho, VOLUME_FRACTION, pnodes, data_bag);
 
-        // // Curvature (kappa)
-        // sprintf(fieldname, "%s/kappa", groupname);
-        // Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->kappa, VOLUME_FRACTION, pnodes, data_bag);
+        // Interface normals (normal_x, normal_y, normal_z)
+        sprintf(fieldname, "%s/normal_x", groupname);
+        Resume_h5_flow_variable(data_bag->vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
 
-        // // Interface normals (normal_x, normal_y, normal_z)
-        // sprintf(fieldname, "%s/normal_x", groupname);
-        // Resume_h5_flow_variable(data_bag->vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
+        sprintf(fieldname, "%s/normal_y", groupname);
+        Resume_h5_flow_variable(data_bag->vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
 
-        // sprintf(fieldname, "%s/normal_y", groupname);
-        // Resume_h5_flow_variable(data_bag->vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
-
-        // sprintf(fieldname, "%s/normal_z", groupname);
-        // Resume_h5_flow_variable(data_bag->vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-        // Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
+        sprintf(fieldname, "%s/normal_z", groupname);
+        Resume_h5_flow_variable(data_bag->vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
 
         // Plane intercept (alpha)
         sprintf(fieldname, "%s/alpha", groupname);
         Resume_h5_flow_variable(data_bag->vof->alpha, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
         Communication_update_ghost_nodes_flow_variable(data_bag->vof->alpha, VOLUME_FRACTION, pnodes, data_bag);
+
+		#ifdef SURFACE_TENSION
+
+	    // Curvature (kappa)
+        sprintf(fieldname, "%s/kappa", groupname);
+        Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->kappa, VOLUME_FRACTION, pnodes, data_bag);
+
+
+		// Write F_smooth
+		sprintf(fieldname, "%s/F_smooth", groupname);
+		Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
+
+          // Write interface normals
+        sprintf(fieldname, "%s/normal_x_smooth", groupname);
+	    Resume_h5_flow_variable(data_bag->vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+	    Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x_smooth, VOLUME_FRACTION, pnodes, data_bag);
+ 
+		sprintf(fieldname, "%s/normal_y_smooth", groupname);
+		Resume_h5_flow_variable(data_bag->vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y_smooth, VOLUME_FRACTION, pnodes, data_bag);
+		
+	
+		sprintf(fieldname, "%s/normal_z_smooth", groupname);
+		Resume_h5_flow_variable(data_bag->vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z_smooth, VOLUME_FRACTION, pnodes, data_bag);
+
+ #endif // SURFACE TENSION 
     }
 #endif // VOF_PLIC
 

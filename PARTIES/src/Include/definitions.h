@@ -233,11 +233,20 @@
 #define P_CORRECTION 'h'
 
 #define DENSITY 'i'
+#define VISCOSITY 'j'
 #define VOLUME_FRACTION 'o'
 
 #define FLUX_X 'p'
 #define FLUX_Y 'q'
 #define FLUX_Z 'r'
+#define PLANEINTERC 'T'
+
+#define F_SMOOTH 's'
+#define CURVATURE 't'
+
+#define NORMALX 'u'
+#define NORMALY 'v'
+#define NORMALZ 'w'
 
 // deprecated stuff maybe ready to be deleted
 #undef TEST_OUTPUT

@@ -38,6 +38,7 @@
 #include "post_processing.h"
 #include "EPforcing.h"
 #include "VolumeFraction.h"
+#include <math.h>  
 
 
 #define TIMEFILE "timesteps.dat"
@@ -689,7 +690,9 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
          VOF_set_advection(data_bag);
          VOF_update_F(data_bag);
 
-         // Reconstruct again if needed
+		 VOF_set_boundary_values(vof->F, data_bag);
+
+         // Reconstruct again with the new F
          VOF_reconstruct_interface(data_bag);
 
          // If using mixture laws for density/viscosity
@@ -869,6 +872,30 @@ if(which_stage == 0){
 	}
 #endif
 
+
+#ifdef SURFACE_TENSION
+
+    // /* Smooth VOF*/
+     VoF_smoothing(data_bag);
+
+
+    // /*  Reconstruct interface curvature */
+     curvature_patel(data_bag);
+
+
+    // /*  Add surface‐tension RHS 
+     Velocity_add_surfacetension_2_RHS_patel(data_bag);
+
+
+#endif
+
+
+#ifdef VOF_GRAVITY
+  Velocity_add_gravity_2_RHS(data_bag);
+#endif
+
+
+
 #ifdef BOUSSINESQ
 
 	 Velocity_add_buoyancy_2_RHS(data_bag); // we need the face centered volume fraction for the buoyancy in the case of particles
@@ -920,26 +947,12 @@ if(which_stage == 0){
 
 	#endif
 
-/*
-printf("vdata NY-3 is %2.5f\n",v->data[0][NY-3][0]);
-printf("vdata NY-2 is %2.5f\n",v->data[0][NY-2][0]);
-printf("vdata NY-1 is %2.5f\n",v->data[0][NY-1][0]);
-printf("vdata 0 is %2.5f\n",v->data[0][0][0]);
-printf("vdata 1 is %2.5f\n",v->data[0][1][0]);
-printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
-*/
+
 	/*------------------------------------------------------------------------*/
 	/*
 	 Solve for pre-projected velocity
 	 */
 	/*------------------------------------------------------------------------*/
-
-/*	printf("vdata NY-2 is %2.5f\n",v->data[0][NY-2][0]);
-	printf("vdata NY-1 is %2.5f\n",v->data[0][NY-1][0]);
-	printf("vdata 0 is %2.5f\n",v->data[0][0][0]);
-	printf("vdata 1 is %2.5f\n",v->data[0][1][0]);
-	printf("aaaa vdata 2 is %2.5f\n",v->data[0][2][0]);
-*/
 
 
 	T1 = MPI_Wtime();
@@ -951,14 +964,6 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 
 
 
-	/*
-	printf("vdata NY-3 is %2.5f\n",v->data[0][NY-3][0]);
-	printf("vdata NY-2 is %2.5f\n",v->data[0][NY-2][0]);
-	printf("vdata NY-1 is %2.5f\n",v->data[0][NY-1][0]);
-	printf("vdata 0 is %2.5f\n",v->data[0][0][0]);
-	printf("vdata 1 is %2.5f\n",v->data[0][1][0]);
-	printf("oooo vdata 2 is %2.5f\n",v->data[0][2][0]);
-*/
 
 	//--------------------------------------------------------------------------
 	// Update boundary conditions
@@ -1026,20 +1031,17 @@ printf("vdata 2 is %2.5f\n",v->data[0][2][0]);
 #else
 		Pressure_solve(p, grid, params);
 #endif
-		//printf(" Iteration of Poisson solver: %d\n", poisson_iters);
+
 		T2 = MPI_Wtime();
 		timer->Wtime_p_solve += T2 - T1;
 
-		//printf("vertical velocity at bottom is v[0][0][0]=%2.3f\n",v->data[0][0][0]);
-		//printf("vertical velocity at top is v[0][NY-1][0]=%2.3f\n",v->data[0][NY-1][0]);
+
 		// use pressure to project a divergence free velocity field
 
 		T1 = MPI_Wtime();
 		Pressure_project_velocity(data_bag);
 		T2 = MPI_Wtime();
 		timer->Wtime_p_project += T2 - T1;
-
-
 
 		Velocity_update_boundaries(u->data, 'u', VEL_TYPE_NORMAL, data_bag);
 		Velocity_update_boundaries(v->data, 'v', VEL_TYPE_NORMAL, data_bag);

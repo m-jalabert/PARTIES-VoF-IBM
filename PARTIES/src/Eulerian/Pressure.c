@@ -192,51 +192,10 @@ void Pressure_set_RHS(Cart3d_bag *data_bag) {
 				dwdz = ( w_data[k+1][j][i] - w_data[k][j][i] ) * idzdt[k];
 #endif
 				rhs_vec[k][j][i] = dudx + dvdy + dwdz; //cos(2*PI*xc[i]/Lx) *  cos(2*PI*yc[j]/Ly) *  cos(2*PI*zc[k]/Lz);//
-                // Debug print for a sample cell (e.g., the mid-domain cell)
-                if (k == (k_start + k_end) / 2 && j == (j_start + j_end) / 2 && i == (i_start + i_end) / 2) {
-                    printf("Pressure_set_RHS sample at cell (%d,%d,%d):\n", i, j, k);
-                    printf("    dudx = %g, dvdy = %g, dwdz = %g, rhs = %g\n", dudx, dvdy, dwdz, rhs_vec[k][j][i]);
-                    printf("    Raw u = %g (at [%d,%d,%d]), Raw v = %g, Raw w = %g\n", 
-                           u_data[k][j][i], i, j, k, v_data[k][j][i], w_data[k][j][i]);
-}
 
 			} /* for i*/
 		} /* for j*/
 	} /* for k*/
-
-	/*
-	printf("vdata 0 is %2.5f\n",v_data[0][0][0]);
-	printf("vdata 1 is %2.5f\n",v_data[0][1][0]);
-	printf("vdata 2 is %2.5f\n",v_data[0][2][0]);
-	printf("vdata NY-1 is %2.5f\n",v_data[0][NY-1][0]);
-	printf("vdata NY-2 is %2.5f\n",v_data[0][NY-2][0]);
-	printf("vdata NY-3 is %2.5f\n",v_data[0][NY-3][0]);
-
-	printf("y 0 is %2.5f\n",yv[0]);
-	printf("y 1 is %2.5f\n",yv[1]);
-	printf("y 2 is %2.5f\n",yv[2]);
-	printf("y NY-1 is %2.5f\n",yv[NY-1]);
-	printf("y NY-2 is %2.5f\n",yv[NY-2]);
-	printf("y NY-3 is %2.5f\n",yv[NY-3]);
-
-
-	printf("udata 0 is %2.5f\n",u_data[0][0][0]);
-	printf("udata 1 is %2.5f\n",u_data[0][0][1]);
-
-	printf("udata 0 is %2.5f\n",u_data[0][1][0]);
-	printf("udata 1 is %2.5f\n",u_data[0][1][1]);
-
-	printf("wdata 0 is %2.5f\n",w_data[0][0][0]);
-	printf("wdata 1 is %2.5f\n",w_data[1][0][0]);
-
-	printf("wdata 0 is %2.5f\n",w_data[0][1][0]);
-	printf("wdata 1 is %2.5f\n",w_data[1][1][0]);
-
-	printf("rhs p 0 is %2.5f\n",rhs_vec[0][0][0]);
-	printf("rhs p 1 is %2.5f\n",rhs_vec[0][1][0]);
-	printf("rhs p 2 is %2.5f\n",rhs_vec[0][2][0]);
-	printf("rhs p 3 is %2.5f\n",rhs_vec[0][3][0]);
-*/
 
 }
 
@@ -256,8 +215,8 @@ void Pressure_set_RHS(Cart3d_bag *data_bag) {
    u^k = u^* - 2 alpha_k dt         ∇φ   (single-phase case)
 
  The pressure update is:
-   p^k = p^{k-1} + rho * φ            (VOF)
-   p^k = p^{k-1} +       φ         (single-phase)
+   p^k = p^{k-1} + φ            (VOF)
+   p^k = p^{k-1} + φ         (single-phase)
 */
 /******************************************************************************/
 void Pressure_project_velocity(Cart3d_bag *data_bag) {
@@ -305,13 +264,6 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 	// exclude the half cell added
 	int i_end = min(NX-1, Ie);
 	int j_end = min(NY-1, Je);
-/*
-#ifdef YPERIODIC
-if (j_end == NY-1) {
-	j_end = NY;
-}
-#endif
-*/
 	int k_end = min(NZ-1, Ke);
 
 	double *idxdt = p->idxdt;
@@ -329,38 +281,6 @@ if (j_end == NY-1) {
 	//local data since ghost nodes are required
 	double ***deltap = p -> deltap;
 
-
-/*
-	#ifdef YPERIODIC
-	double **exchange_slab = data_bag->grid->exchange_slab;
-	int yproc = params-> yproccoord;
-	int NPY = params->NPY;
-
-
-	if(yproc == 0) {  // We are at the bottom let's copy the data to the exchange
-		for (k = k_start; k < k_end; k++) {
-			for (i = i_start; i < i_end; i++) {
-
-				exchange_slab[k][i] = deltap[k][0][i];
-
-			}
-		}
-
-	}
-		MPI_Allreduce(MPI_IN_PLACE, &exchange_slab[0][0], NX*NZ, MPI_DOUBLE, MPI_SUM, PCW);
-		// Now everyone has the bottom slab, this should be optimized later by a more specific communicator because only the top need to know that
-	if(yproc == NPY-1) { // We are at the top process
-
-		for (k = k_start; k < k_end; k++) {
-				for (i = i_start; i < i_end; i++) {
-					 deltap[k][NY-1][i] = exchange_slab[k][i];
-				}
-		}
-	}
-
-
-	#endif
-	*/
 
 	// Phi. Get the ghost nodes from the neighboring processors
 	T1 = MPI_Wtime();
@@ -390,8 +310,8 @@ if (j_end == NY-1) {
 
 	//--------------------------------------------------------------------------
 	// Update Pressure 
-	// p^k = p^{k-1} + rho^{k-1} * phi   (VOF)
-	// p^k = p^{k-1} + 1 * phi           (single-phase)
+	// p^k = p^{k-1} + phi   (VOF)
+	// p^k = p^{k-1} + phi   (single-phase)
 	//--------------------------------------------------------------------------
 	T1 = MPI_Wtime();
 	for (k = k_start; k < k_end; k++) {
@@ -400,7 +320,8 @@ if (j_end == NY-1) {
 
 #ifdef VOF_PLIC
                 // Multi-phase
-                p_data[k][j][i] += rho[k][j][i] * deltap[k][j][i];
+                //p_data[k][j][i] += rho[k][j][i] * deltap[k][j][i];
+				p_data[k][j][i] += deltap[k][j][i];
 #else
                 // Single-phase
                 p_data[k][j][i] += deltap[k][j][i];
@@ -416,6 +337,7 @@ if (j_end == NY-1) {
 	p->project_update_cpu_time += T2-T1;
 
 	T1 = MPI_Wtime();
+	Pressure_apply_BCs(p_data, grid, params);
 	Communication_update_ghost_nodes_flow_variable(p_data, CONCENTRATION_PERTURBATION, 3, data_bag);
 	T2 = MPI_Wtime();
 	p->project_comm_cpu_time += T2-T1;
@@ -446,9 +368,9 @@ if (j_end == NY-1) {
 			for (i = i_start; i < i_end; i++) {
 
 #ifdef VOF_PLIC
-                double inv_rho = 1.0 / rho[k][j][i];
+				double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k][j][i-1]);
                 u_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j][i-1] )
-                                   * ( idxdt[i-1] * inv_rho );
+                                   * ( idxdt[i-1] * inv_rho_face );
 #else
                 u_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j][i-1] )
                                    * idxdt[i-1];
@@ -487,9 +409,9 @@ if (j_end == NY-1)
 			for (i = i_start; i < i_end; i++) {
 				
 #ifdef VOF_PLIC
-                double inv_rho = 1.0 / rho[k][j][i];
+				double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k][j-1][i]);
                 v_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j-1][i] )
-                                   * ( idydt[j-1] * inv_rho );
+                                   * ( idydt[j-1] * inv_rho_face );
 #else
                 v_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j-1][i] )
                                    * idydt[j-1];
@@ -500,8 +422,7 @@ if (j_end == NY-1)
 	T2 = MPI_Wtime();
 	p->project_v_cpu_time += T2-T1;
 
-	//printf("v_data[0][0][0] %2.5f\n",v_data[0][0][0]);
-	//printf("v_data[0][NY-1][0] %2.5f\n",v_data[0][NY-1][0]);
+
 	//--------------------------------------------------------------------------
 	// Update w_star to w_new (divergence free velocity field)
 	//--------------------------------------------------------------------------
@@ -523,9 +444,9 @@ if (j_end == NY-1)
 			for (i = i_start; i < i_end; i++) {
 
 #ifdef VOF_PLIC
-                double inv_rho = 1.0 / rho[k][j][i];
+				double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k-1][j][i]);
                 w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
-                                   * ( idzdt[k-1] * inv_rho );
+                                   * ( idzdt[k-1] * inv_rho_face );
 #else
                 w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
                                    * idzdt[k-1];
@@ -665,12 +586,12 @@ double Pressure_compute_velocity_divergence(Cart3d_bag *data_bag) {
 	W_l1_div = W_l1_div / ( (NX-1) * (NY-1) * (NZ-1) );
 	W_l2_div = W_l2_div / ( (NX-1) * (NY-1) * (NZ-1) );
 
-	if (params->rank == 0) {
-		printf("Pressure.c/ div:%20.16e at (i,j,k)=(%d,%d,%d) at proc = %d\n",
-		       W_div_max, i_max, j_max, k_max,proc_max);
-		printf("Pressure.c/ l1_div=%16.12e l2_div= %16.12e\n",
-		       W_l1_div, W_l2_div);
-	}
+	// if (params->rank == 0) {
+	// 	printf("Pressure.c/ div:%20.16e at (i,j,k)=(%d,%d,%d) at proc = %d\n",
+	// 	       W_div_max, i_max, j_max, k_max,proc_max);
+	// 	printf("Pressure.c/ l1_div=%16.12e l2_div= %16.12e\n",
+	// 	       W_l1_div, W_l2_div);
+	// }
 	return (W_div_max);
 }
 

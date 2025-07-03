@@ -707,26 +707,35 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 #ifdef VOF_PLIC
     // Initialize VOF field based on init_type
     switch(params->init_type) {
-        case 1:  // Bubble test case
+        case 1:  // Advection test case
             VoF_init_bubble(data_bag);
             break;
-        // Add future initialization types here
-        case 2: // Single Cell test case
-			VoF_init_single_cell(data_bag);
-			break;
-        default:
-			if(params->rank == 0) {
-				char warning_msg[256];
-				snprintf(warning_msg, sizeof(warning_msg), 
-						"Unsupported VOF init_type: %d. Valid options are: 1 (bubble). "
-						"No VOF initialization performed.", params->init_type);
-				Display_throw_warning(warning_msg, params);
-			}
+        
+        case 2: // stationary droplet test case
+			VoF_init_stationary_droplet(data_bag);
             break;
+			
+		case 3: // ellipsoid droplet test case
+			VoF_init_ellipsoid(data_bag);
+            break;
+
+		case 4: // rising bubble test case
+			VoF_init_rising_bubble(data_bag);
+            break;
+
+		case 5: // rising multiple bubbles 
+			VoF_init_two_bubbles_coaxial(data_bag);
+            break;
+
+		case 6: 
+		    VoF_init_vertical_bilayer_Z(data_bag);
+			break;
     }
     
         // Set boundary values and update ghost nodes
-         VOF_set_boundary_values(data_bag->vof->F, data_bag);
+        VOF_set_boundary_values(data_bag->vof->F, data_bag);		     
+        VoF_smoothing(data_bag);
+    	curvature_patel(data_bag);
         
         // Update mixture properties (density, viscosity)
         VOF_update_density_viscosity(data_bag);

@@ -129,14 +129,14 @@
 /*                                X-Boundaries                                */
 /******************************************************************************/
 	#undef  LEFT_WALL_VELOCITY_NOSLIP
-	#undef LEFT_WALL_VELOCITY_FREESLIP
-	#define  LEFT_INFLOW
+	#define LEFT_WALL_VELOCITY_FREESLIP
+	#undef  LEFT_INFLOW
 	#undef  LEFT_OUTFLOW
 
 	#undef  RIGHT_WALL_VELOCITY_NOSLIP
-	#undef RIGHT_WALL_VELOCITY_FREESLIP
+	#define RIGHT_WALL_VELOCITY_FREESLIP
 	#undef  RIGHT_INFLOW
-	#define  RIGHT_OUTFLOW
+	#undef  RIGHT_OUTFLOW
 
 	#undef  XPERIODIC
 
@@ -156,12 +156,12 @@
 /******************************************************************************/
 /*                                Y-Boundaries                                */
 /******************************************************************************/
-	#define BOTTOM_WALL_VELOCITY_NOSLIP
-	#undef  BOTTOM_WALL_VELOCITY_FREESLIP
+	#undef BOTTOM_WALL_VELOCITY_NOSLIP
+	#define  BOTTOM_WALL_VELOCITY_FREESLIP
 	#undef  BOTTOM_WALL_SCHUMANN
 	#undef  BOTTOM_WALL_VELOCITY
-	#define TOP_WALL_VELOCITY_NOSLIP
-	#undef  TOP_WALL_VELOCITY_FREESLIP
+	#undef TOP_WALL_VELOCITY_NOSLIP
+	#define  TOP_WALL_VELOCITY_FREESLIP
 	#undef  TOP_WALL_SCHUMANN
 	#undef  TOP_WALL_VELOCITY
 	#undef YPERIODIC
@@ -189,6 +189,8 @@
 /* 						Volume of Fluid - PLIC with CSF					      */
 /******************************************************************************/
 #define VOF_PLIC
+#define SURFACE_TENSION
+#define STATIC_BUBBLE_TESTCASE
 
 
 

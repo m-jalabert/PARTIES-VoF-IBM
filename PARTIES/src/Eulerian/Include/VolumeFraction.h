@@ -2,60 +2,75 @@
  #define VOLUMEFRACTION_H
 
 #include "DataTypes.h"
+#include <stdbool.h> 
 
-// "Constructor"-style function (similar to Conc_create)
+#ifdef VOF_PLIC
+//==============================
+// Initialization / Destruction
+//==============================
 VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params);
-
-// "Destructor"-style function (similar to Conc_destroy)
 void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params);
 
-// Additional prototypes: boundary updates, advection, etc.
+//==============================
+// Boundary Conditions
+//==============================
 void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag);
 
+//==============================
+// Interface Reconstruction
+//==============================
 /**
- *    Reconstruct interface (PLIC)
- *    We solve for alpha in each interface cell so that the plane
- *    is consistent with the local volume fraction F[i][j][k] and normal.
+ * Reconstructs interface (PLIC).
+ * Solves for α to match volume fraction F and normal vector in each cell.
  */
 void VOF_reconstruct_interface(Cart3d_bag *data_bag);
 
+//==============================
+// Advection
+//==============================
 /**
- *    VoF_set_advection
- *
- * Computes convective terms for VOF advection using PLIC-reconstructed interface
- * Geometry-aware advection based on face fluxes calculated using interface normals
+ * Computes convective terms for VOF advection using PLIC-reconstructed interface.
+ * Geometry-aware advection based on fluxes across interface faces.
  */
 void VOF_set_advection(Cart3d_bag *data_bag); 
 
 /**
- *    VOF_set_RHS
- *
- * Updates the volume-fraction field `F` using a 3-stage Runge–Kutta (RK3) scheme.
+ * Advances volume fraction F using a 3-stage Runge–Kutta (RK3) time integrator.
  */
 void VOF_update_F(Cart3d_bag *data_bag);
 
+//==============================
+// Material Property Updates
+//==============================
 /**
- *    Compute curvature (kappa)
- *    Possibly using height-function or simpler approach. Fill vof->kappa.
+ * Updates dimensionless density and viscosity fields:
+ *   ρ̃(F) = F + (1 - F)(ρ₂/ρ₁)
+ *   μ̃(F) = F + (1 - F)(μ₂/μ₁)
  */
-void VOF_compute_curvature (Cart3d_bag *data_bag);
+void VOF_update_density_viscosity(Cart3d_bag *data_bag);
+
+//==============================
+// Surface Tension & Body Forces
+//==============================
+/**
+ * Smooths volume fraction field via convolution kernel (Patel method).
+ */
+void VoF_smoothing(Cart3d_bag *data_bag);
 
 /**
- *    Apply surface tension (CSF)
- *    Add sigma * kappa * grad(F) / rho to momentum or velocity body force
+ * Computes interface curvature κ using the smoothed volume fraction field.
  */
-void VOF_apply_surface_tension (Cart3d_bag *data_bag);
+void curvature_patel(Cart3d_bag *data_bag);
 
 /**
- * Updates the dimensionless density and viscosity fields in the domain,
- * using the piecewise mixing laws:
- *
- *   (1)  rho_tilde(F) = F + (1 - F)* (rho2 / rho1)
- *
- *   (2)  rho_tilde / mu_tilde = F
- *           + (1 - F)* (rho2 * mu1) / (rho1 * mu2)
+ * Adds surface tension force (2/We)·κ·∇F to momentum RHS.
  */
-void VOF_update_density_viscosity (Cart3d_bag *data_bag);
+void Velocity_add_surfacetension_2_RHS_patel(Cart3d_bag *data_bag);
+
+/**
+ * Adds gravity source term to the momentum equations.
+ */
+void Velocity_add_gravity_2_RHS(Cart3d_bag *data_bag);
 
 
 
@@ -81,6 +96,9 @@ double rectangle_fraction(PointType n, double alpha, PointType a, PointType b);
 
 int facets_2D(PointType n, double alpha, PointType p[2]);
 int facets_3D(PointType n, double alpha, PointType v[12], double h);
+
+double line_length_center(PointType m, double alpha, PointType *p);
+double plane_area_center(PointType m, double alpha, PointType *p);
 
 void line_center(PointType m, double alpha, double a, PointType *p);
 void plane_center(PointType m, double alpha, double a, PointType *p);
@@ -182,7 +200,7 @@ PointType VoF_facet_normal_3D(
  ******************************************************************************/
 double VOF_InterfaceArea_3D(Cart3d_bag *data_bag);
 
-
+#endif // VOF_PLIC
 #endif // VOLUMEFRACTION_H
 
 

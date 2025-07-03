@@ -338,11 +338,16 @@ void VOF_update_F(Cart3d_bag *data_bag)
 
 
 /******************************************************************************
- * VoF_set_boundary_values
+ * VOF_set_boundary_values
  *
- * Set boundary values for volume fraction, then do MPI ghost updates.
- * This expanded version showcases how you might handle more boundary 
- * condition types (inflow, outflow, contact angle, free-slip, etc.).
+ * Fill ghost cells of the VOF field F according to the compile-time wall
+ * macros, then call the MPI ghost-exchange.  Works for any number of ghost
+ * layers (NG = params->ghost_nodes).
+ *
+ * Conventions
+ *   • Zero-gradient (F = interior value)  ⟹  impermeable wall, θ = 90°.
+ *   • Dirichlet (F = 1 or user value)     ⟹  inflow / moving wall.
+ *   • Outflow (copy one-way)              ⟹  simple convective exit.
  ******************************************************************************/
 void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
 {
@@ -730,12 +735,8 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
  *
  *   (1)  rho_tilde(F) = F + (1 - F)* (rho2 / rho1)
  *
- *   (2)  rho_tilde / mu_tilde = F
- *           + (1 - F)* (rho2 * mu1) / (rho1 * mu2)
- *
- * so that:
- *
- *   mu_tilde(F) = rho_tilde(F) / [ F + (1-F)*(rho2*mu1)/(rho1*mu2) ].
+ *   (2)  mu_tilde(F) = F + (1 - F)* (mu2 / mu1) 
+ 
  *
  * We store:
  *   vof_density->rho[k][j][i]    = rho_tilde
@@ -753,8 +754,7 @@ void VOF_update_density_viscosity(Cart3d_bag *data_bag)
     MAC_grid       *grid           = data_bag->grid;
     Parameters     *params         = data_bag->params;
     VolumeFraction *vof            = data_bag->vof;
-    //Density_vof    *vof_density   = data_bag->vof_density;
-    //Viscosity_vof  *vof_viscosity = data_bag->vof_viscosity;
+
 
     // Extract dimensionless volume fraction field
     double ***F = vof->F;
@@ -788,15 +788,10 @@ void VOF_update_density_viscosity(Cart3d_bag *data_bag)
                 //     rho_tilde = F + (1-F)*(rho2/rho1)
                 double rhoVal = F_ijk + (1.0 - F_ijk)*(rho2 / rho1);
 
-                // (2) Compute ratio [rho_tilde / mu_tilde] 
-                //     = F + (1-F)*[ (rho2*mu1)/(rho1*mu2 ) ]
-                double rmRatio = F_ijk 
-                               + (1.0 - F_ijk)*((rho2*mu1)/(rho1*mu2));
+                // (2) Compute dimensionless viscosity:
+                //     mu_tilde = F + (1 - F)*(mu2/mu1)
+                double muVal = F_ijk + (1.0 - F_ijk)*(mu2 / mu1); 
 
-                // (3) => mu_tilde = rho_tilde / rmRatio
-                // Be mindful that rmRatio can be near 0 => add tiny eps if needed
-                double eps = 1e-30;
-                double muVal = (rmRatio > eps) ? (rhoVal / rmRatio) : 0.0;
 
                 // Store dimensionless fields
                 rho_tilde[k][j][i] = rhoVal;
@@ -804,6 +799,8 @@ void VOF_update_density_viscosity(Cart3d_bag *data_bag)
             }
         }
     }
+    VOF_set_boundary_values(rho_tilde, data_bag);
+    VOF_set_boundary_values(mu_tilde, data_bag);
 }
 
 

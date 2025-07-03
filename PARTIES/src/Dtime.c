@@ -135,7 +135,7 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 				                            idz_w[k] * idz_w[k] );
 #endif
 
-				max_idt = max(max_idt, convective + viscous);
+				max_idt = max(max_idt, convective + viscous); // sum because of von Neumann stability condition advection-diffusion equation
 
 #if defined LEFT_OUTFLOW || defined RIGHT_OUTFLOW
 				// To find maximum u-Velocity in the domain
@@ -149,6 +149,19 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 	} // for k
 
 	dt_cfl = params->cfl / max_idt;
+
+#ifdef SURFACE_TENSION
+    // Surface tension stability condition
+    double dx_min = min(min(1.0/grid->idx_u[0], 1.0/grid->idy_v[0]), 1.0/grid->idz_w[0]);
+    double rho1 = params->rho1;
+    double rho2 = params->rho2;
+    double sigma = params->sigma;
+    double C_sigma = params->cfl; 
+    double dt_sigma = C_sigma * sqrt(((rho1 + rho2) * pow(dx_min, 3)) / (4.0 * PI * sigma));
+
+    // Combine with previous CFL
+    dt_cfl = min(dt_cfl, dt_sigma);
+#endif
 
 	// Now, find minimum dt and send it back to all processors
 	send_data[0] = dt_cfl;

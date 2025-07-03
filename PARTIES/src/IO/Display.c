@@ -207,7 +207,7 @@ int Display_parameters(Parameters *params) {
 
 #if defined YPERIODIC
 	printf("Y-Boundaries: ... periodic\n");
-#elif BOTTOM_WALL_VELOCITY_NOSLIP
+#elif defined BOTTOM_WALL_VELOCITY_NOSLIP
 	printf("Bottom wall: .... no-slip\n");
 #elif defined BOTTOM_WALL_VELOCITY_FREESLIP
 	printf("Bottom wall: .... free-slip\n");
