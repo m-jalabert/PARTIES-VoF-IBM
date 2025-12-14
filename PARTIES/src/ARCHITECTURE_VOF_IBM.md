@@ -189,106 +189,62 @@ Values are clamped: $F \in [0, 1]$.
 Implements the **Liu & Ding (2015)** characteristic extension method to enforce the prescribed contact angle $\theta$ in ghost cells inside the solid region.
 
 **Physical Setup:**
-- Contact angle $\theta$ is measured through the liquid from the solid surface
-- For superhydrophobic surfaces: $\theta > 90°$ (e.g., $\theta = 154°$)
-- For hydrophilic surfaces: $\theta \leq 90°$
+- Contact angle $\theta$ is measured through the liquid from the solid surface.
+- For superhydrophobic surfaces: $\theta > 90°$ (e.g., $\theta = 154°$).
+- For hydrophilic surfaces: $\theta \leq 90°$.
 
-**Step 1: Identify Ghost Contact-Line Region (Eq. 18)**
-
-A cell at $(i,j,k)$ is in the ghost region if:
-1. It is inside or at the solid boundary: $vfc_{i,j,k} > 0.005$
-2. It has at least one fluid neighbor ($vfc < 0.5$) — ensures we can compute gradients
+**Step 1: Identify Ghost Contact-Line Region**
+The algorithm iterates through all cells. A cell $(i,j,k)$ is identified as a contact-line ghost cell if it satisfies the following criteria:
+1.  It is a solid cell ($vfc \geq 0.05$).
+2.  It satisfies one of two conditions indicating proximity to the interface:
+    *   **Condition A:** The cell itself contains the interface ($0.005 \le F \le 0.995$).
+    *   **Condition B:** It has at least one immediate neighbor (sharing a face) that is a fluid cell ($vfc < 0.05$) *and* contains the interface.
 
 **Step 2: Compute Solid Normal $\mathbf{n}_s$ (Pointing INTO Fluid)**
-
-The IBM normal field `nx_IBM, ny_IBM, nz_IBM` is computed as $\nabla vfc / |\nabla vfc|$, which points **into the solid** (from $vfc=0$ to $vfc=1$). For the extension algorithm, we need the outward normal:
-$$\mathbf{n}_s = -\frac{\nabla vfc}{|\nabla vfc|}$$
-
-This $\mathbf{n}_s$ points from solid into fluid.
+The Immersed Boundary Method (IBM) normal field (`nx_IBM`, etc.) stores the gradient of the volume fraction $\nabla vfc$, which points into the solid. To obtain the wall normal pointing **into the fluid**:
+$$ \mathbf{n}_s = -\frac{\nabla vfc}{|\nabla vfc|} $$
+If the magnitude of the normal is degenerate ($< 10^{-12}$), the cell is skipped.
 
 **Step 3: Compute Wall Tangent $\mathbf{t}_s$**
+The tangent direction is obtained by projecting the interface gradient $\nabla F$ onto the wall plane. In this implementation, $\nabla F$ is computed using **central differences at the ghost cell $P$** itself:
+$$ \mathbf{t}_s = \frac{\nabla F - (\nabla F \cdot \mathbf{n}_s)\mathbf{n}_s}{|\nabla F - (\nabla F \cdot \mathbf{n}_s)\mathbf{n}_s|} $$
+If the projected gradient magnitude is negligible (indicating a flat interface parallel to the wall), $\mathbf{t}_s$ is set to zero.
 
-The tangent direction is obtained by projecting $\nabla F$ onto the wall plane:
-$$\mathbf{t}_s = \frac{\nabla F - (\nabla F \cdot \mathbf{n}_s)\mathbf{n}_s}{|\nabla F - (\nabla F \cdot \mathbf{n}_s)\mathbf{n}_s|}$$
-
-The gradient $\nabla F$ is evaluated at a **fluid neighbor** cell to ensure accurate interface orientation. This is critical because $\nabla F$ computed inside the solid may be unreliable.
-
-**Step 4: Construct Characteristic Stencil Directions (Eq. 17)**
-
-Two symmetric stencil directions $\mathbf{M}_1$ and $\mathbf{M}_2$ are constructed:
-$$\mathbf{M}_1 = \mathbf{n}_s \sin\theta + \mathbf{t}_s \cos\theta$$
-$$\mathbf{M}_2 = \mathbf{n}_s \sin\theta - \mathbf{t}_s \cos\theta$$
-
-**Geometric interpretation:**
-- The angle between $\mathbf{M}_{1,2}$ and the wall tangent is $(\theta - 90°)$
-- For $\theta = 90°$: $\mathbf{M}_{1,2} = \mathbf{n}_s$ (stencils point normal to wall)
-- For $\theta = 154°$: $\sin(154°) \approx 0.44$, $\cos(154°) \approx -0.90$
-  - $\mathbf{M} \approx 0.44\mathbf{n}_s - 0.90\mathbf{t}_s$ (stencils tilt along the surface, into fluid)
-
-Both directions point into the fluid region where donor values are sampled.
+**Step 4: Construct Characteristic Stencil Directions**
+Two symmetric stencil directions $\mathbf{M}_1$ and $\mathbf{M}_2$ are constructed based on the contact angle $\theta$:
+$$ \mathbf{M}_1 = \mathbf{n}_s \sin\theta + \mathbf{t}_s \cos\theta $$
+$$ \mathbf{M}_2 = \mathbf{n}_s \sin\theta - \mathbf{t}_s \cos\theta $$
+These directions represent the characteristic lines of the phase field extending from the solid into the fluid.
 
 **Step 5: Ray Tracing to Find Interpolation Points**
+For each stencil direction $\mathbf{M}$, the algorithm performs a ray trace starting from the ghost cell center $\mathbf{P}$:
+1.  The ray is traced until it intersects a **cell face** that separates two fluid cells (where $vfc < 0.05$ on both sides).
+2.  The intersection is validated by ensuring the hit point lies within the physical bounds of that cell face (with a tolerance of $\approx 0.1\%$).
+3.  The algorithm identifies the grid line passing through the intersection point orthogonal to the face. Three fluid cells ($A, B, C$) are identified along this line for interpolation, where cell $A$ is the immediate fluid neighbor beyond the intersection.
 
-For each stencil direction $\mathbf{M}$, starting from ghost cell center $\mathbf{P}$:
-1. March along $\mathbf{M}$ until crossing into fluid region ($vfc < 0.5$)
-2. Find intersection point $\mathbf{D}$ with a grid line connecting cell centers
-3. Identify three consecutive fluid cells $A$, $B$, $C$ along the grid line for interpolation
+**Step 6: Mixed-Order Interpolation**
+To ensure robustness near complex geometries or thin films, the implementation uses a mixed-order interpolation strategy to compute the value $C_D$ at the intersection point:
+1.  **Quadratic (Liu & Ding Eq. 20):** Used if cells $A$, $B$, and $C$ are all valid fluid cells.
+    $$ C_D = \left(\frac{l_{AD}}{h}\right)^2 \left(\frac{1}{2}C_A - C_B + \frac{1}{2}C_C\right) + \frac{l_{AD}}{h}\left(-1.5C_A + 2C_B - \frac{1}{2}C_C\right) + C_A $$
+2.  **Linear:** Used if cell $C$ is invalid (solid or out of bounds).
+    $$ C_D = C_A + \frac{C_A - C_B}{h} (-l_{AD}) $$
+3.  **Constant:** Used if cell $B$ is also invalid.
+    $$ C_D = C_A $$
 
-The intersection must satisfy:
-- $t > 0$ (positive distance along ray)
-- Both cells adjacent to the intersected face are fluid
-- Hit point lies within the cell face bounds
+**Step 7: Apply Extension Rule**
+The extended value $C_P$ at ghost cell $P$ is determined by the valid results from the two characteristic rays ($C_{D1}, C_{D2}$):
 
-**Step 6: Quadratic Interpolation (Eq. 20)**
-
-Given cells $A$, $B$, $C$ at uniform spacing $h$, and intersection point $D$ at distance $l_{AD}$ from $A$:
-$$C_D = \left(\frac{l_{AD}}{h}\right)^2 \left(\frac{1}{2}C_A - C_B + \frac{1}{2}C_C\right) + \frac{l_{AD}}{h}\left(-\frac{1}{2}C_A + 2C_B - \frac{1}{2}C_C\right) + C_A$$
-
-This is equivalent to Lagrange interpolation through points $A$, $B$, $C$.
-
-**Step 7: Apply Extension Rule (Eq. 19)**
-
-The extended value $C_P$ at ghost cell $P$ is determined by:
-$$C_P = \begin{cases} 
+$$ C_P = \begin{cases} 
 \max(C_{D1}, C_{D2}) & \text{if } \theta \leq 90° \text{ (hydrophilic)} \\
 \min(C_{D1}, C_{D2}) & \text{if } \theta > 90° \text{ (hydrophobic)}
-\end{cases}$$
+\end{cases} $$
 
-**Physical rationale:**
-- Hydrophilic ($\theta \leq 90°$): Liquid spreads → maximize liquid volume fraction
-- Hydrophobic ($\theta > 90°$): Liquid retracts → minimize liquid volume fraction (maximize gas)
+*Note: If only one ray returns a valid interpolation (e.g., due to geometry blockage), that single value is used. If neither is valid, the value remains unchanged.*
 
-**Step 8: Apply Constraint**
-
-Ensure physical consistency:
-$$F + vfc \leq 1$$
-
-If violated, clip: $F = 1 - vfc$.
-
-**Algorithm Summary:**
-
-for each cell (i,j,k) with vfc > 0.005:
-
-    if no fluid neighbor exists: skip
-    n_s = -normalize(nx_IBM, ny_IBM, nz_IBM)  // points into fluid
-    gradF = central_diff(F) at fluid neighbor
-    t_s = normalize(gradF - (gradF·n_s)*n_s)
-
-    M1 = n_s*sin(θ) + t_s*cos(θ)
-    M2 = n_s*sin(θ) - t_s*cos(θ)
-
-    C_D1 = trace_and_interpolate(origin, M1)
-    C_D2 = trace_and_interpolate(origin, M2)
-
-    if θ <= 90°:
-        C_P = max(C_D1, C_D2)
-    else:
-        C_P = min(C_D1, C_D2)
-
-    F[i,j,k] = clamp(C_P, 0, 1 - vfc[i,j,k])
----
-
-**Reference:** Liu, H. & Ding, Y. (2015). "A diffuse-interface immersed-boundary method for two-dimensional simulation of flows with moving contact lines on curved substrates." *Journal of Computational Physics*, 294, 484-502.
+**Step 8: Apply Volume Constraint**
+To ensure physical consistency between the solid volume fraction ($vfc$) and the liquid volume fraction ($F$), the result is constrained such that the sum does not exceed unity:
+$$ F + vfc \leq 1 \implies F = \min(F, 1 - vfc) $$
+Finally, ghost node values are synchronized across processors.
 
 ### 3.3 Surface Tension & Contact Line Force
 
