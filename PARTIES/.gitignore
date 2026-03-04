@@ -17,4 +17,39 @@ src/Include/Boundary.h
 *.exe
 # Misc
 .DS_store
+.DS_Store
 post_processing/h5ToVTK/
+
+# Large binary archives (use Git LFS or document separately)
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+*.tgz
+
+# CFD output
+*.vtu
+*.vtk
+*.pvtu
+*.pvd
+*.xmf
+*.xdmf
+results/
+output/
+restart/
+
+# HPC / Slurm
+slurm-*.out
+core.*
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Editors
+*.swp
+*.swo
+*~
+.vscode/
