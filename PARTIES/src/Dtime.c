@@ -157,7 +157,8 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
     double rho2 = params->rho2;
     double sigma = params->sigma;
     double C_sigma = params->cfl; 
-    double dt_sigma = C_sigma * sqrt(((rho1 + rho2) * pow(dx_min, 3)) / (4.0 * PI * sigma));
+	double We = params->We;
+    double dt_sigma = C_sigma * sqrt(((rho1 + rho2) * pow(dx_min, 3) * We) / (4.0 * PI));
 
     // Combine with previous CFL
     dt_cfl = min(dt_cfl, dt_sigma);
