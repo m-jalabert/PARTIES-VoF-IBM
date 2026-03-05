@@ -104,9 +104,8 @@ CFG(vof, mu2, 1.0, atof)       // Viscosity fluid 2
 // Interface initialization 
 CFG(vof, init_type, 0, atoi)     // 1=Advection test case, 2=Stationary Bubble test case
 
-// Contact angle parameters 
-CFG(vof, contact_angle, 0, atoi)         // Static contact angle (degrees)
-CFG(vof, wall_adhesion_model, 45, atoi)  // 0=none, 1=constant angle
+//Contact angle inputs
+CFG(vof, contact_angle_deg, 90.0, atof) 
 
 // Test cases 
 // Rider & Kothe Advection testcase (1998) 
