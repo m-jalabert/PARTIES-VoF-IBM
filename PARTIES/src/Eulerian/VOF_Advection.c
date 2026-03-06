@@ -54,7 +54,7 @@ void VOF_set_advection(Cart3d_bag *data_bag)
     double ***flux_x = vof->flux_x;
     double ***flux_y = vof->flux_y;
     double ***flux_z = vof->flux_z;     
-    double ***conv = vof->conv;  
+    double ***conv = vof->conv;
 
     // Face velocities (MAC)
     Velocity *u = data_bag->u; // x-face velocity => [k][j][i]
@@ -332,8 +332,7 @@ void VOF_update_F(Cart3d_bag *data_bag)
             }
         }
     }
-    Communication_update_ghost_nodes_flow_variable(vof->F, VOLUME_FRACTION,
-        params->ghost_nodes, data_bag);
+    VOF_set_boundary_values(vof->F, data_bag);
 }
 
 
@@ -353,6 +352,7 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
 {
     MAC_grid    *grid   = data_bag->grid;
     Parameters  *params = data_bag->params;
+    VolumeFraction *vof = data_bag->vof;
 
     int NX = grid->NX;
     int NY = grid->NY;
@@ -366,7 +366,7 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
     int Ke = grid->G_Ke;
 
     //-------------------------------------------------------------------------
-    // 1) X boundaries
+    // 1) X boundaries — use G_Ks..G_Ke and G_Js..G_Je so corner ghosts are filled
     //-------------------------------------------------------------------------
 #ifndef XPERIODIC
 
@@ -376,63 +376,41 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
     if (Is == 0) {
         int i0 = 0;
       #ifdef LEFT_INFLOW
-        /*
-         * Example: if you want a fluid inflow with volume fraction = 1.0 
-         * at x=0 (i.e., pure fluid enters),
-         * then set the ghost cell to 1.0. 
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i0-1] = 1.0; 
             }
         }
       
       #elif defined LEFT_OUTFLOW
-        /*
-         * For an "outflow" or "convective" boundary, we might do
-         * a zero-gradient approach: F[k][j][i0-1] = F[k][j][i0].
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i0-1] = F[k][j][i0];
             }
         }
 
       #elif defined LEFT_WALL_VELOCITY_NOSLIP
-        /*
-         * If we consider a "wall" for VOF, often we do zero flux 
-         * or zero gradient. Possibly also impose contact angle 
-         * conditions if relevant. 
-         * For now, let's just do zero gradient:
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i0-1] = F[k][j][i0];
             }
         }
 
       #elif defined LEFT_WALL_VELOCITY_FREESLIP
-        /*
-         * Similarly, for a "free-slip" boundary, typically no normal flux 
-         * is still correct for VOF. 
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i0-1] = F[k][j][i0];
             }
         }
 
       #else
-        /*
-         * Default fallback: mirror or zero-gradient boundary
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i0-1] = F[k][j][i0];
             }
         }
-      #endif // left boundary condition
-    } // Is == 0
+      #endif
+    }
 
     //************************
     // Right boundary (x = NX-1)
@@ -440,286 +418,210 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
     if (Ie == NX) {
         int i1 = NX - 1;
       #ifdef RIGHT_INFLOW
-        /*
-         * If fluid inflows from the right side, set volume fraction to 1.
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i1] = 1.0;
             }
         }
 
       #elif defined RIGHT_OUTFLOW
-        /*
-         * Zero-gradient outflow, or 'convective' approach
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i1] = F[k][j][i1-1];
             }
         }
 
       #elif defined RIGHT_WALL_VELOCITY_NOSLIP
-        /*
-         * No-slip wall => typically zero flux for VOF
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i1] = F[k][j][i1-1];
             }
         }
 
       #elif defined RIGHT_WALL_VELOCITY_FREESLIP
-        /*
-         * Free-slip => again no normal flux
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i1] = F[k][j][i1-1];
             }
         }
 
       #else
-        /*
-         * Default fallback: mirror boundary
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int j = grid->L_Js; j < grid->L_Je; j++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
                 F[k][j][i1] = F[k][j][i1-1];
             }
         }
-      #endif // right boundary condition
-    } // Ie == NX
+      #endif
+    }
 #endif // !XPERIODIC
 
 
     //-------------------------------------------------------------------------
-    // 2) Y boundaries
+    // 2) Y boundaries — use G_Ks..G_Ke and G_Is..G_Ie (includes x-ghost overlap)
     //-------------------------------------------------------------------------
 #ifndef YPERIODIC
 
-    //************************
-    // Bottom boundary (y=0)
-    //************************
     if (Js == 0) {
-        int j0 = 0;
-      #ifdef BOTTOM_WALL_VELOCITY_NOSLIP
-        /*
-         * For a no-slip bottom wall, we can do zero flux for VOF
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
-                F[k][j0-1][i] = F[k][j0][i];
-            }
-        }
+#ifdef VOF_WETTING
+        if (vof_wetting_manages_array(vof, F)) {
+            /* Skip: handled by VOF_WETTING */
+        } else
+#endif
+        {
+            int j0 = 0;
 
-      #elif defined BOTTOM_WALL_VELOCITY_FREESLIP
-        /*
-         * Or free-slip also => zero flux approach
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
-                F[k][j0-1][i] = F[k][j0][i];
+          #ifdef BOTTOM_WALL_VELOCITY_NOSLIP
+            for (int k = Ks; k < Ke; k++) {
+                for (int i = Is; i < Ie; i++) {
+                    F[k][j0-1][i] = F[k][j0][i];
+                }
             }
-        }
 
-      #elif defined BOTTOM_WALL_VELOCITY
-        /*
-         * If you had some "moving wall" or "inflow" at bottom, 
-         * you might set F=1.0 or a user-specified function.
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
-                F[k][j0-1][i] = 1.0; // example
+          #elif defined BOTTOM_WALL_VELOCITY_FREESLIP
+            for (int k = Ks; k < Ke; k++) {
+                for (int i = Is; i < Ie; i++) {
+                    F[k][j0-1][i] = F[k][j0][i];
+                }
             }
-        }
 
-      #elif defined BOTTOM_WALL_SCHUMANN
-        /*
-         * Some specialized boundary condition. 
-         * Typically you'd do a partial flux approach or a special function.
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
-                // Placeholder for specialized BC 
-                F[k][j0-1][i] = F[k][j0][i];
+          #elif defined BOTTOM_WALL_VELOCITY
+            for (int k = Ks; k < Ke; k++) {
+                for (int i = Is; i < Ie; i++) {
+                    F[k][j0-1][i] = 1.0;
+                }
             }
-        }
 
-      #else
-        /*
-         * Default fallback: zero-gradient
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
-                F[k][j0-1][i] = F[k][j0][i];
+          #elif defined BOTTOM_WALL_SCHUMANN
+            for (int k = Ks; k < Ke; k++) {
+                for (int i = Is; i < Ie; i++) {
+                    F[k][j0-1][i] = F[k][j0][i];
+                }
             }
+
+          #else
+            for (int k = Ks; k < Ke; k++) {
+                for (int i = Is; i < Ie; i++) {
+                    F[k][j0-1][i] = F[k][j0][i];
+                }
+            }
+          #endif
         }
-      #endif // bottom boundary condition
     }
 
-    //************************
-    // Top boundary (y = NY-1)
-    //************************
     if (Je == NY) {
         int j1 = NY - 1;
       #ifdef TOP_WALL_VELOCITY_NOSLIP
-        /*
-         * Another no-slip boundary => zero flux for VOF
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k][j1][i] = F[k][j1-1][i];
             }
         }
 
       #elif defined TOP_WALL_VELOCITY_FREESLIP
-        /*
-         * Free-slip => zero flux approach
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k][j1][i] = F[k][j1-1][i];
             }
         }
 
       #elif defined TOP_WALL_VELOCITY
-        /*
-         * Possibly set F=1 if fluid is injected from top
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k][j1][i] = 1.0; 
             }
         }
 
       #elif defined TOP_WALL_SCHUMANN
-        /*
-         * Specialized BC again
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
-                // some specialized approach
+        for (int k = Ks; k < Ke; k++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k][j1][i] = F[k][j1-1][i];
             }
         }
 
       #else
-        /*
-         * Default fallback: mirror
-         */
-        for (int k = grid->L_Ks; k < grid->L_Ke; k++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int k = Ks; k < Ke; k++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k][j1][i] = F[k][j1-1][i];
             }
         }
-      #endif // top boundary condition
+      #endif
     }
 #endif // !YPERIODIC
 
 
-//-------------------------------------------------------------------------
-// 3) Z boundaries
-//-------------------------------------------------------------------------
+    //-------------------------------------------------------------------------
+    // 3) Z boundaries — use G_Js..G_Je and G_Is..G_Ie (includes x,y ghost overlap)
+    //-------------------------------------------------------------------------
 #ifndef ZPERIODIC
 
-    // Back boundary (z = 0)
     if (Ks == 0) {
         int k0 = 0;
     #if defined BACK_WALL_VELOCITY_NOSLIP
-        /*
-         * Typical no-slip => zero flux for VOF
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k0-1][j][i] = F[k0][j][i];
             }
         }
 
     #elif defined BACK_WALL_VELOCITY_FREESLIP
-        /*
-         * Free-slip => typically zero gradient for volume fraction
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k0-1][j][i] = F[k0][j][i];
             }
         }
 
     #elif defined BACK_WALL_VELOCITY
-        /*
-         * Example scenario: a moving or inflow boundary at z=0,
-         * e.g. set VOF=1.0 if fluid is injected from the back
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k0-1][j][i] = 1.0;
             }
         }
 
     #else
-        /*
-         * Default fallback => mirror or zero gradient
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k0-1][j][i] = F[k0][j][i];
             }
         }
-    #endif // back wall macros
+    #endif
     }
 
-    // Front boundary (z = NZ - 1)
     if (Ke == NZ) {
         int k1 = NZ - 1;
     #if defined FRONT_WALL_VELOCITY_NOSLIP
-        /*
-         * Another no-slip => zero flux for VOF
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k1][j][i] = F[k1-1][j][i];
             }
         }
 
     #elif defined FRONT_WALL_VELOCITY_FREESLIP
-        /*
-         * Free-slip => zero gradient approach
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k1][j][i] = F[k1-1][j][i];
             }
         }
 
     #elif defined FRONT_WALL_VELOCITY
-        /*
-         * Possibly set F=1.0 if fluid is injected from front
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k1][j][i] = 1.0;
             }
         }
 
     #else
-        /*
-         * Default fallback => zero gradient
-         */
-        for (int j = grid->L_Js; j < grid->L_Je; j++) {
-            for (int i = grid->L_Is; i < grid->L_Ie; i++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
                 F[k1][j][i] = F[k1-1][j][i];
             }
         }
-    #endif // front wall macros
+    #endif
     }
 
 #endif // !ZPERIODIC
 
-
-
     //-------------------------------------------------------------------------
-    // 4) MPI ghost‐cell update
+    // 4) MPI ghost-cell update
     //-------------------------------------------------------------------------
      Communication_update_ghost_nodes_flow_variable(F,
                                                    VOLUME_FRACTION,
@@ -727,82 +629,101 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
                                                    data_bag);
 }
 
+
 /******************************************************************************
- * VoF_update_density_viscosity
- *
- * Updates the dimensionless density and viscosity fields in the domain,
- * using the piecewise mixing laws:
- *
- *   (1)  rho_tilde(F) = F + (1 - F)* (rho2 / rho1)
- *
- *   (2)  mu_tilde(F) = F + (1 - F)* (mu2 / mu1) 
- 
- *
- * We store:
- *   vof_density->rho[k][j][i]    = rho_tilde
- *   vof_viscosity->mu[k][j][i]   = mu_tilde
- *
- * where F is the volume fraction in vof->F.
- * This routine is typically called after VoF advection, 
- * ensuring that rho and mu fields remain consistent with the new interface.
+ * VOF_update_density_viscosity
  ******************************************************************************/
 void VOF_update_density_viscosity(Cart3d_bag *data_bag)
 {
     /**************************************************************************
      * 1. Basic references
      **************************************************************************/
-    MAC_grid       *grid           = data_bag->grid;
-    Parameters     *params         = data_bag->params;
-    VolumeFraction *vof            = data_bag->vof;
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
 
+    /* Volume fraction fields:
+     *  - F        : raw VOF, used for viscosity mixing
+     *  - F_smooth : smoothed VOF, used for density mixing (and CSF/pressure)
+     */
+    double ***F_raw    = vof->F;
 
-    // Extract dimensionless volume fraction field
-    double ***F = vof->F;
-
-    // Destination arrays for dimensionless density and viscosity
+    /* Destination arrays for dimensionless density and viscosity */
     double ***rho_tilde = vof->rho;
     double ***mu_tilde  = vof->mu;
 
-    // Physical property ratios (from parameters)
-    double rho1 = params->rho1;
-    double rho2 = params->rho2;
-    double mu1  = params->mu1;
-    double mu2  = params->mu2;
+    /* Physical property ratios (from parameters) */
+    double rho1 = params->rho1;   /* liquid density   */
+    double rho2 = params->rho2;   /* gas density      */
+    double mu1  = params->mu1;    /* liquid viscosity */
+    double mu2  = params->mu2;    /* gas viscosity    */
 
-    // Local domain extents
+#ifdef VOF_IBM
+    /* Smoothed solid volume fraction: 0 outside solid, ~1 inside solid */
+    double ***vfc = vof->vfc;
+#endif
+
     int Is = grid->G_Is, Ie = grid->G_Ie;
     int Js = grid->G_Js, Je = grid->G_Je;
     int Ks = grid->G_Ks, Ke = grid->G_Ke;
 
-    /**************************************************************************
-     * 2. Loop over interior cells, compute rho_tilde and mu_tilde
-     **************************************************************************/
     for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
             for (int i = Is; i < Ie; i++) {
 
-                // Volume fraction in cell (i,j,k)
-                double F_ijk = F[k][j][i];
+                /* 1) Fluid-only mixture based on VOF (liquid + gas) */
 
-                // (1) Compute dimensionless density: 
-                //     rho_tilde = F + (1-F)*(rho2/rho1)
-                double rhoVal = F_ijk + (1.0 - F_ijk)*(rho2 / rho1);
+                /* Use raw F for viscosity */
+                double F_ijk  = F_raw[k][j][i];
 
-                // (2) Compute dimensionless viscosity:
-                //     mu_tilde = F + (1 - F)*(mu2/mu1)
-                double muVal = F_ijk + (1.0 - F_ijk)*(mu2 / mu1); 
+                double rho_fluid_tilde =
+                    F_ijk + (1.0 - F_ijk) * (rho2 / rho1);
+                double mu_fluid_tilde =
+                    F_ijk + (1.0 - F_ijk) * (mu2 / mu1);
 
+#ifdef VOF_IBM
+                double Phi_s = 0.0;
+                if (vfc) {
+                    Phi_s = vfc[k][j][i];
+                    if (Phi_s < 0.0) Phi_s = 0.0;
+                    if (Phi_s > 1.0) Phi_s = 1.0;
+                }
 
-                // Store dimensionless fields
+                /* NEW: Use liquid properties (1.0) for ANY cell with solid presence
+                 * This ensures:
+                 *   - Consistent IBM forcing (Newton's 3rd law)
+                 *   - Correct buoyancy integral (Int_rho_scalar = V_p)
+                 *   - Uniform proxy fluid inside solid
+                 */
+                const double rho_solid_proxy_tilde = 1.0;
+                const double mu_solid_proxy_tilde  = 1.0;
+
+                double rhoVal, muVal;
+                if (Phi_s > 1e-6) {
+                    /* Any solid presence: use proxy density */
+                    rhoVal = rho_solid_proxy_tilde;
+                    muVal  = mu_solid_proxy_tilde;
+                } else {
+                    /* Pure fluid cell */
+                    rhoVal = rho_fluid_tilde;
+                    muVal  = mu_fluid_tilde;
+                }
+#else
+                double rhoVal = rho_fluid_tilde;
+                double muVal  = mu_fluid_tilde;
+#endif
+
+                /* 3) Store dimensionless NS fields */
                 rho_tilde[k][j][i] = rhoVal;
                 mu_tilde[k][j][i]  = muVal;
             }
         }
     }
+
+    /* Enforce BCs on the property fields */
     VOF_set_boundary_values(rho_tilde, data_bag);
     VOF_set_boundary_values(mu_tilde, data_bag);
 }
-
 
 
 
