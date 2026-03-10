@@ -192,10 +192,57 @@ int Velocity_solve_explicit(Velocity *vel, Cart3d_bag *data_bag) {
 	double ***rhs = vel -> ng_rhs;
 	double ***vel_data = vel -> data;
 
+	#ifdef VOF_PLIC
+		VolumeFraction *vof = data_bag->vof;
+		double ***rho       = vof->rho;   // cell-centered current density (rho^k)
+	#endif
+
 	for (k = Ks; k < Ke; k++) {
 		for (j = Js; j < Je; j++) {
 			for (i = Is; i < Ie; i++) {
-				vel_data[k][j][i] = rhs[k][j][i] * dtimeb;
+				#ifndef VOF_PLIC
+
+								/* Original constant-density behavior */
+								vel_data[k][j][i] = rhs[k][j][i] * dtimeb;
+
+				#else
+								/* 
+								* Variable-density correction:
+								* rhs is interpreted as (1 / (alpha_k * dt)) * (rho^k u^* - rho^{k-1} u^{k-1}) + ...
+								* After multiplying by dtimeb = beta_k * dt, we have something proportional
+								* to rho^k u^*. To recover u^*, we must divide by the current density
+								* at the velocity location (face).
+								*/
+
+								double rho_face = 1.0;
+
+								if (vel->component == 'u') {
+									/* u at x-face between cells i-1 and i */
+									int icL = i-1;
+									int icR = i;
+									/* indices should already be valid due to Is >= 1; ghosts hold BCs */
+									rho_face = 0.5 * (rho[k][j][icL] + rho[k][j][icR]);
+								}
+								else if (vel->component == 'v') {
+									/* v at y-face between cells j-1 and j */
+									int jcB = j-1;
+									int jcT = j;
+									rho_face = 0.5 * (rho[k][jcB][i] + rho[k][jcT][i]);
+								}
+								else if (vel->component == 'w') {
+									/* w at z-face between cells k-1 and k */
+									int kcB = k-1;
+									int kcT = k;
+									rho_face = 0.5 * (rho[kcB][j][i] + rho[kcT][j][i]);
+								}
+
+								/* Safety: avoid division by zero or negative density (should not happen) */
+								if (rho_face <= 0.0) {
+									rho_face = 1.0;
+								}
+
+								vel_data[k][j][i] = (rhs[k][j][i] * dtimeb) / rho_face;
+				#endif
 			}
 		}
 	}
