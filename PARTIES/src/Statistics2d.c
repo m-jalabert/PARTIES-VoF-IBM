@@ -1544,7 +1544,7 @@ void Statistics2d_potEnergy_y(double **potE, double ***c, double Ri , double *in
 	Ke = min(NZ-1, grid->G_Ke);
 
 #if(!defined GRID_UNIFORM)
-	printf('Function __PRETTY_FUNCTION__ is not ready for nonuniform grid');
+	printf("Function __PRETTY_FUNCTION__ is not ready for nonuniform grid");
 #endif
 	DSET_ZERO(potE[0],NX*NY);
 

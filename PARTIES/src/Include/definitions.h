@@ -172,6 +172,7 @@
 #define LAG_COLLECT_COLL  31
 #define LAG_COLLECT_HYDRO 32
 #define LAG_COLLECT_NONE  33
+#define LAG_COLLECT_CCF   34  
 
 // IDs of walls for collisions
 #define WALL_ID_XMIN -1
