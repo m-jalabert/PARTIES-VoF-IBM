@@ -1,5 +1,6 @@
 #include "DataTypes.h"
 #include "Boundary.h"
+#include "Display.h"
 #include "Communication.h" // For ghost-node exchanges
 #include <stdio.h>
 #include <math.h>
