@@ -34,11 +34,13 @@ Pressure *Pressure_create(MAC_grid *grid, Parameters *params) {
 	new_p->p_data_avg = Memory_allocate_flow_variable(grid, params);
 #endif
 
+#ifdef VOF_PLIC
     // ALLOCATIONS for CG solver 
     new_p->res     = Memory_allocate_flow_variable(grid, params);  // residual array
     new_p->d       = Memory_allocate_flow_variable(grid, params);  // search direction
     new_p->Ad      = Memory_allocate_flow_variable(grid, params);  // operator applied to d
 	new_p->M_inv   = Memory_allocate_flow_variable(grid, params);  // Preconditioner
+#endif
 
 	new_p->project_comm_cpu_time = 0.0;
 	new_p->project_update_cpu_time = 0.0;
@@ -70,11 +72,13 @@ void Pressure_destroy(Pressure *p, MAC_grid *grid, Parameters *params) {
 	Memory_free_flow_variable(grid, params, p->p_data_avg);
 #endif
 
+#ifdef VOF_PLIC
     // FREES for CG arrays 
     Memory_free_flow_variable(grid, params, p->res);
     Memory_free_flow_variable(grid, params, p->d);
     Memory_free_flow_variable(grid, params, p->Ad);
 	Memory_free_flow_variable(grid, params, p->M_inv);
+#endif
 
 	free(p->idxdt);
 	free(p->idydt);
@@ -318,14 +322,7 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
 
-#ifdef VOF_PLIC
-                // Multi-phase
-                //p_data[k][j][i] += rho[k][j][i] * deltap[k][j][i];
 				p_data[k][j][i] += deltap[k][j][i];
-#else
-                // Single-phase
-                p_data[k][j][i] += deltap[k][j][i];
-#endif
 
 #ifdef POST_PROCESS
 				p_data_avg[k][j][i] += 2.0 * BET[params->which_stage] * p_data[k][j][i];
@@ -337,7 +334,12 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 	p->project_update_cpu_time += T2-T1;
 
 	T1 = MPI_Wtime();
+
+	#ifdef VOF_PLIC
+	// Apply boundary conditions for pressure perturbation (VOF)
 	Pressure_apply_BCs(p_data, grid, params);
+	#endif
+
 	Communication_update_ghost_nodes_flow_variable(p_data, CONCENTRATION_PERTURBATION, 3, data_bag);
 	T2 = MPI_Wtime();
 	p->project_comm_cpu_time += T2-T1;
@@ -873,5 +875,85 @@ void Pressure_project_velocity_vof(Cart3d_bag *data_bag) {
 }
 #endif
 
+#ifdef VOF_IBM
+void Pressure_init_hydrostatic_VOF(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    Pressure       *p      = data_bag->p;
+    VolumeFraction *vof    = data_bag->vof;
+    
+    double ***p_data = p->p_data;
+    double ***rho    = vof->rho;
+    
+    double g = params->grav[1];  // gravity component in y-direction (e.g., -1.0)
+    
+    int NX = grid->NX;
+    int NY = grid->NY;
+    int NZ = grid->NZ;
+    
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+    
+    double *yc = grid->yc;
+    double *dy_c = grid->dy_c;
+    
+    // Reference pressure at top (y_max) - typically 0 for non-dimensional
+    double p_ref = 0.0;
+    
+    // Clamp indices to valid range (exclude ghost cells beyond NX-1, NY-1, NZ-1)
+    int i_end = min(NX-1, Ie);
+    int j_end = min(NY-1, Je);
+    int k_end = min(NZ-1, Ke);
+    
+    // IMPORTANT: The momentum RHS uses "+2.0*ρ*g - 2.0*dp/dy", so for hydrostatic balance:
+    //   0 = 2.0*ρ*g - 2.0*dp/dy
+    //   => dp/dy = ρ*g
+    //
+    // Note: g < 0 (downward in -y direction), so dp/dy < 0 (pressure decreases upward in +y)
+    //
+    // Integrate downward from top (j = NY-2) to bottom (j = 0)
+    // Since dp/dy = ρ*g and dy > 0 going down:
+    //   p(j) = p(j+1) - ∫(j+1 to j) (dp/dy) dy
+    //   p(j) = p(j+1) - ρ_avg * g * dy
+    
+    // Initialize all cells on this processor
+    for (int j = NY-2; j >= 0; j--) {
+        if (j < Js || j >= j_end) continue; // Skip if outside processor domain
+        
+        for (int k = Ks; k < k_end; k++) {
+            for (int i = Is; i < i_end; i++) {
+                
+                if (j == NY-2) {
+                    // Top layer: integrate from y_max to cell center
+                    // p(NY-2) = p_ref - ρ(NY-2) * g * dy/2
+                    double rho_cell = rho[k][j][i];
+                    p_data[k][j][i] = p_ref - rho_cell * g * (0.5 * dy_c[j]);
+                } else {
+                    // Interior: average density at interface between j and j+1
+                    double rho_avg = 0.5 * (rho[k][j][i] + rho[k][j+1][i]);
+                    
+                    // Hydrostatic: dp/dy = ρg
+                    // Going down (from j+1 to j): p(j) = p(j+1) - ρ_avg * g * dy
+                    // Since g < 0, this means p increases going down (as expected)
+                    p_data[k][j][i] = p_data[k][j+1][i] - rho_avg * g * dy_c[j];
+                }
+            }
+        }
+    }
+    
+    // Update ghost nodes to ensure consistency across processors
+    Communication_update_ghost_nodes_flow_variable(p_data, CONCENTRATION_PERTURBATION, 
+                                                   params->ghost_nodes, data_bag);
+    
+    if (params->rank == 0) {
+        printf("Pressure_init_hydrostatic_VOF: Initialized hydrostatic pressure field\n");
+        printf("  (Hydrostatic balance: 2.0*ρ*g = 2.0*dp/dy => dp/dy = ρ*g)\n");
+    }
+}
+#endif //VOF_IBM
+
 #include "lsolver/psolve_fft.c"
 #include "lsolver/psolve_cg.c"
+#include "lsolver/psolve_hypre.c"
