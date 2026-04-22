@@ -7,6 +7,9 @@
 	#define PI 3.14159265358979323846
 #endif
 
+#define TWOD_AXISYM_THETA_SPAN_FULL (2.0 * PI)
+#define TWOD_RADIAL_EPS 1.0e-14
+
 #define HALF 0.5
 
 #define NO  0
@@ -172,7 +175,7 @@
 #define LAG_COLLECT_COLL  31
 #define LAG_COLLECT_HYDRO 32
 #define LAG_COLLECT_NONE  33
-#define LAG_COLLECT_CCF   34  
+#define LAG_COLLECT_CCF   34
 
 // IDs of walls for collisions
 #define WALL_ID_XMIN -1

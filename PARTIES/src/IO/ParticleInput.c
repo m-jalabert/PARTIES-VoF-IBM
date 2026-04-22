@@ -203,11 +203,11 @@ int N_read_data = 4;
 	//--------------------------------------------------------------------------
 	for (i = 0; i < Np; i++) {
 
-		// Check that particle fits within subdomain
-		if (G_xmax-G_xmin < R[i] || G_ymax-G_ymin < R[i] || G_zmax-G_zmin < R[i]) {
-			ierr = -6;
-			break;
-		}
+		// // Check that particle fits within subdomain
+		// if (G_xmax-G_xmin < R[i] || G_ymax-G_ymin < R[i] || G_zmax-G_zmin < R[i]) {
+		// 	ierr = -6;
+		// 	break;
+		// }
 
 		if (X[i][0] >= G_xmin && X[i][0] <  G_xmax && X[i][1] >= G_ymin &&
 			X[i][1] <  G_ymax && X[i][2] >= G_zmin && X[i][2] <  G_zmax) {
