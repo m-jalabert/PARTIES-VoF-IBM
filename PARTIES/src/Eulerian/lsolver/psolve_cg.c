@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#ifdef VOF_PLIC
+#ifdef VOF
 /******************************************************************************/
 // A simple dot-product function for 3D arrays with parallel sum.
 // Then we do an MPI_Allreduce to get the global sum.
@@ -448,14 +448,14 @@ void Pressure_apply_BCs(double ***phi, MAC_grid *grid, Parameters *params)
             // Dirichlet => 0
             for (k = grid->L_Ks; k < grid->L_Ke; k++) {
                 for (j = grid->L_Js; j < grid->L_Je; j++) {
-                    phi[k][j][Ie] = 0.0;
+                    phi[k][j][Ie - 1] = 0.0;
                 }
             }
         #elif defined(RIGHT_OUTFLOW)
             // Typically outflow => zero derivative
             for (k = grid->L_Ks; k < grid->L_Ke; k++) {
                 for (j = grid->L_Js; j < grid->L_Je; j++) {
-                    phi[k][j][Ie] = phi[k][j][Ie - 1];
+                    phi[k][j][Ie - 1] = phi[k][j][Ie - 2];
                 }
             }
         #else
@@ -558,4 +558,4 @@ void Pressure_apply_BCs(double ***phi, MAC_grid *grid, Parameters *params)
 
 
 
-#endif // VOF_PLIC
+#endif // VOF
