@@ -917,168 +917,9 @@ void VOF_DIFFUSE_step(Cart3d_bag *db)
     Array_copy_withghost(rhs_cur, vof->ch_rhs_n, grid, params);
 }
 
-void VOF_DIFFUSE_build_mcl_mask(Cart3d_bag *db)
-{
-    MAC_grid       *grid = db->grid;
-    VolumeFraction *vof  = db->vof;
 
-    for (int k = grid->L_Ks; k < grid->L_Ke; ++k)
-    for (int j = grid->L_Js; j < grid->L_Je; ++j)
-    for (int i = grid->L_Is; i < grid->L_Ie; ++i) {
-        vof->mcl_mask[k][j][i] = 0;
-    }
 
-    diffuse_update_phase_cache(db);
-
-    for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
-        for (int j = grid->G_Js; j < grid->G_Je; ++j) {
-            for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-                double cs = vof->C_S[k][j][i];
-                double cl = vof->C_L[k][j][i];
-                double cg = vof->C_G[k][j][i];
-
-                bool interface_here = (cl >= 0.005 && cl <= 0.995 &&
-                                       cg >= 0.005 && cg <= 0.995);
-                bool in_ghost_band = (cs >= 0.05 && cs <= 1.0 && interface_here);
-
-                if (!in_ghost_band) {
-                    static const int di[6] = { 1, -1, 0, 0, 0, 0 };
-                    static const int dj[6] = { 0, 0, 1, -1, 0, 0 };
-                    static const int dk[6] = { 0, 0, 0, 0, 1, -1 };
-
-                    for (int dir = 0; dir < 6; ++dir) {
-                        int ii = i + di[dir];
-                        int jj = j + dj[dir];
-                        int kk = k + dk[dir];
-
-                        double csn = vof->C_S[kk][jj][ii];
-                        double cln = vof->C_L[kk][jj][ii];
-                        double cgn = vof->C_G[kk][jj][ii];
-
-                        if (csn >= 0.0 && csn <= 0.05 &&
-                            cln >= 0.005 && cln <= 0.995 &&
-                            cgn >= 0.005 && cgn <= 0.995) {
-                            in_ghost_band = true;
-                            break;
-                        }
-                    }
-                }
-
-                vof->mcl_mask[k][j][i] = (char) in_ghost_band;
-            }
-        }
-    }
-}
-
-void VOF_DIFFUSE_apply_contact_angle(Cart3d_bag *db)
-{
-    MAC_grid       *grid   = db->grid;
-    Parameters     *params = db->params;
-    VolumeFraction *vof    = db->vof;
-
-    const double theta = params->contact_angle_deg * PI / 180.0;
-    const double cos_t = cos(theta);
-    const double sin_t = sin(theta);
-    const double cn = params->Cn;
-    const double shift = sqrt(2.0) * log(19.0) * cn;
-    const double denom = 2.0 * sqrt(2.0) * cn;
-
-    if (db->lag == NULL) {
-        return;
-    }
-
-    Particle_list  *mobile = db->lag->p_mobile_list;
-    Particle_list  *fixed  = db->lag->p_fixed_list;
-
-    VOF_DIFFUSE_build_mcl_mask(db);
-    VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
-
-    for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
-        double z = grid->zc[k];
-        for (int j = grid->G_Js; j < grid->G_Je; ++j) {
-            double y = grid->yc[j];
-            for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-                if (!vof->mcl_mask[k][j][i]) {
-                    continue;
-                }
-
-                double best_d2 = 1e300;
-                Particle *best = NULL;
-                diffuse_find_nearest_particle(grid->xc[i], y, z, mobile, &best_d2, &best);
-                diffuse_find_nearest_particle(grid->xc[i], y, z, fixed,  &best_d2, &best);
-
-                if (best == NULL) {
-                    continue;
-                }
-
-                double dx = grid->xc[i] - best->X[0];
-                double dy = y - best->X[1];
-                double dz = z - best->X[2];
-                double dist = sqrt(dx * dx + dy * dy + dz * dz);
-                if (dist < 1e-14) {
-                    continue;
-                }
-
-                double n[3] = { dx / dist, dy / dist, dz / dist };
-                double x_mid[3] = {
-                    best->X[0] + (best->R - shift) * n[0],
-                    best->X[1] + (best->R - shift) * n[1],
-                    best->X[2] + (best->R - shift) * n[2]
-                };
-
-                double grad[3] = {
-                    diffuse_grad_x(vof->C_L, grid, i, j, k),
-                    diffuse_grad_y(vof->C_L, grid, i, j, k),
-                    diffuse_grad_z(vof->C_L, grid, i, j, k)
-                };
-
-                double proj = grad[0] * n[0] + grad[1] * n[1] + grad[2] * n[2];
-                double t[3] = {
-                    grad[0] - proj * n[0],
-                    grad[1] - proj * n[1],
-                    grad[2] - proj * n[2]
-                };
-                double tmag = sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
-
-                if (tmag < 1e-12) {
-                    double ref[3] = { 1.0, 0.0, 0.0 };
-                    if (fabs(n[0]) > 0.9) {
-                        ref[0] = 0.0;
-                        ref[1] = 1.0;
-                    }
-                    double dotrn = ref[0] * n[0] + ref[1] * n[1] + ref[2] * n[2];
-                    t[0] = ref[0] - dotrn * n[0];
-                    t[1] = ref[1] - dotrn * n[1];
-                    t[2] = ref[2] - dotrn * n[2];
-                    tmag = sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
-                }
-
-                if (tmag < 1e-12) {
-                    continue;
-                }
-
-                t[0] /= tmag;
-                t[1] /= tmag;
-                t[2] /= tmag;
-
-                double ni[3] = {
-                    cos_t * n[0] + sin_t * t[0],
-                    cos_t * n[1] + sin_t * t[1],
-                    cos_t * n[2] + sin_t * t[2]
-                };
-
-                double rel[3] = { grid->xc[i] - x_mid[0], y - x_mid[1], z - x_mid[2] };
-                double s = rel[0] * ni[0] + rel[1] * ni[1] + rel[2] * ni[2];
-
-                vof->C_L[k][j][i] = diffuse_clamp01(0.5 * (1.0 + tanh(s / (denom + 1e-30))));
-            }
-        }
-    }
-
-    VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
-    diffuse_update_phase_cache(db);
-}
-
+#ifdef SURFACE_TENSION
 void VOF_DIFFUSE_compute_f_sigma(Cart3d_bag *db)
 {
     MAC_grid       *grid   = db->grid;
@@ -1163,6 +1004,7 @@ void VOF_DIFFUSE_apply_f_sigma_old(Cart3d_bag *db)
 {
     VOF_apply_f_sigma_old(db);
 }
+#endif
 
 void VOF_DIFFUSE_update_density_viscosity(Cart3d_bag *db)
 {
@@ -1170,8 +1012,6 @@ void VOF_DIFFUSE_update_density_viscosity(Cart3d_bag *db)
     Parameters     *params = db->params;
     VolumeFraction *vof    = db->vof;
 
-    Array_copy_withghost(vof->rho, vof->rho_old, grid, params);
-    Array_copy_withghost(vof->mu,  vof->mu_old,  grid, params);
 
     diffuse_update_phase_cache(db);
 
@@ -1187,8 +1027,6 @@ void VOF_DIFFUSE_update_density_viscosity(Cart3d_bag *db)
 
     VOF_DIFFUSE_set_boundary_values(vof->rho, db);
     VOF_DIFFUSE_set_boundary_values(vof->mu, db);
-    VOF_DIFFUSE_set_boundary_values(vof->rho_old, db);
-    VOF_DIFFUSE_set_boundary_values(vof->mu_old, db);
 }
 
 

@@ -27,7 +27,7 @@
 #include <assert.h>
 
 
-#ifdef VOF
+#ifdef VOF_PLIC
 
 /******************************************************************************
  * VoF_set_advection
@@ -664,80 +664,6 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
 
 
 
-
-
-/******************************************************************************
- * VOF_update_density_viscosity
- ******************************************************************************/
-void VOF_update_density_viscosity(Cart3d_bag *data_bag)
-{
-#ifdef VOF_DIFFUSE
-    VOF_DIFFUSE_update_density_viscosity(data_bag);
-    return;
-#endif
-
-    /**************************************************************************
-     * 1. Basic references
-     **************************************************************************/
-    MAC_grid       *grid   = data_bag->grid;
-    Parameters     *params = data_bag->params;
-    VolumeFraction *vof    = data_bag->vof;
-
-    /* Volume fraction fields:
-     *  - F        : raw VOF, used for viscosity mixing
-     *  - F_smooth : smoothed VOF, used for density mixing (and CSF/pressure)
-     */
-    double ***F_raw    = vof->F;
-
-    /* Destination arrays for dimensionless density and viscosity */
-    double ***rho_tilde = vof->rho;
-    double ***mu_tilde  = vof->mu;
-
-    /* Physical property ratios (from parameters) */
-    double rho1 = params->rho1;   /* liquid density   */
-    double rho2 = params->rho2;   /* gas density      */
-    double mu1  = params->mu1;    /* liquid viscosity */
-    double mu2  = params->mu2;    /* gas viscosity    */
-
-    int Is = grid->G_Is, Ie = grid->G_Ie;
-    int Js = grid->G_Js, Je = grid->G_Je;
-    int Ks = grid->G_Ks, Ke = grid->G_Ke;
-
-    double ***rho_old = vof->rho_old;
-    double ***mu_old  = vof->mu_old;
-    Array_copy_withghost(vof->rho, vof->rho_old, grid, params);
-    Array_copy_withghost(vof->mu,  vof->mu_old,  grid, params);
-
-    for (int k = Ks; k < Ke; k++) {
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-
-                /* 1) Fluid-only mixture based on VOF (liquid + gas) */
-
-                /* Use raw F for viscosity */
-                double F_ijk  = F_raw[k][j][i];
-
-                double rho_fluid_tilde =
-                    F_ijk + (1.0 - F_ijk) * (rho2 / rho1);
-                double mu_fluid_tilde =
-                    F_ijk + (1.0 - F_ijk) * (mu2 / mu1);
-
-
-                /* 2) Store dimensionless NS fields */
-                rho_tilde[k][j][i] = rho_fluid_tilde;
-                mu_tilde[k][j][i]  = mu_fluid_tilde;
-            }
-        }
-    }
-
-    /* Enforce BCs on the property fields */
-    VOF_set_boundary_values(rho_tilde, data_bag);
-    VOF_set_boundary_values(mu_tilde, data_bag);
-    VOF_set_boundary_values(vof->rho_old, data_bag);
-    VOF_set_boundary_values(vof->mu_old, data_bag);
-}
-
-
 void VOF_compute_conservative_momentum_fluxes(Cart3d_bag *data_bag) {
 
     VolumeFraction *vof = data_bag->vof;
@@ -807,5 +733,75 @@ void VOF_compute_conservative_momentum_fluxes(Cart3d_bag *data_bag) {
         params->ghost_nodes, data_bag);
 }
 
+#endif
 
-#endif // VOF
+
+
+/******************************************************************************
+ * VOF_update_density_viscosity
+ ******************************************************************************/
+void VOF_update_density_viscosity(Cart3d_bag *data_bag)
+{
+#ifdef VOF_DIFFUSE
+    VOF_DIFFUSE_update_density_viscosity(data_bag);
+    return;
+#endif
+
+    /**************************************************************************
+     * 1. Basic references
+     **************************************************************************/
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+
+    /* Volume fraction fields:
+     *  - F        : raw VOF, used for viscosity mixing
+     *  - F_smooth : smoothed VOF, used for density mixing (and CSF/pressure)
+     */
+    double ***F_raw    = vof->F;
+
+    /* Destination arrays for dimensionless density and viscosity */
+    double ***rho_tilde = vof->rho;
+    double ***mu_tilde  = vof->mu;
+
+    /* Physical property ratios (from parameters) */
+    double rho1 = params->rho1;   /* liquid density   */
+    double rho2 = params->rho2;   /* gas density      */
+    double mu1  = params->mu1;    /* liquid viscosity */
+    double mu2  = params->mu2;    /* gas viscosity    */
+
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+
+    for (int k = Ks; k < Ke; k++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
+
+                /* 1) Fluid-only mixture based on VOF (liquid + gas) */
+
+                /* Use raw F for viscosity */
+                double F_ijk  = F_raw[k][j][i];
+
+                double rho_fluid_tilde =
+                    F_ijk + (1.0 - F_ijk) * (rho2 / rho1);
+                double mu_fluid_tilde =
+                    F_ijk + (1.0 - F_ijk) * (mu2 / mu1);
+
+
+                /* 2) Store dimensionless NS fields */
+                rho_tilde[k][j][i] = rho_fluid_tilde;
+                mu_tilde[k][j][i]  = mu_fluid_tilde;
+            }
+        }
+    }
+
+    /* Enforce BCs on the property fields */
+    VOF_set_boundary_values(rho_tilde, data_bag);
+    VOF_set_boundary_values(mu_tilde, data_bag);
+}
+
+
+
+

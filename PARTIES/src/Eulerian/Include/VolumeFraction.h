@@ -4,7 +4,7 @@
 #include "DataTypes.h"
 #include <stdbool.h> 
 
-#ifdef VOF_PLIC
+#ifdef VOF
 //==============================
 // Initialization / Destruction
 //==============================
@@ -39,6 +39,8 @@ void VOF_set_advection(Cart3d_bag *data_bag);
  */
 void VOF_update_F(Cart3d_bag *data_bag);
 
+void VOF_compute_conservative_momentum_fluxes(Cart3d_bag *data_bag);
+
 //==============================
 // Material Property Updates
 //==============================
@@ -60,12 +62,21 @@ void VoF_smoothing(Cart3d_bag *data_bag);
 /**
  * Computes interface curvature κ using the smoothed volume fraction field.
  */
+void VOF_set_boundary_values_normal_vector(double ***nx,
+                                           double ***ny,
+                                           double ***nz,
+                                           Cart3d_bag *data_bag);
 void curvature_patel(Cart3d_bag *data_bag);
 
 /**
  * Adds surface tension force (2/We)·κ·∇F to momentum RHS.
  */
-void Velocity_add_surfacetension_2_RHS_patel(Cart3d_bag *data_bag);
+void VOF_compute_f_sigma(Cart3d_bag *data_bag);
+void VOF_apply_f_sigma_old(Cart3d_bag *data_bag);
+void VOF_swap_f_sigma(Cart3d_bag *data_bag);
+
+void VOF_store_fluid_volume(Cart3d_bag *data_bag);
+void VOF_volume_correction(Cart3d_bag *data_bag);
 
 /**
  * Adds gravity source term to the momentum equations.
@@ -73,8 +84,25 @@ void Velocity_add_surfacetension_2_RHS_patel(Cart3d_bag *data_bag);
 void Velocity_add_gravity_2_RHS(Cart3d_bag *data_bag);
 
 
-
-
+/**
+ * Initializes the volume fraction field.
+ */
+void VoF_init_bubble(Cart3d_bag *data_bag);
+void VoF_init_stationary_droplet(Cart3d_bag *data_bag);
+void VoF_init_ellipsoid(Cart3d_bag *data_bag);
+void VoF_init_rising_bubble(Cart3d_bag *data_bag);
+void VoF_init_two_bubbles_coaxial(Cart3d_bag *data_bag);
+void VoF_init_vertical_bilayer_Z(Cart3d_bag *data_bag);
+void VoF_droplet_flat_plate(Cart3d_bag *data_bag);
+void VoF_init_droplet_on_sphere(Cart3d_bag *data_bag);
+void VoF_init_bilayer_at_4D(Cart3d_bag *data_bag);
+void VoF_init_droplet_on_sphere_theta(Cart3d_bag *bag);
+void VoF_init_all_heavy(Cart3d_bag *data_bag);
+void VoF_init_stationary_droplet_Francois(Cart3d_bag *data_bag);
+void VoF_init_meniscus_154deg(Cart3d_bag *data_bag);
+void VoF_init_rayleigh_taylor_2d(Cart3d_bag *data_bag);
+void VoF_init_axisymmetric_rising_bubble_2d(Cart3d_bag *data_bag);
+void VoF_init_planar_rising_bubble_2d(Cart3d_bag *data_bag);
 //Below are all the low-level functions implemented from Basilisk's geometry.h file used to compute the interface normals and to reconstruct the interface (PLIC)
 
 
@@ -200,8 +228,45 @@ PointType VoF_facet_normal_3D(
  ******************************************************************************/
 double VOF_InterfaceArea_3D(Cart3d_bag *data_bag);
 
+
+//VOF_IBM functions
+#ifdef VOF_IBM
+void IBM_VOF_extend(Cart3d_bag *data_bag);
+void VOF_PLIC_contact_angle(Cart3d_bag *data_bag);
+void VOF_smooth_contact_angle(Cart3d_bag *data_bag);
+
+/* Geometric extension (Liu & Ding 2015 approach) */
+void VOF_geometric_extend(Cart3d_bag *data_bag);
+
+void VOF_solid_contact_angle_extend(Cart3d_bag *data_bag);
+void VOF_normals_IBM(Cart3d_bag *data_bag);
+void VOF_velocity_extend(Cart3d_bag *data_bag);
+void VOF_extend_subiter(Cart3d_bag *data_bag,
+                               double ***flux_ex,
+                               double ***flux_ey,
+                               double ***flux_ez,
+                               double dt_ext);
+void VOF_extend(Cart3d_bag *data_bag);
+void Vfc_smoothing(Cart3d_bag *data_bag);
+void VOF_normals_IBM_smooth(Cart3d_bag *data_bag);
+void VOF_correct_mass_error(Cart3d_bag *data_bag);
+void Zero_RHS_momentum(Cart3d_bag *data_bag);
+
+void VOF_compute_CCF_tangents(Cart3d_bag *data_bag);
+void VOF_compute_CCF_force_density(Cart3d_bag *data_bag);
+void VOF_compute_contact_line_region(Particle_list *p_list,
+		Cart3d_bag *data_bag, Debug_trace *dtrace);
+void VOF_compute_solid_mask(Particle_list *p_list,
+        Cart3d_bag *data_bag, Debug_trace *dtrace);
+void VOF_compute_extension_source(Cart3d_bag *data_bag);
+void VOF_save_previous_iteration(Cart3d_bag *data_bag);
+void VOF_corrector_with_source(Cart3d_bag *data_bag);
+void VOF_init_contact_line_fields(Cart3d_bag *data_bag);
+void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag);
+void VOF_overwrite_solid_F(Cart3d_bag *data_bag);
+void VOF_integrate_CSF_over_solid(Particle *p, Cart3d_bag *data_bag);
+#endif // VOF_IBM
+
+
 #endif // VOF_PLIC
 #endif // VOLUMEFRACTION_H
-
-
-
