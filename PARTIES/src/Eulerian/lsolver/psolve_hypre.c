@@ -342,6 +342,12 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     }
 #endif
 
+    /*
+     * Mirror the CG path: after the solve, populate the physical pressure
+     * ghosts with the same wall BCs used by the face-gradient projection and
+     * by the momentum RHS in Velocity.c.
+     */
+    Pressure_apply_BCs(phi, grid, params);
     Communication_update_ghost_nodes_flow_variable(
         phi, 'h', params->ghost_nodes, data_bag);
 
