@@ -18,6 +18,7 @@
 #include "Array.h"
 #include "Cart3d.h"
 #include "Lagrangian.h"
+#include "VOF_DIFFUSE.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -26,7 +27,7 @@
 #include <assert.h>
 
 
-#ifdef VOF_PLIC
+#ifdef VOF
 
 /******************************************************************************
  * VoF_set_advection
@@ -69,6 +70,7 @@ void VOF_set_advection(Cart3d_bag *data_bag)
 
     
     double SEPS = 1e-30;
+    double EPS_VOF = 1e-6;  // or even 1e-10; tune to taste
     double dt   = params->dt;
 
     // Uniform cell spacing
@@ -96,9 +98,9 @@ void VOF_set_advection(Cart3d_bag *data_bag)
 
                 double c_up = F[k][j][iup];
                 double cf   = 0.0;
-                if (c_up <= 0.0) {
+                if (c_up <= EPS_VOF) {
                     cf = 0.0;
-                } else if (c_up >= 1.0) {
+                } else if (c_up >= (1.0 - EPS_VOF)) {
                     cf = 1.0;
                 } else {
                     // plane normal from upwind cell
@@ -138,9 +140,9 @@ void VOF_set_advection(Cart3d_bag *data_bag)
 
                 double c_up = F[k][jup][i];
                 double cf   = 0.0;
-                if (c_up <= 0.0) {
+                if (c_up <= EPS_VOF) {
                     cf = 0.0;
-                } else if (c_up >= 1.0) {
+                } else if (c_up >= (1.0 - EPS_VOF)) {
                     cf = 1.0;
                 } else {
                     double nx = vof->normal_x[k][jup][i];
@@ -179,9 +181,9 @@ void VOF_set_advection(Cart3d_bag *data_bag)
 
                 double c_up = F[kup][j][i];
                 double cf   = 0.0;
-                if (c_up <= 0.0) {
+                if (c_up <= EPS_VOF) {
                     cf = 0.0;
-                } else if (c_up >= 1.0) {
+                } else if (c_up >= (1.0 - EPS_VOF)) {
                     cf = 1.0;
                 } else {
                     double nx = vof->normal_x[kup][j][i];
@@ -322,6 +324,14 @@ void VOF_update_F(Cart3d_bag *data_bag)
         }
     }
 
+    double EPS_FLOT = 1e-6;
+    for (int k = Ks; k < Ke; k++)
+    for (int j = Js; j < Je; j++)
+        for (int i = Is; i < Ie; i++) {
+            if (F[k][j][i] < EPS_FLOT)       F[k][j][i] = 0.0;
+            else if (F[k][j][i] > 1.0 - EPS_FLOT) F[k][j][i] = 1.0;
+        }
+
     // Update conv_old for next stage (if not final)
     if (which_stage < 2) {
         for (int k = Ks; k < Ke; k++) {
@@ -335,18 +345,48 @@ void VOF_update_F(Cart3d_bag *data_bag)
     VOF_set_boundary_values(vof->F, data_bag);
 }
 
-
 /******************************************************************************
  * VOF_set_boundary_values
  *
- * Fill ghost cells of the VOF field F according to the compile-time wall
+ * Fill ghost cells of a SCALAR field F according to the compile-time wall
  * macros, then call the MPI ghost-exchange.  Works for any number of ghost
  * layers (NG = params->ghost_nodes).
  *
- * Conventions
+ * -----------------------------------------
+ * - FREE-SLIP walls now use EVEN MIRROR instead of zero-gradient:
+ *
+ *       F[ghost_g] = F[mirror_interior_g]
+ *
+ *   This preserves the field profile across the symmetry plane.
+ *   Zero-gradient copies only the boundary cell value into ALL ghost
+ *   layers, which flattens gradients and corrupts any stencil reading
+ *   ghost cells (smoothing kernel, WLS gradient, PLIC reconstruction).
+ *
+ * - All other wall types remain zero-gradient (unchanged).
+ *
+ * - Cascading fill order X → Y → Z for edge/corner coverage (unchanged).
+ *
+ * Mirror index mapping (left-type boundaries, i0 = 0):
+ *
+ *     ghost layer g    ghost index     mirror interior index
+ *     ─────────────    ───────────     ─────────────────────
+ *          1             i0 − 1              i0 + 0
+ *          2             i0 − 2              i0 + 1
+ *          3             i0 − 3              i0 + 2
+ *
+ * Mirror index mapping (right-type boundaries, i1 = NX−1):
+ *
+ *     ghost layer g    ghost index     mirror interior index
+ *     ─────────────    ───────────     ─────────────────────
+ *          0             i1 + 0              i1 − 1
+ *          1             i1 + 1              i1 − 2
+ *          2             i1 + 2              i1 − 3
+ *
+ * Conventions (unchanged)
  *   • Zero-gradient (F = interior value)  ⟹  impermeable wall, θ = 90°.
- *   • Dirichlet (F = 1 or user value)     ⟹  inflow / moving wall.
- *   • Outflow (copy one-way)              ⟹  simple convective exit.
+ *   • Even-mirror   (F = mirrored value)  ⟹  symmetry plane (free-slip).
+ *   • Dirichlet     (F = 1 or user value) ⟹  inflow / moving wall.
+ *   • Outflow       (copy one-way)        ⟹  simple convective exit.
  ******************************************************************************/
 void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
 {
@@ -358,109 +398,110 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
     int NY = grid->NY;
     int NZ = grid->NZ;
 
-    int Is = grid->G_Is; 
+    int Is = grid->G_Is;
     int Js = grid->G_Js;
     int Ks = grid->G_Ks;
     int Ie = grid->G_Ie;
     int Je = grid->G_Je;
     int Ke = grid->G_Ke;
 
-    //-------------------------------------------------------------------------
-    // 1) X boundaries — use G_Ks..G_Ke and G_Js..G_Je so corner ghosts are filled
-    //-------------------------------------------------------------------------
+    /* Local extents (including ghost cells) */
+    int IsL = grid->L_Is;
+    int JsL = grid->L_Js;
+    int KsL = grid->L_Ks;
+    int IeL = grid->L_Ie;
+    int JeL = grid->L_Je;
+    int KeL = grid->L_Ke;
+
+    const int NG = params->ghost_nodes;
+
+    /*=========================================================================
+     * 1) X boundaries
+     *=========================================================================*/
 #ifndef XPERIODIC
 
-    //************************
-    // Left boundary (x = 0)
-    //************************
+    /*--- Left boundary (x = 0) ---*/
     if (Is == 0) {
         int i0 = 0;
+
       #ifdef LEFT_INFLOW
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i0-1] = 1.0; 
-            }
-        }
-      
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 1; g <= NG; g++)
+            F[k][j][i0 - g] = 1.0;
+
       #elif defined LEFT_OUTFLOW
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i0-1] = F[k][j][i0];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 1; g <= NG; g++)
+            F[k][j][i0 - g] = F[k][j][i0];
 
       #elif defined LEFT_WALL_VELOCITY_NOSLIP
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i0-1] = F[k][j][i0];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 1; g <= NG; g++)
+            F[k][j][i0 - g] = F[k][j][i0];
 
       #elif defined LEFT_WALL_VELOCITY_FREESLIP
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i0-1] = F[k][j][i0];
-            }
-        }
+        /* ── EVEN MIRROR: symmetry plane ── */
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 1; g <= NG; g++)
+            F[k][j][i0 - g] = F[k][j][i0 + g - 1];
 
       #else
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i0-1] = F[k][j][i0];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 1; g <= NG; g++)
+            F[k][j][i0 - g] = F[k][j][i0];
       #endif
     }
 
-    //************************
-    // Right boundary (x = NX-1)
-    //************************
+    /*--- Right boundary (x = NX-1) ---*/
     if (Ie == NX) {
         int i1 = NX - 1;
+
       #ifdef RIGHT_INFLOW
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i1] = 1.0;
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 0; g < NG; g++)
+            F[k][j][i1 + g] = 1.0;
 
       #elif defined RIGHT_OUTFLOW
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i1] = F[k][j][i1-1];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 0; g < NG; g++)
+            F[k][j][i1 + g] = F[k][j][i1 - 1];
 
       #elif defined RIGHT_WALL_VELOCITY_NOSLIP
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i1] = F[k][j][i1-1];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 0; g < NG; g++)
+            F[k][j][i1 + g] = F[k][j][i1 - 1];
 
       #elif defined RIGHT_WALL_VELOCITY_FREESLIP
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i1] = F[k][j][i1-1];
-            }
-        }
+        /* ── EVEN MIRROR: symmetry plane ── */
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 0; g < NG; g++)
+            F[k][j][i1 + g] = F[k][j][i1 - 1 - g];
 
       #else
-        for (int k = Ks; k < Ke; k++) {
-            for (int j = Js; j < Je; j++) {
-                F[k][j][i1] = F[k][j][i1-1];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int j = JsL; j < JeL; j++)
+        for (int g = 0; g < NG; g++)
+            F[k][j][i1 + g] = F[k][j][i1 - 1];
       #endif
     }
-#endif // !XPERIODIC
+#endif /* !XPERIODIC */
 
 
-    //-------------------------------------------------------------------------
-    // 2) Y boundaries — use G_Ks..G_Ke and G_Is..G_Ie (includes x-ghost overlap)
-    //-------------------------------------------------------------------------
+    /*=========================================================================
+     * 2) Y boundaries
+     *=========================================================================*/
 #ifndef YPERIODIC
 
+    /*--- Bottom boundary (y = 0) ---*/
     if (Js == 0) {
 #ifdef VOF_WETTING
         if (vof_wetting_manages_array(vof, F)) {
@@ -471,163 +512,158 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
             int j0 = 0;
 
           #ifdef BOTTOM_WALL_VELOCITY_NOSLIP
-            for (int k = Ks; k < Ke; k++) {
-                for (int i = Is; i < Ie; i++) {
-                    F[k][j0-1][i] = F[k][j0][i];
-                }
-            }
+            for (int k = KsL; k < KeL; k++)
+            for (int i = IsL; i < IeL; i++)
+            for (int g = 1; g <= NG; g++)
+                F[k][j0 - g][i] = F[k][j0][i];
 
           #elif defined BOTTOM_WALL_VELOCITY_FREESLIP
-            for (int k = Ks; k < Ke; k++) {
-                for (int i = Is; i < Ie; i++) {
-                    F[k][j0-1][i] = F[k][j0][i];
-                }
-            }
+            /* ── EVEN MIRROR: symmetry plane ── */
+            for (int k = KsL; k < KeL; k++)
+            for (int i = IsL; i < IeL; i++)
+            for (int g = 1; g <= NG; g++)
+                F[k][j0 - g][i] = F[k][j0 + g - 1][i];
 
           #elif defined BOTTOM_WALL_VELOCITY
-            for (int k = Ks; k < Ke; k++) {
-                for (int i = Is; i < Ie; i++) {
-                    F[k][j0-1][i] = 1.0;
-                }
-            }
+            for (int k = KsL; k < KeL; k++)
+            for (int i = IsL; i < IeL; i++)
+            for (int g = 1; g <= NG; g++)
+                F[k][j0 - g][i] = 1.0;
 
           #elif defined BOTTOM_WALL_SCHUMANN
-            for (int k = Ks; k < Ke; k++) {
-                for (int i = Is; i < Ie; i++) {
-                    F[k][j0-1][i] = F[k][j0][i];
-                }
-            }
+            for (int k = KsL; k < KeL; k++)
+            for (int i = IsL; i < IeL; i++)
+            for (int g = 1; g <= NG; g++)
+                F[k][j0 - g][i] = F[k][j0][i];
 
           #else
-            for (int k = Ks; k < Ke; k++) {
-                for (int i = Is; i < Ie; i++) {
-                    F[k][j0-1][i] = F[k][j0][i];
-                }
-            }
+            for (int k = KsL; k < KeL; k++)
+            for (int i = IsL; i < IeL; i++)
+            for (int g = 1; g <= NG; g++)
+                F[k][j0 - g][i] = F[k][j0][i];
           #endif
         }
     }
 
+    /*--- Top boundary (y = NY-1) ---*/
     if (Je == NY) {
         int j1 = NY - 1;
+
       #ifdef TOP_WALL_VELOCITY_NOSLIP
-        for (int k = Ks; k < Ke; k++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k][j1][i] = F[k][j1-1][i];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k][j1 + g][i] = F[k][j1 - 1][i];
 
       #elif defined TOP_WALL_VELOCITY_FREESLIP
-        for (int k = Ks; k < Ke; k++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k][j1][i] = F[k][j1-1][i];
-            }
-        }
+        /* ── EVEN MIRROR: symmetry plane ── */
+        for (int k = KsL; k < KeL; k++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k][j1 + g][i] = F[k][j1 - 1 - g][i];
 
       #elif defined TOP_WALL_VELOCITY
-        for (int k = Ks; k < Ke; k++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k][j1][i] = 1.0; 
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k][j1 + g][i] = 1.0;
 
       #elif defined TOP_WALL_SCHUMANN
-        for (int k = Ks; k < Ke; k++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k][j1][i] = F[k][j1-1][i];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k][j1 + g][i] = F[k][j1 - 1][i];
 
       #else
-        for (int k = Ks; k < Ke; k++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k][j1][i] = F[k][j1-1][i];
-            }
-        }
+        for (int k = KsL; k < KeL; k++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k][j1 + g][i] = F[k][j1 - 1][i];
       #endif
     }
-#endif // !YPERIODIC
+#endif /* !YPERIODIC */
 
 
-    //-------------------------------------------------------------------------
-    // 3) Z boundaries — use G_Js..G_Je and G_Is..G_Ie (includes x,y ghost overlap)
-    //-------------------------------------------------------------------------
+    /*=========================================================================
+     * 3) Z boundaries
+     *=========================================================================*/
 #ifndef ZPERIODIC
 
+    /*--- Back boundary (z = 0) ---*/
     if (Ks == 0) {
         int k0 = 0;
-    #if defined BACK_WALL_VELOCITY_NOSLIP
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k0-1][j][i] = F[k0][j][i];
-            }
-        }
 
-    #elif defined BACK_WALL_VELOCITY_FREESLIP
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k0-1][j][i] = F[k0][j][i];
-            }
-        }
+      #if defined BACK_WALL_VELOCITY_NOSLIP
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 1; g <= NG; g++)
+            F[k0 - g][j][i] = F[k0][j][i];
 
-    #elif defined BACK_WALL_VELOCITY
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k0-1][j][i] = 1.0;
-            }
-        }
+      #elif defined BACK_WALL_VELOCITY_FREESLIP
+        /* ── EVEN MIRROR: symmetry plane ── */
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 1; g <= NG; g++)
+            F[k0 - g][j][i] = F[k0 + g - 1][j][i];
 
-    #else
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k0-1][j][i] = F[k0][j][i];
-            }
-        }
-    #endif
+      #elif defined BACK_WALL_VELOCITY
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 1; g <= NG; g++)
+            F[k0 - g][j][i] = 1.0;
+
+      #else
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 1; g <= NG; g++)
+            F[k0 - g][j][i] = F[k0][j][i];
+      #endif
     }
 
+    /*--- Front boundary (z = NZ-1) ---*/
     if (Ke == NZ) {
         int k1 = NZ - 1;
-    #if defined FRONT_WALL_VELOCITY_NOSLIP
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k1][j][i] = F[k1-1][j][i];
-            }
-        }
 
-    #elif defined FRONT_WALL_VELOCITY_FREESLIP
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k1][j][i] = F[k1-1][j][i];
-            }
-        }
+      #if defined FRONT_WALL_VELOCITY_NOSLIP
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k1 + g][j][i] = F[k1 - 1][j][i];
 
-    #elif defined FRONT_WALL_VELOCITY
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k1][j][i] = 1.0;
-            }
-        }
+      #elif defined FRONT_WALL_VELOCITY_FREESLIP
+        /* ── EVEN MIRROR: symmetry plane ── */
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k1 + g][j][i] = F[k1 - 1 - g][j][i];
 
-    #else
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-                F[k1][j][i] = F[k1-1][j][i];
-            }
-        }
-    #endif
+      #elif defined FRONT_WALL_VELOCITY
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k1 + g][j][i] = 1.0;
+
+      #else
+        for (int j = JsL; j < JeL; j++)
+        for (int i = IsL; i < IeL; i++)
+        for (int g = 0; g < NG; g++)
+            F[k1 + g][j][i] = F[k1 - 1][j][i];
+      #endif
     }
 
-#endif // !ZPERIODIC
+#endif /* !ZPERIODIC */
 
-    //-------------------------------------------------------------------------
-    // 4) MPI ghost-cell update
-    //-------------------------------------------------------------------------
-     Communication_update_ghost_nodes_flow_variable(F,
+    /*=========================================================================
+     * 4) MPI ghost-cell update
+     *=========================================================================*/
+    Communication_update_ghost_nodes_flow_variable(F,
                                                    VOLUME_FRACTION,
                                                    params->ghost_nodes,
                                                    data_bag);
 }
+
+
+
 
 
 /******************************************************************************
@@ -635,6 +671,11 @@ void VOF_set_boundary_values(double ***F, Cart3d_bag *data_bag)
  ******************************************************************************/
 void VOF_update_density_viscosity(Cart3d_bag *data_bag)
 {
+#ifdef VOF_DIFFUSE
+    VOF_DIFFUSE_update_density_viscosity(data_bag);
+    return;
+#endif
+
     /**************************************************************************
      * 1. Basic references
      **************************************************************************/
@@ -658,14 +699,14 @@ void VOF_update_density_viscosity(Cart3d_bag *data_bag)
     double mu1  = params->mu1;    /* liquid viscosity */
     double mu2  = params->mu2;    /* gas viscosity    */
 
-#ifdef VOF_IBM
-    /* Smoothed solid volume fraction: 0 outside solid, ~1 inside solid */
-    double ***vfc = vof->vfc;
-#endif
-
     int Is = grid->G_Is, Ie = grid->G_Ie;
     int Js = grid->G_Js, Je = grid->G_Je;
     int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    double ***rho_old = vof->rho_old;
+    double ***mu_old  = vof->mu_old;
+    Array_copy_withghost(vof->rho, vof->rho_old, grid, params);
+    Array_copy_withghost(vof->mu,  vof->mu_old,  grid, params);
 
     for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
@@ -681,41 +722,10 @@ void VOF_update_density_viscosity(Cart3d_bag *data_bag)
                 double mu_fluid_tilde =
                     F_ijk + (1.0 - F_ijk) * (mu2 / mu1);
 
-#ifdef VOF_IBM
-                double Phi_s = 0.0;
-                if (vfc) {
-                    Phi_s = vfc[k][j][i];
-                    if (Phi_s < 0.0) Phi_s = 0.0;
-                    if (Phi_s > 1.0) Phi_s = 1.0;
-                }
 
-                /* NEW: Use liquid properties (1.0) for ANY cell with solid presence
-                 * This ensures:
-                 *   - Consistent IBM forcing (Newton's 3rd law)
-                 *   - Correct buoyancy integral (Int_rho_scalar = V_p)
-                 *   - Uniform proxy fluid inside solid
-                 */
-                const double rho_solid_proxy_tilde = 1.0;
-                const double mu_solid_proxy_tilde  = 1.0;
-
-                double rhoVal, muVal;
-                if (Phi_s > 1e-6) {
-                    /* Any solid presence: use proxy density */
-                    rhoVal = rho_solid_proxy_tilde;
-                    muVal  = mu_solid_proxy_tilde;
-                } else {
-                    /* Pure fluid cell */
-                    rhoVal = rho_fluid_tilde;
-                    muVal  = mu_fluid_tilde;
-                }
-#else
-                double rhoVal = rho_fluid_tilde;
-                double muVal  = mu_fluid_tilde;
-#endif
-
-                /* 3) Store dimensionless NS fields */
-                rho_tilde[k][j][i] = rhoVal;
-                mu_tilde[k][j][i]  = muVal;
+                /* 2) Store dimensionless NS fields */
+                rho_tilde[k][j][i] = rho_fluid_tilde;
+                mu_tilde[k][j][i]  = mu_fluid_tilde;
             }
         }
     }
@@ -723,8 +733,79 @@ void VOF_update_density_viscosity(Cart3d_bag *data_bag)
     /* Enforce BCs on the property fields */
     VOF_set_boundary_values(rho_tilde, data_bag);
     VOF_set_boundary_values(mu_tilde, data_bag);
+    VOF_set_boundary_values(vof->rho_old, data_bag);
+    VOF_set_boundary_values(vof->mu_old, data_bag);
 }
 
 
+void VOF_compute_conservative_momentum_fluxes(Cart3d_bag *data_bag) {
 
-#endif // VOF_PLIC
+    VolumeFraction *vof = data_bag->vof;
+    MAC_grid *grid      = data_bag->grid;
+    Parameters *params  = data_bag->params;
+
+    double rho1 = params->rho1;   // reference (liquid) density
+    double rho2 = params->rho2;   // second-phase density  (rho2/rho1 << 1 for gas)
+    double r = params->rho2 / params->rho1;
+    double dt   = params->dt;
+
+    double ***flux_x = vof->flux_x;   // γ_f * u_f * dt  (from VOF_set_advection)
+    double ***flux_y = vof->flux_y;
+    double ***flux_z = vof->flux_z;
+
+    double ***u = data_bag->u->data;  // u^{k-1}
+    double ***v = data_bag->v->data;
+    double ***w = data_bag->w->data;
+
+    double ***mfx = vof->mass_flux_x;
+    double ***mfy = vof->mass_flux_y;
+    double ***mfz = vof->mass_flux_z;
+
+    int Is = grid->G_Is, Ie = grid->G_Ie;
+    int Js = grid->G_Js, Je = grid->G_Je;
+    int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    for (int k = Ks; k < Ke; k++) {
+    for (int j = Js; j < Je; j++) {
+    for (int i = Is; i < Ie; i++) {
+
+        /* ---- X-face: flux_x[k][j][i] = γ_f * u_f * dt ---- */
+        double u_f = u[k][j][i];
+        double gamma_x = (fabs(u_f) > 1e-14)
+                    ? flux_x[k][j][i] / u_f
+                    : 0.5*(vof->F[k][j][i] + vof->F[k][j][i-1]);
+        gamma_x = fmax(0.0, fmin(1.0, gamma_x));
+        double rho_fx = gamma_x + (1.0 - gamma_x) * r;   // ρ̃_f ∈ [r, 1.0]
+        mfx[k][j][i] = rho_fx * u_f;
+
+        /* ---- Y-face ---- */
+        double v_f = v[k][j][i];
+        double gamma_y = (fabs(v_f) > 1e-14)
+                    ? flux_y[k][j][i] / v_f
+                    : 0.5*(vof->F[k][j][i] + vof->F[k][j-1][i]);
+        gamma_y = fmax(0.0, fmin(1.0, gamma_y));
+        double rho_fy = gamma_y + (1.0 - gamma_y) * r;
+        mfy[k][j][i] = rho_fy * v_f;
+
+        /* ---- Z-face ---- */
+        double w_f = w[k][j][i];
+        double gamma_z = (fabs(w_f) > 1e-14)
+                    ? flux_z[k][j][i] / w_f
+                    : 0.5*(vof->F[k][j][i] + vof->F[k-1][j][i]);
+        gamma_z = fmax(0.0, fmin(1.0, gamma_z));
+        double rho_fz = gamma_z + (1.0 - gamma_z) * r;
+        mfz[k][j][i] = rho_fz * w_f;
+
+    }}} // k,j,i
+
+    /* Ghost node exchange so momentum loops can read halo values */
+    Communication_update_ghost_nodes_flow_variable(mfx, FLUX_X, 
+        params->ghost_nodes, data_bag); 
+    Communication_update_ghost_nodes_flow_variable(mfy, FLUX_Y, 
+        params->ghost_nodes, data_bag);
+    Communication_update_ghost_nodes_flow_variable(mfz, FLUX_Z, 
+        params->ghost_nodes, data_bag);
+}
+
+
+#endif // VOF
