@@ -9,19 +9,12 @@
 #include "DataTypes.h"
 
 #include "Communication.h"
-#include "Array.h"
 #include "Display.h"
 #include "Memory.h"
 #include "Output.h"
 #include "Resume.h"
 #include "Velocity.h"
 #include "Conc.h"
-#include "VolumeFraction.h"
-#include "VOF-CICSAM.h"
-
-static int Resume_h5_field_exists(hid_t file_id, const char *fieldname) {
-	return H5Lexists(file_id, fieldname, H5P_DEFAULT) > 0;
-}
 
 /******************************************************************************/
 /*
@@ -141,7 +134,7 @@ void Resume_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	}
 #endif
 
-#ifdef VOF
+#ifdef VOF_PLIC
     //--------------------------------------------------------------------------
     // VOF data (critical for interface reconstruction)
     //--------------------------------------------------------------------------
@@ -152,46 +145,10 @@ void Resume_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
     Resume_h5_flow_variable(vof->F, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
     Communication_update_ghost_nodes_flow_variable(vof->F, VOLUME_FRACTION, pnodes, data_bag);
 
-    #ifdef VOF_DIFFUSE
-    sprintf(fieldname, "%s/C_L", groupname);
-    if (Resume_h5_field_exists(file_id, fieldname)) {
-        Resume_h5_flow_variable(vof->C_L, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-    } else {
-        Array_copy_withghost(vof->F, vof->C_L, grid, params);
-    }
-    Communication_update_ghost_nodes_flow_variable(vof->C_L, VOLUME_FRACTION, pnodes, data_bag);
-
-    sprintf(fieldname, "%s/C_S", groupname);
-    if (Resume_h5_field_exists(file_id, fieldname)) {
-        Resume_h5_flow_variable(vof->C_S, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-        Communication_update_ghost_nodes_flow_variable(vof->C_S, VOLUME_FRACTION, pnodes, data_bag);
-    } else {
-        Memory_reset_flow_variable(grid, params, vof->C_S);
-    }
-
-    sprintf(fieldname, "%s/ch_rhs_n", groupname);
-    if (Resume_h5_field_exists(file_id, fieldname)) {
-        Resume_h5_flow_variable(vof->ch_rhs_n, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-    } else {
-        Memory_reset_flow_variable(grid, params, vof->ch_rhs_n);
-    }
-    Communication_update_ghost_nodes_flow_variable(vof->ch_rhs_n, VOLUME_FRACTION, pnodes, data_bag);
-
-    sprintf(fieldname, "%s/ch_rhs_nm1", groupname);
-    if (Resume_h5_field_exists(file_id, fieldname)) {
-        Resume_h5_flow_variable(vof->ch_rhs_nm1, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-    } else {
-        Memory_reset_flow_variable(grid, params, vof->ch_rhs_nm1);
-    }
-    Communication_update_ghost_nodes_flow_variable(vof->ch_rhs_nm1, VOLUME_FRACTION, pnodes, data_bag);
-    #endif
-
-    #ifdef VOF_PLIC
     // Read plane intercept alpha
     sprintf(fieldname, "%s/alpha", groupname);
     Resume_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
     Communication_update_ghost_nodes_flow_variable(vof->alpha, VOLUME_FRACTION, pnodes, data_bag);
-    #endif
 
      // Read interface normals
      sprintf(fieldname, "%s/normal_x", groupname);
@@ -208,7 +165,6 @@ void Resume_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 	#ifdef SURFACE_TENSION
 
-	#ifdef VOF_PLIC
 	// Curvature (kappa)
     sprintf(fieldname, "%s/kappa", groupname);
     Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
@@ -232,107 +188,29 @@ void Resume_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
      sprintf(fieldname, "%s/normal_z_smooth", groupname);
 	 Resume_h5_flow_variable(data_bag->vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
 	 Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z_smooth, VOLUME_FRACTION, pnodes, data_bag);
-	 #endif
 
     #endif // SURFACE TENSION 
  
 	 // Read or recompute additional VOF fields if needed (e.g., mu, rho)
 	 sprintf(fieldname, "%s/mu", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-	     Resume_h5_flow_variable(vof->mu, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-         Communication_update_ghost_nodes_flow_variable(vof->mu, VOLUME_FRACTION, pnodes, data_bag);
-     }
+	 Resume_h5_flow_variable(vof->mu, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
 	 
 	 sprintf(fieldname, "%s/rho", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-	     Resume_h5_flow_variable(vof->rho, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-         Communication_update_ghost_nodes_flow_variable(vof->rho, VOLUME_FRACTION, pnodes, data_bag);
-     }
-
-     #ifdef VOF_DIFFUSE
-     sprintf(fieldname, "%s/rho_old", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-         Resume_h5_flow_variable(vof->rho_old, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-         Communication_update_ghost_nodes_flow_variable(vof->rho_old, VOLUME_FRACTION, pnodes, data_bag);
-     } else {
-         Array_copy_withghost(vof->rho, vof->rho_old, grid, params);
-     }
-
-     sprintf(fieldname, "%s/mu_old", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-         Resume_h5_flow_variable(vof->mu_old, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-         Communication_update_ghost_nodes_flow_variable(vof->mu_old, VOLUME_FRACTION, pnodes, data_bag);
-     } else {
-         Array_copy_withghost(vof->mu, vof->mu_old, grid, params);
-     }
-     #endif
+	 Resume_h5_flow_variable(vof->rho, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
  
 	 // Read fluxes if necessary
 	 sprintf(fieldname, "%s/flux_x", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-	     Resume_h5_flow_variable(vof->flux_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-         Communication_update_ghost_nodes_flow_variable(vof->flux_x, FLUX_X, pnodes, data_bag);
-     } else {
-         Memory_reset_flow_variable(grid, params, vof->flux_x);
-     }
+	 Resume_h5_flow_variable(vof->flux_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
  
 	 sprintf(fieldname, "%s/flux_y", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-	     Resume_h5_flow_variable(vof->flux_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-         Communication_update_ghost_nodes_flow_variable(vof->flux_y, FLUX_Y, pnodes, data_bag);
-     } else {
-         Memory_reset_flow_variable(grid, params, vof->flux_y);
-     }
+	 Resume_h5_flow_variable(vof->flux_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
  
 	 sprintf(fieldname, "%s/flux_z", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-	     Resume_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-         Communication_update_ghost_nodes_flow_variable(vof->flux_z, FLUX_Z, pnodes, data_bag);
-     } else {
-         Memory_reset_flow_variable(grid, params, vof->flux_z);
-     }
-
-     #ifdef VOF_DIFFUSE
-     sprintf(fieldname, "%s/f_sigma_old_x", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-         Resume_h5_noghost_variable(vof->f_sigma_old_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_noghost_variable"));
-     } else {
-         Memory_reset_noghost_variable(grid, params, vof->f_sigma_old_x);
-     }
-
-     sprintf(fieldname, "%s/f_sigma_old_y", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-         Resume_h5_noghost_variable(vof->f_sigma_old_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_noghost_variable"));
-     } else {
-         Memory_reset_noghost_variable(grid, params, vof->f_sigma_old_y);
-     }
-
-     sprintf(fieldname, "%s/f_sigma_old_z", groupname);
-     if (Resume_h5_field_exists(file_id, fieldname)) {
-         Resume_h5_noghost_variable(vof->f_sigma_old_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_noghost_variable"));
-     } else {
-         Memory_reset_noghost_variable(grid, params, vof->f_sigma_old_z);
-     }
-
-     if (!Resume_h5_field_exists(file_id, "/Resume/rho") ||
-         !Resume_h5_field_exists(file_id, "/Resume/mu")) {
-         VOF_DIFFUSE_update_density_viscosity(data_bag);
-     }
-
-     for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
-         for (int j = grid->G_Js; j < grid->G_Je; ++j) {
-             for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-                 vof->C_G[k][j][i] = clampDouble(1.0 - vof->C_L[k][j][i] - vof->C_S[k][j][i], 0.0, 1.0);
-             }
-         }
-     }
-     Communication_update_ghost_nodes_flow_variable(vof->C_G, VOLUME_FRACTION, pnodes, data_bag);
-     #else
-	 
+	 Resume_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+ 
 	 // Recompute derived fields such as density and viscosity from F, if necessary.
 	 VOF_update_density_viscosity(data_bag);
-     #endif
- #endif // VOF
+ #endif // VOF_PLIC
 
 	//--------------------------------------------------------------------------
 	// 3D data
@@ -476,7 +354,7 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Communication_update_ghost_nodes_flow_variable(rans->nut, 'c', pnodes, data_bag);
 #endif
 
-#ifdef VOF
+#ifdef VOF_PLIC
     //--------------------------------------------------------------------------
     // VOF-PLIC data
     //--------------------------------------------------------------------------
@@ -488,212 +366,69 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
         Resume_h5_flow_variable(data_bag->vof->F, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
         Communication_update_ghost_nodes_flow_variable(data_bag->vof->F, VOLUME_FRACTION, pnodes, data_bag);
 
-        #ifdef VOF_DIFFUSE
-        sprintf(fieldname, "%s/C_L", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->C_L, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-        } else {
-            Array_copy_withghost(data_bag->vof->F, data_bag->vof->C_L, grid, params);
-        }
-        Communication_update_ghost_nodes_flow_variable(data_bag->vof->C_L, VOLUME_FRACTION, pnodes, data_bag);
-
-        sprintf(fieldname, "%s/C_S", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->C_S, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->C_S, VOLUME_FRACTION, pnodes, data_bag);
-        }
-
-        sprintf(fieldname, "%s/C_G", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->C_G, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->C_G, VOLUME_FRACTION, pnodes, data_bag);
-        }
-
-        sprintf(fieldname, "%s/psi", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->psi, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->psi, VOLUME_FRACTION, pnodes, data_bag);
-        }
-
-        sprintf(fieldname, "%s/psi_LG", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->psi_LG, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->psi_LG, VOLUME_FRACTION, pnodes, data_bag);
-        }
-
-        sprintf(fieldname, "%s/lap_C", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->lap_C, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->lap_C, VOLUME_FRACTION, pnodes, data_bag);
-        }
-
-        sprintf(fieldname, "%s/bulk_S", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->bulk_S, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->bulk_S, VOLUME_FRACTION, pnodes, data_bag);
-        }
-
-        sprintf(fieldname, "%s/ch_rhs_n", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->ch_rhs_n, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->ch_rhs_n, VOLUME_FRACTION, pnodes, data_bag);
-        }
-
-        sprintf(fieldname, "%s/ch_rhs_nm1", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->ch_rhs_nm1, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->ch_rhs_nm1, VOLUME_FRACTION, pnodes, data_bag);
-        }
-        #endif
-
-		#ifdef VOF_PLIC
         // Smoothed volume fraction (F_smooth)
         sprintf(fieldname, "%s/F_smooth", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
-        }
-		#endif
+        Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
 
         // Viscosity (mu)
         sprintf(fieldname, "%s/mu", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->mu, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->mu, VOLUME_FRACTION, pnodes, data_bag);
-        }
+        Resume_h5_flow_variable(data_bag->vof->mu, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->mu, VOLUME_FRACTION, pnodes, data_bag);
 
         // Density (rho)
         sprintf(fieldname, "%s/rho", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->rho, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->rho, VOLUME_FRACTION, pnodes, data_bag);
-        }
+        Resume_h5_flow_variable(data_bag->vof->rho, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->rho, VOLUME_FRACTION, pnodes, data_bag);
 
         // Interface normals (normal_x, normal_y, normal_z)
         sprintf(fieldname, "%s/normal_x", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
-        }
+        Resume_h5_flow_variable(data_bag->vof->normal_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x, VOLUME_FRACTION, pnodes, data_bag);
 
         sprintf(fieldname, "%s/normal_y", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
-        }
+        Resume_h5_flow_variable(data_bag->vof->normal_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y, VOLUME_FRACTION, pnodes, data_bag);
 
         sprintf(fieldname, "%s/normal_z", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
-        }
+        Resume_h5_flow_variable(data_bag->vof->normal_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z, VOLUME_FRACTION, pnodes, data_bag);
 
-        #ifdef VOF_PLIC
         // Plane intercept (alpha)
         sprintf(fieldname, "%s/alpha", groupname);
         Resume_h5_flow_variable(data_bag->vof->alpha, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
         Communication_update_ghost_nodes_flow_variable(data_bag->vof->alpha, VOLUME_FRACTION, pnodes, data_bag);
-        #endif
 
 		#ifdef SURFACE_TENSION
 
 	    // Curvature (kappa)
         sprintf(fieldname, "%s/kappa", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-            Communication_update_ghost_nodes_flow_variable(data_bag->vof->kappa, VOLUME_FRACTION, pnodes, data_bag);
-        }
+        Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+        Communication_update_ghost_nodes_flow_variable(data_bag->vof->kappa, VOLUME_FRACTION, pnodes, data_bag);
 
 
-		#ifdef VOF_PLIC 
-		//Write F_smooth
+		// Write F_smooth
 		sprintf(fieldname, "%s/F_smooth", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-		    Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		    Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
-        }
+		Resume_h5_flow_variable(data_bag->vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		Communication_update_ghost_nodes_flow_variable(data_bag->vof->F_smooth, VOLUME_FRACTION, pnodes, data_bag);
 
           // Write interface normals
         sprintf(fieldname, "%s/normal_x_smooth", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-	        Resume_h5_flow_variable(data_bag->vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-	        Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x_smooth, VOLUME_FRACTION, pnodes, data_bag);
-        }
+	    Resume_h5_flow_variable(data_bag->vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+	    Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_x_smooth, VOLUME_FRACTION, pnodes, data_bag);
  
 		sprintf(fieldname, "%s/normal_y_smooth", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-		    Resume_h5_flow_variable(data_bag->vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		    Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y_smooth, VOLUME_FRACTION, pnodes, data_bag);
-        }
+		Resume_h5_flow_variable(data_bag->vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_y_smooth, VOLUME_FRACTION, pnodes, data_bag);
 		
 	
 		sprintf(fieldname, "%s/normal_z_smooth", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-		    Resume_h5_flow_variable(data_bag->vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		    Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z_smooth, VOLUME_FRACTION, pnodes, data_bag);
-        }
-		#endif
-
-        #ifdef VOF_DIFFUSE
-        sprintf(fieldname, "%s/f_sigma_old_x", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_noghost_variable(data_bag->vof->f_sigma_old_x, file_id, fieldname, grid, params, DTRACE("Resume_h5_noghost_variable"));
-        }
-
-        sprintf(fieldname, "%s/f_sigma_old_y", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_noghost_variable(data_bag->vof->f_sigma_old_y, file_id, fieldname, grid, params, DTRACE("Resume_h5_noghost_variable"));
-        }
-
-        sprintf(fieldname, "%s/f_sigma_old_z", groupname);
-        if (Resume_h5_field_exists(file_id, fieldname)) {
-            Resume_h5_noghost_variable(data_bag->vof->f_sigma_old_z, file_id, fieldname, grid, params, DTRACE("Resume_h5_noghost_variable"));
-        }
-        #endif
+		Resume_h5_flow_variable(data_bag->vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		Communication_update_ghost_nodes_flow_variable(data_bag->vof->normal_z_smooth, VOLUME_FRACTION, pnodes, data_bag);
 
  #endif // SURFACE TENSION 
-
-
- #ifdef VOF_IBM
-		
-		sprintf(fieldname, "%s/vfc", groupname);
-		Resume_h5_flow_variable(data_bag->vof->vfc, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->vfc, VOLUME_FRACTION, pnodes, data_bag);
-
-		sprintf(fieldname, "%s/vfc_smooth", groupname);
-		Resume_h5_flow_variable(data_bag->vof->vfc_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->vfc_smooth, VOLUME_FRACTION, pnodes, data_bag);
-
-		sprintf(fieldname, "%s/nx_IBM", groupname);
-		Resume_h5_flow_variable(data_bag->vof->nx_IBM, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->nx_IBM, VOLUME_FRACTION, pnodes, data_bag);
-
-		sprintf(fieldname, "%s/ny_IBM", groupname);
-		Resume_h5_flow_variable(data_bag->vof->ny_IBM, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->ny_IBM, VOLUME_FRACTION, pnodes, data_bag);
-
-		sprintf(fieldname, "%s/nz_IBM", groupname);
-		Resume_h5_flow_variable(data_bag->vof->nz_IBM, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->nz_IBM, VOLUME_FRACTION, pnodes, data_bag);
-
-		sprintf(fieldname, "%s/uE", groupname);
-		Resume_h5_flow_variable(data_bag->vof->uE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->uE, VOLUME_FRACTION, pnodes, data_bag);
-
-		sprintf(fieldname, "%s/vE", groupname);
-		Resume_h5_flow_variable(data_bag->vof->vE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->vE, VOLUME_FRACTION, pnodes, data_bag);
-
-		sprintf(fieldname, "%s/wE", groupname);
-		Resume_h5_flow_variable(data_bag->vof->wE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->wE, VOLUME_FRACTION, pnodes, data_bag);
-
- #endif // VOF_IBM
-
-
-
     }
-#endif // VOF
+#endif // VOF_PLIC
 
 	H5Fclose(file_id);
 

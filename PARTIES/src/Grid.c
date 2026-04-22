@@ -16,8 +16,6 @@
 #include "Immersed.h"
 #include "Memory.h"
 
-static void Grid_initialize_twod_state(MAC_grid *grid, Parameters *params);
-
 
 /******************************************************************************/
 /*
@@ -41,21 +39,6 @@ MAC_grid *Grid_create(Parameters *params, Debug_trace *dtrace) {
 
 	new_grid = (MAC_grid *)malloc(sizeof(MAC_grid));
 	Memory_check_allocation(new_grid);
-	new_grid->twod_x_c = NULL;
-	new_grid->twod_x_u = NULL;
-	new_grid->twod_y_c = NULL;
-	new_grid->twod_y_v = NULL;
-	new_grid->axisym_r_coords_c = NULL;
-	new_grid->axisym_r_coords_u = NULL;
-	new_grid->axisym_z_coords_c = NULL;
-	new_grid->axisym_z_coords_v = NULL;
-	new_grid->r_u = NULL;
-	new_grid->r_c = NULL;
-	new_grid->inv_r_u = NULL;
-	new_grid->inv_r_c = NULL;
-	new_grid->ring_wt_u = NULL;
-	new_grid->ring_wt_c = NULL;
-	new_grid->dummy_z_slab_thickness = 0.0;
 
 	// Global (world) number of grids. A half cell is added in each direction.
 	// Same on all processors
@@ -641,8 +624,6 @@ MAC_grid *Grid_create(Parameters *params, Debug_trace *dtrace) {
 	new_grid -> total_nodes    = (new_grid->L_Ie - new_grid->L_Is) * (new_grid->L_Je - new_grid->L_Js) * (new_grid->L_Ke - new_grid->L_Ks);
 	new_grid -> ng_total_nodes = (new_grid->G_Ie - new_grid->G_Is) * (new_grid->G_Je - new_grid->G_Js) * (new_grid->G_Ke - new_grid->G_Ks);
 
-	Grid_initialize_twod_state(new_grid, params);
-
 	new_grid -> u_sdf =  Memory_allocate_flow_variable(new_grid, params);
 	new_grid -> v_sdf =  Memory_allocate_flow_variable(new_grid, params);
 	new_grid -> w_sdf =  Memory_allocate_flow_variable(new_grid, params);
@@ -735,19 +716,6 @@ void Grid_destroy(MAC_grid *grid, Parameters *params) {
 	free(grid -> idz_w - Ghost_Nodes);
 	free(grid -> idz_c - Ghost_Nodes);
 	free(grid -> i2dz_c - Ghost_Nodes);
-
-	if (grid->r_u != NULL)
-		free(grid->r_u - Ghost_Nodes);
-	if (grid->r_c != NULL)
-		free(grid->r_c - Ghost_Nodes);
-	if (grid->inv_r_u != NULL)
-		free(grid->inv_r_u - Ghost_Nodes);
-	if (grid->inv_r_c != NULL)
-		free(grid->inv_r_c - Ghost_Nodes);
-	if (grid->ring_wt_u != NULL)
-		free(grid->ring_wt_u - Ghost_Nodes);
-	if (grid->ring_wt_c != NULL)
-		free(grid->ring_wt_c - Ghost_Nodes);
 
 #ifdef YPERIODIC
 	Memory_free_2D_double_array(NZ, grid->exchange_slab);
@@ -859,62 +827,6 @@ void Grid_generate_mesh_coordinates(MAC_grid *grid, Parameters *params,
 	}
 
 	return;
-}
-
-
-
-/******************************************************************************/
-/*
- Set up shared 2D aliases and axisymmetric radial metrics.
- */
-/******************************************************************************/
-static void Grid_initialize_twod_state(MAC_grid *grid, Parameters *params)
-{
-	int i;
-	int Ghost_Nodes = params->ghost_nodes;
-	int NX_ghost = grid->NX + 2 * Ghost_Nodes;
-	int i_start = -Ghost_Nodes;
-	int i_end = grid->NX + Ghost_Nodes - 1;
-
-	grid->twod_x_c = grid->xc;
-	grid->twod_x_u = grid->xu;
-	grid->twod_y_c = grid->yc;
-	grid->twod_y_v = grid->yv;
-
-	grid->axisym_r_coords_c = grid->xc;
-	grid->axisym_r_coords_u = grid->xu;
-	grid->axisym_z_coords_c = grid->yc;
-	grid->axisym_z_coords_v = grid->yv;
-	grid->dummy_z_slab_thickness = params->twod_slab_thickness;
-
-	if (!params->axisym_rz_enabled)
-		return;
-
-	grid->r_u = Memory_allocate_1D_array(GVG_DOUBLE, NX_ghost);
-	grid->r_c = Memory_allocate_1D_array(GVG_DOUBLE, NX_ghost);
-	grid->inv_r_u = Memory_allocate_1D_array(GVG_DOUBLE, NX_ghost);
-	grid->inv_r_c = Memory_allocate_1D_array(GVG_DOUBLE, NX_ghost);
-	grid->ring_wt_u = Memory_allocate_1D_array(GVG_DOUBLE, NX_ghost);
-	grid->ring_wt_c = Memory_allocate_1D_array(GVG_DOUBLE, NX_ghost);
-
-	grid->r_u += Ghost_Nodes;
-	grid->r_c += Ghost_Nodes;
-	grid->inv_r_u += Ghost_Nodes;
-	grid->inv_r_c += Ghost_Nodes;
-	grid->ring_wt_u += Ghost_Nodes;
-	grid->ring_wt_c += Ghost_Nodes;
-
-	for (i = i_start; i <= i_end; i++) {
-		double r_u = fabs(grid->xu[i]);
-		double r_c = fabs(grid->xc[i]);
-
-		grid->r_u[i] = r_u;
-		grid->r_c[i] = r_c;
-		grid->inv_r_u[i] = (r_u > TWOD_RADIAL_EPS) ? 1.0 / r_u : 0.0;
-		grid->inv_r_c[i] = (r_c > TWOD_RADIAL_EPS) ? 1.0 / r_c : 0.0;
-		grid->ring_wt_u[i] = params->axisym_theta_span * r_u;
-		grid->ring_wt_c[i] = params->axisym_theta_span * r_c;
-	}
 }
 
 
@@ -2341,36 +2253,6 @@ void Grid_find_best_NP(int *NP, double *err_NP, int first_sign, int second_sign,
 	int NPX,NPY,NPZ;
 	int NREMYZ, NREMY;
 	double f_coord_length;
-
-#ifdef TWOD_MODE
-	int best_NPX = 1;
-	int best_NPY = params->size;
-	double best_err = 1.0e30;
-	double NT_domain_2d = (double)(NX * NY);
-	double f_coord_length_2d = sqrt(NT_domain_2d / (double)params->size);
-
-	for (NPX = 1; NPX <= params->size; NPX++) {
-		double err;
-
-		if (params->size % NPX != 0)
-			continue;
-
-		NPY = params->size / NPX;
-		err = sqrt(pow(((double)NX / NPX) - f_coord_length_2d, 2.0) +
-		           pow(((double)NY / NPY) - f_coord_length_2d, 2.0));
-		if (err < best_err) {
-			best_err = err;
-			best_NPX = NPX;
-			best_NPY = NPY;
-		}
-	}
-
-	NP[0] = best_NPX;
-	NP[1] = best_NPY;
-	NP[2] = 1;
-	*err_NP = best_err;
-	return;
-#endif
 
 	NT_domain = NX * NY * NZ;
 	NT_domain = (NT_domain + params -> size - 1) / params -> size;

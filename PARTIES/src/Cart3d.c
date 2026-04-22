@@ -41,211 +41,6 @@
 #include "Interpolate.h"
 #include "EPforcing.h"
 #include "VolumeFraction.h"
-#include "VOF-CICSAM.h"
-#include "VOF_DIFFUSE.h"
-
-static void Cart3d_twod_abort(Parameters *params, const char *message,
-		const char *function, int line)
-{
-	Debug_trace trace = {"", "", 0, NULL, NULL};
-
-	snprintf(trace.function, sizeof(trace.function), "%s", function);
-	snprintf(trace.file, sizeof(trace.file), "%s", __FILE__);
-	trace.line = line;
-	Display_throw_error(message, params, &trace);
-}
-
-#define CART3D_TWOD_ABORT(params, message) \
-	Cart3d_twod_abort((params), (message), __func__, __LINE__)
-
-static void Cart3d_twod_assert_all(int local_ok, Parameters *params,
-		const char *message)
-{
-	int global_ok = 0;
-
-	MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, PCW);
-	if (!global_ok)
-		CART3D_TWOD_ABORT(params, message);
-}
-
-static double Cart3d_twod_exchange_value(int i, int j, int k)
-{
-	return 1000000.0 * k + 1000.0 * j + (double)i;
-}
-
-static void Cart3d_run_twod_pretests(Cart3d_bag *data_bag)
-{
-	int i, j, k;
-	int local_ok = 1;
-	int pnodes = 1;
-	MAC_grid *grid = data_bag->grid;
-	Parameters *params = data_bag->params;
-	double ***probe = NULL;
-
-	Cart3d_twod_assert_all(grid->G_Ks == 0 && grid->G_Ke == grid->NZ &&
-	                       grid->NK == 1,
-	                       params,
-	                       "Phase 0 pre-test failed: the z-direction does not reduce to a single physical slab.");
-
-	Cart3d_twod_assert_all(grid->L_Ks == grid->G_Ks - params->ghost_nodes &&
-	                       grid->L_Ke == grid->G_Ke + params->ghost_nodes,
-	                       params,
-	                       "Phase 0 pre-test failed: z ghost extents are not a pure ghost-layer expansion.");
-
-	Cart3d_twod_assert_all(grid->zw[1] > grid->zw[0] &&
-	                       grid->zc[0] > grid->zw[0] &&
-	                       grid->dummy_z_slab_thickness > 0.0,
-	                       params,
-	                       "Phase 0 pre-test failed: the dummy slab coordinates are invalid for NZM = 1.");
-
-	if (params->axisym_rz_enabled) {
-		Cart3d_twod_assert_all(grid->r_u != NULL && grid->r_c != NULL &&
-		                       grid->inv_r_u != NULL && grid->inv_r_c != NULL &&
-		                       grid->ring_wt_u != NULL && grid->ring_wt_c != NULL &&
-		                       grid->r_u[0] == 0.0 && grid->r_c[0] >= 0.0 &&
-		                       grid->ring_wt_u[0] == 0.0,
-		                       params,
-		                       "Phase 0 pre-test failed: axisymmetric radial metric arrays were not initialized correctly.");
-	}
-	else {
-		Cart3d_twod_assert_all(grid->r_u == NULL && grid->r_c == NULL &&
-		                       grid->inv_r_u == NULL && grid->inv_r_c == NULL &&
-		                       grid->ring_wt_u == NULL && grid->ring_wt_c == NULL,
-		                       params,
-		                       "Phase 0 pre-test failed: Cartesian 2D mode unexpectedly allocated axisymmetric radial metrics.");
-	}
-
-	probe = Memory_allocate_flow_variable(grid, params);
-	local_ok = (probe != NULL) &&
-	           (grid->ng_total_nodes ==
-	            (grid->G_Ie - grid->G_Is) *
-	            (grid->G_Je - grid->G_Js) *
-	            (grid->G_Ke - grid->G_Ks));
-	Cart3d_twod_assert_all(local_ok,
-	                       params,
-	                       "Phase 0 pre-test failed: 3D field allocation or no-ghost sizing is inconsistent for NZM = 1.");
-	Memory_free_flow_variable(grid, params, probe);
-
-	probe = Memory_allocate_flow_variable(grid, params);
-	for (k = grid->G_Ks; k < grid->G_Ke; k++) {
-		for (j = grid->G_Js; j < grid->G_Je; j++) {
-			for (i = grid->G_Is; i < grid->G_Ie; i++) {
-				probe[k][j][i] = Cart3d_twod_exchange_value(i, j, k);
-			}
-		}
-	}
-
-	Communication_update_ghost_nodes_x(probe, CONCENTRATION_PERTURBATION, pnodes, data_bag);
-	local_ok = 1;
-	if (params->npxminus != MPI_PROC_NULL) {
-		for (j = grid->G_Js; j < grid->G_Je && local_ok; j++) {
-			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
-				local_ok = fabs(probe[k][j][grid->G_Is - 1] -
-				                Cart3d_twod_exchange_value(grid->G_Is - 1, j, k)) < 1.0e-12;
-			}
-		}
-	}
-	if (params->npxplus != MPI_PROC_NULL) {
-		for (j = grid->G_Js; j < grid->G_Je && local_ok; j++) {
-			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
-				local_ok = fabs(probe[k][j][grid->G_Ie] -
-				                Cart3d_twod_exchange_value(grid->G_Ie, j, k)) < 1.0e-12;
-			}
-		}
-	}
-	Cart3d_twod_assert_all(local_ok,
-	                       params,
-	                       "Phase 0 pre-test failed: x-direction halo exchange did not preserve the in-plane slab data.");
-
-	Communication_update_ghost_nodes_y(probe, CONCENTRATION_PERTURBATION, pnodes, data_bag);
-	local_ok = 1;
-	if (params->npyminus != MPI_PROC_NULL) {
-		for (i = grid->G_Is; i < grid->G_Ie && local_ok; i++) {
-			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
-				local_ok = fabs(probe[k][grid->G_Js - 1][i] -
-				                Cart3d_twod_exchange_value(i, grid->G_Js - 1, k)) < 1.0e-12;
-			}
-		}
-	}
-	if (params->npyplus != MPI_PROC_NULL) {
-		for (i = grid->G_Is; i < grid->G_Ie && local_ok; i++) {
-			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
-				local_ok = fabs(probe[k][grid->G_Je][i] -
-				                Cart3d_twod_exchange_value(i, grid->G_Je, k)) < 1.0e-12;
-			}
-		}
-	}
-	Cart3d_twod_assert_all(local_ok,
-	                       params,
-	                       "Phase 0 pre-test failed: y-direction halo exchange did not preserve the in-plane slab data.");
-	Memory_free_flow_variable(grid, params, probe);
-
-	probe = Memory_allocate_flow_variable(grid, params);
-	for (j = grid->G_Js; j < grid->G_Je; j++) {
-		for (i = grid->G_Is; i < grid->G_Ie; i++) {
-			probe[grid->G_Ks][j][i] = Cart3d_twod_exchange_value(i, j, grid->G_Ks);
-		}
-	}
-	Communication_update_ghost_nodes_z(probe, CONCENTRATION_PERTURBATION, pnodes, data_bag);
-	local_ok = 1;
-	for (j = grid->G_Js; j < grid->G_Je && local_ok; j++) {
-		for (i = grid->G_Is; i < grid->G_Ie && local_ok; i++) {
-			double expected = Cart3d_twod_exchange_value(i, j, grid->G_Ks);
-			local_ok = fabs(probe[grid->G_Ks - 1][j][i] - expected) < 1.0e-12 &&
-			           fabs(probe[grid->G_Ke - 1][j][i] - expected) < 1.0e-12;
-		}
-	}
-	Cart3d_twod_assert_all(local_ok,
-	                       params,
-	                       "Phase 0 pre-test failed: z-direction halo exchange did not collapse to a safe periodic slab fill.");
-	Memory_free_flow_variable(grid, params, probe);
-}
-
-static void Cart3d_validate_twod_startup(Cart3d_bag *data_bag)
-{
-#ifdef TWOD_MODE
-	Parameters *params = data_bag->params;
-	MAC_grid *grid = data_bag->grid;
-	char message[256];
-
-	Cart3d_twod_assert_all(params->NZM == 1,
-	                       params,
-	                       "TWOD_MODE requires NZM == 1.");
-	Cart3d_twod_assert_all(params->NPZ == 1,
-	                       params,
-	                       "TWOD_MODE requires NPZ == 1 after domain decomposition.");
-
-#ifndef ZPERIODIC
-	CART3D_TWOD_ABORT(params, "TWOD_MODE requires ZPERIODIC.");
-#endif
-
-	snprintf(message, sizeof(message),
-	         "TWOD_MODE active: z-direction extent [%.6g, %.6g] is treated as a storage-only slab of thickness %.6g.\n",
-	         params->zmin, params->zmax, params->twod_slab_thickness);
-	Display_progress(params, message);
-
-#ifdef AXISYM_RZ
-	Cart3d_twod_assert_all(fabs(params->xmin) < 1.0e-12,
-	                       params,
-	                       "AXISYM_RZ requires xmin == 0.0 so the left boundary is the axis.");
-	Cart3d_twod_assert_all(params->axisym_no_swirl,
-	                       params,
-	                       "AXISYM_RZ phase 0 requires AXISYM_NO_SWIRL.");
-#if defined(LEFT_WALL_VELOCITY_NOSLIP) || defined(LEFT_WALL_VELOCITY_FREESLIP) || defined(LEFT_INFLOW) || defined(LEFT_OUTFLOW) || defined(XPERIODIC)
-	CART3D_TWOD_ABORT(params,
-	                  "AXISYM_RZ requires the code x-min boundary to be reserved for the symmetry axis; left wall, inflow/outflow, or x-periodic logic is not allowed.");
-#endif
-#endif
-
-	Cart3d_twod_assert_all(grid->dummy_z_slab_thickness > 0.0,
-	                       params,
-	                       "TWOD_MODE requires a positive dummy slab thickness.");
-	Cart3d_run_twod_pretests(data_bag);
-	Display_progress(params, "Phase 0 2D configuration and pre-tests passed.\n");
-#else
-	(void)data_bag;
-#endif
-}
 
 
 
@@ -326,7 +121,6 @@ int main(int argc, char **args) {
 	// Timer: contains timing information for the simulation
 	//--------------------------------------------------------------------------
 	data_bag -> timer = Timer_create(grid, params);
-	Cart3d_validate_twod_startup(data_bag);
 
 	/*------------------------------------------------------------------------*/
 	/*
@@ -384,9 +178,9 @@ int main(int argc, char **args) {
 #endif
 
 
-#ifdef VOF
+#ifdef VOF_PLIC
     //--------------------------------------------------------------------------
-	// Create VOF field
+	// Create VOF-PLIC field
 	//--------------------------------------------------------------------------
     data_bag->vof = VoF_create(grid, params);
     Display_progress(params, "Volume Fraction initialized successfully...\n");
@@ -557,13 +351,12 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 	Display_progress(params, "Immersed boundary has been setup successfully\n");
 #endif
 
-#ifndef VOF
 	// Setup the linear system for primitive variables based on the fluid nodes
-	Cart3d_setup_lsys_accounting_geometry(data_bag);
+	//Cart3d_setup_lsys_accounting_geometry(data_bag);
 
 	// Setup linear solver
-	lsolver_transpose_setup(grid, params);
-#endif
+	//lsolver_transpose_setup(grid, params);
+
 
 
 #if defined CONC && defined LAG_PARTICLE_RESOLVED // Scalar is set zero inside particle
@@ -648,10 +441,6 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 	Tend = MPI_Wtime();
 	data_bag->timer->Wtime_init += Tend - Tstart;
 
-#ifdef USE_HYPRE
-	Pressure_hypre_setup(data_bag);
-#endif
-
 
 
 
@@ -700,7 +489,7 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 	Lagrangian_destroy(data_bag->lag, grid, params);
 #endif
 
-#ifdef VOF
+#ifdef VOF_PLIC
     // Destroy Volume Fraction structure
     VOF_destroy(data_bag->vof, grid, params);
     Display_progress(params, "Volume Fraction freed\n");
@@ -733,11 +522,6 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 	}
 
 	Display_progress(params,"data_bag freed\n");
-
-#ifdef USE_HYPRE
-	Pressure_hypre_destroy();
-#endif
-
 	Communication_finalize();
 	printf("Exit here.\n");
 	return 0;
@@ -920,9 +704,7 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 #endif
 
-#ifdef VOF
-	int init_hydrostatic_pressure = 0;
-
+#ifdef VOF_PLIC
     // Initialize VOF field based on init_type
     switch(params->init_type) {
         case 1:  // Advection test case
@@ -941,96 +723,24 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			VoF_init_rising_bubble(data_bag);
             break;
 
-		case 5: // rising multiple bubbles
+		case 5: // rising multiple bubbles 
 			VoF_init_two_bubbles_coaxial(data_bag);
             break;
 
-		case 6:
+		case 6: 
 		    VoF_init_vertical_bilayer_Z(data_bag);
 			break;
-
-		case 7: // droplet on flat surface test case
-			VoF_droplet_flat_plate(data_bag);
-			break;
-
-		case 8: // droplet on sphere test case
-			VoF_init_droplet_on_sphere(data_bag);
-			break;
-		case 9:
-			VoF_init_bilayer_at_4D(data_bag);
-			//Pressure_init_hydrostatic_VOF(data_bag);
-			break;
-
-		case 10:
-			VoF_init_droplet_on_sphere_theta(data_bag);
-			break;
-
-		case 11:
-			VoF_init_all_heavy(data_bag);
-			break;
-
-		case 12:
-			VoF_init_stationary_droplet_Francois(data_bag);
-			break;
-
-		case 13:
-			VoF_init_meniscus_154deg(data_bag);
-			break;
-
-		case 14: // quasi-2D Rayleigh-Taylor instability in the x-y plane
-			VoF_init_rayleigh_taylor_2d(data_bag);
-			init_hydrostatic_pressure = 1;
-			break;
-
-		case 15: // quasi-2D axisymmetric rising bubble using a thin z span
-			VoF_init_axisymmetric_rising_bubble_2d(data_bag);
-			init_hydrostatic_pressure = 1;
-			break;
-
-		case 16: // planar 2D rising-bubble benchmark in x-y, extruded through thin z
-			VoF_init_planar_rising_bubble_2d(data_bag);
-			init_hydrostatic_pressure = 1;
-			break;
-
-
-	    }
-        // update ghost nodes / initialize the active interface representation
-		#ifdef VOF_DIFFUSE
-		VOF_set_boundary_values(data_bag->vof->F, data_bag);
-		VOF_DIFFUSE_init(data_bag);
-		#else
-		VOF_set_boundary_values(data_bag->vof->F, data_bag);
-		#endif
-
-		#ifdef VOF_PLIC
-		// Reconstruct interface (PLIC-specific)
-        VOF_reconstruct_interface(data_bag);
-		#endif
-
-		VOF_update_density_viscosity(data_bag);
-
-		if (init_hydrostatic_pressure) {
-			Pressure_init_hydrostatic_VOF(data_bag);
-		}
-
-		// Bootstrap the balanced-force arrays from the initialized interface
-		#ifdef SURFACE_TENSION
-		#ifdef VOF_DIFFUSE
-		VOF_DIFFUSE_compute_psi_LG(data_bag);
-		VOF_DIFFUSE_compute_f_sigma(data_bag);
-		#else
-		VoF_smoothing(data_bag);
-		curvature_patel(data_bag);
-		VOF_compute_f_sigma(data_bag);
-		#endif
-		// Copy new → old so first substep uses f_σ^0
-		Array_copy_noghost(data_bag->vof->f_sigma_new_x, data_bag->vof->f_sigma_old_x, grid, params);
-		Array_copy_noghost(data_bag->vof->f_sigma_new_y, data_bag->vof->f_sigma_old_y, grid, params);
-		Array_copy_noghost(data_bag->vof->f_sigma_new_z, data_bag->vof->f_sigma_old_z, grid, params);
-		#endif
-
+    }
+    
+        // Set boundary values and update ghost nodes
+        VOF_set_boundary_values(data_bag->vof->F, data_bag);		     
+        VoF_smoothing(data_bag);
+    	curvature_patel(data_bag);
+        
+        // Update mixture properties (density, viscosity)
+        VOF_update_density_viscosity(data_bag);
         Display_progress(params, "VOF initialized successfully...\n");
-
+    
 #endif
 
 

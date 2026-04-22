@@ -27,70 +27,8 @@
 #include <time.h>
 #include <assert.h>
 
-static char ***VOF_DIFFUSE_allocate_char_flow_variable(MAC_grid *grid) {
-    char ***array;
-    char **twodarray, *onedarray;
-    int istart, iend, jstart, jend, kstart, kend;
-    int icount, jcount, kcount;
-    int i, j, k;
 
-    istart = grid->L_Is;
-    iend   = grid->L_Ie - 1;
-    jstart = grid->L_Js;
-    jend   = grid->L_Je - 1;
-    kstart = grid->L_Ks;
-    kend   = grid->L_Ke - 1;
-
-    icount = iend - istart + 1;
-    jcount = jend - jstart + 1;
-    kcount = kend - kstart + 1;
-
-    array = (char ***)malloc(kcount * (sizeof(char **) +
-            jcount * (sizeof(char *) + icount * sizeof(char))));
-    Memory_check_allocation(array);
-
-    twodarray = (char **)(array + kcount);
-    onedarray = (char *)(twodarray + kcount * jcount);
-
-    for (k = 0; k < kcount; k++) {
-        array[k] = &twodarray[k * jcount];
-    }
-
-    for (k = 0; k < kcount; k++) {
-        for (j = 0; j < jcount; j++) {
-            array[k][j] = &onedarray[icount * (k * jcount + j)];
-        }
-    }
-
-    array = array - kstart;
-    for (k = kstart; k <= kend; k++) {
-        array[k] = array[k] - jstart;
-    }
-
-    for (k = kstart; k <= kend; k++) {
-        for (j = jstart; j <= jend; j++) {
-            array[k][j] = array[k][j] - istart;
-        }
-    }
-
-    for (k = kstart; k <= kend; k++) {
-        for (j = jstart; j <= jend; j++) {
-            for (i = istart; i <= iend; i++) {
-                array[k][j][i] = 0;
-            }
-        }
-    }
-
-    return array;
-}
-
-static void VOF_DIFFUSE_free_char_flow_variable(MAC_grid *grid, char ***array) {
-    if (array != NULL) {
-        free(&array[grid->L_Ks]);
-    }
-}
-
-
+#ifdef VOF_PLIC
 
 
 /******************************************************************************/ 
@@ -133,86 +71,6 @@ VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params) {
        These arrays hold data that do not include ghost cells. */
     vof->ng_rhs = Memory_allocate_noghost_variable(grid, params);
 
-    vof->rho_old = Memory_allocate_flow_variable(grid, params);
-    vof->mu_old = Memory_allocate_flow_variable(grid, params);
-    vof->mass_flux_x = Memory_allocate_flow_variable(grid, params);
-    vof->mass_flux_y = Memory_allocate_flow_variable(grid, params);
-    vof->mass_flux_z = Memory_allocate_flow_variable(grid, params);
-
-    #ifdef VOF_DIFFUSE
-    vof->C_L = Memory_allocate_flow_variable(grid, params);
-    vof->C_S = Memory_allocate_flow_variable(grid, params);
-    vof->C_G = Memory_allocate_flow_variable(grid, params);
-
-    vof->psi = Memory_allocate_flow_variable(grid, params);
-    vof->psi_LG = Memory_allocate_flow_variable(grid, params);
-    vof->lap_C = Memory_allocate_flow_variable(grid, params);
-    vof->bulk_S = Memory_allocate_flow_variable(grid, params);
-
-    vof->ch_rhs_n = Memory_allocate_flow_variable(grid, params);
-    vof->ch_rhs_nm1 = Memory_allocate_flow_variable(grid, params);
-
-    vof->ch_aux1 = Memory_allocate_flow_variable(grid, params);
-    vof->ch_aux2 = Memory_allocate_flow_variable(grid, params);
-    vof->ch_res = Memory_allocate_flow_variable(grid, params);
-    vof->ch_dir = Memory_allocate_flow_variable(grid, params);
-
-    vof->mcl_mask = VOF_DIFFUSE_allocate_char_flow_variable(grid);
-    #endif
-
-    vof->f_sigma_old_x = Memory_allocate_noghost_variable(grid, params);
-    vof->f_sigma_old_y = Memory_allocate_noghost_variable(grid, params);
-    vof->f_sigma_old_z = Memory_allocate_noghost_variable(grid, params);
-    vof->f_sigma_new_x = Memory_allocate_noghost_variable(grid, params);
-    vof->f_sigma_new_y = Memory_allocate_noghost_variable(grid, params);
-    vof->f_sigma_new_z = Memory_allocate_noghost_variable(grid, params);
-
-    vof->grad_mag = Memory_allocate_flow_variable(grid, params);
-
-    #ifdef VOF_IBM
-    vof->nx_IBM = Memory_allocate_flow_variable(grid, params);
-    vof->ny_IBM = Memory_allocate_flow_variable(grid, params);
-    vof->nz_IBM = Memory_allocate_flow_variable(grid, params);
-    vof->uE = Memory_allocate_flow_variable(grid, params);
-    vof->vE = Memory_allocate_flow_variable(grid, params);
-    vof->wE = Memory_allocate_flow_variable(grid, params);
-    vof->vfc = Memory_allocate_flow_variable(grid, params);
-    vof->vfc_smooth = Memory_allocate_flow_variable(grid, params);
-    vof->nx_IBM_smooth = Memory_allocate_flow_variable(grid, params);
-    vof->ny_IBM_smooth = Memory_allocate_flow_variable(grid, params);
-    vof->nz_IBM_smooth = Memory_allocate_flow_variable(grid, params);
-    vof->tx    = Memory_allocate_flow_variable(grid, params);
-    vof->ty    = Memory_allocate_flow_variable(grid, params);
-    vof->tz    = Memory_allocate_flow_variable(grid, params);
-
-
-        // CCF force density
-    vof->f_ccf_x = Memory_allocate_flow_variable(grid, params);
-    vof->f_ccf_y = Memory_allocate_flow_variable(grid, params);
-    vof->f_ccf_z = Memory_allocate_flow_variable(grid, params);
-    
-    // Tangent vectors
-    vof->t_int_x = Memory_allocate_flow_variable(grid, params);
-    vof->t_int_y = Memory_allocate_flow_variable(grid, params);
-    vof->t_int_z = Memory_allocate_flow_variable(grid, params);
-    
-    vof->t_cl_x = Memory_allocate_flow_variable(grid, params);
-    vof->t_cl_y = Memory_allocate_flow_variable(grid, params);
-    vof->t_cl_z = Memory_allocate_flow_variable(grid, params);
-
-    vof->fx_IBM = Memory_allocate_flow_variable(grid, params);
-    vof->fy_IBM = Memory_allocate_flow_variable(grid, params);
-    vof->fz_IBM = Memory_allocate_flow_variable(grid, params);
-
-    vof->F_extended = Memory_allocate_flow_variable(grid, params);
-    vof->rhs_extended = Memory_allocate_flow_variable(grid, params);
-    vof->F_prev = Memory_allocate_flow_variable(grid, params);
-    vof->S_gamma = Memory_allocate_flow_variable(grid, params);
-    vof->gamma_extended = Memory_allocate_flow_variable(grid, params);
-    vof->solid_mask = Memory_allocate_flow_variable(grid, params);
-    vof->conv_predictor = Memory_allocate_flow_variable(grid, params);
-    #endif // VOF_IBM
-
     return vof;
 }
 
@@ -246,85 +104,6 @@ void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params) {
 
     /* Free the no-ghost arrays */
     Memory_free_noghost_variable(grid, params, vof->ng_rhs);
-
-    Memory_free_flow_variable(grid, params, vof->rho_old);
-    Memory_free_flow_variable(grid, params, vof->mu_old);
-    Memory_free_flow_variable(grid, params, vof->mass_flux_x);
-    Memory_free_flow_variable(grid, params, vof->mass_flux_y);
-    Memory_free_flow_variable(grid, params, vof->mass_flux_z);
-
-    #ifdef VOF_DIFFUSE
-    Memory_free_flow_variable(grid, params, vof->C_L);
-    Memory_free_flow_variable(grid, params, vof->C_S);
-    Memory_free_flow_variable(grid, params, vof->C_G);
-
-    Memory_free_flow_variable(grid, params, vof->psi);
-    Memory_free_flow_variable(grid, params, vof->psi_LG);
-    Memory_free_flow_variable(grid, params, vof->lap_C);
-    Memory_free_flow_variable(grid, params, vof->bulk_S);
-
-    Memory_free_flow_variable(grid, params, vof->ch_rhs_n);
-    Memory_free_flow_variable(grid, params, vof->ch_rhs_nm1);
-
-    Memory_free_flow_variable(grid, params, vof->ch_aux1);
-    Memory_free_flow_variable(grid, params, vof->ch_aux2);
-    Memory_free_flow_variable(grid, params, vof->ch_res);
-    Memory_free_flow_variable(grid, params, vof->ch_dir);
-
-    VOF_DIFFUSE_free_char_flow_variable(grid, vof->mcl_mask);
-    #endif
-
-    Memory_free_noghost_variable(grid, params, vof->f_sigma_old_x);
-    Memory_free_noghost_variable(grid, params, vof->f_sigma_old_y);
-    Memory_free_noghost_variable(grid, params, vof->f_sigma_old_z);
-    Memory_free_noghost_variable(grid, params, vof->f_sigma_new_x);
-    Memory_free_noghost_variable(grid, params, vof->f_sigma_new_y);
-    Memory_free_noghost_variable(grid, params, vof->f_sigma_new_z);
-
-    Memory_free_flow_variable(grid, params, vof->grad_mag);
-
-    #ifdef VOF_IBM
-    Memory_free_flow_variable(grid, params, vof->nx_IBM);
-    Memory_free_flow_variable(grid, params, vof->ny_IBM);
-    Memory_free_flow_variable(grid, params, vof->nz_IBM);
-    Memory_free_flow_variable(grid, params, vof->nx_IBM_smooth);
-    Memory_free_flow_variable(grid, params, vof->ny_IBM_smooth);
-    Memory_free_flow_variable(grid, params, vof->nz_IBM_smooth);
-    Memory_free_flow_variable(grid, params, vof->uE);
-    Memory_free_flow_variable(grid, params, vof->vE);
-    Memory_free_flow_variable(grid, params, vof->wE);
-    Memory_free_flow_variable(grid, params, vof->vfc);
-    Memory_free_flow_variable(grid, params, vof->vfc_smooth);
-    Memory_free_flow_variable(grid, params, vof->tx);
-    Memory_free_flow_variable(grid, params, vof->ty);
-    Memory_free_flow_variable(grid, params, vof->tz);
-
-    Memory_free_flow_variable(grid, params, vof->f_ccf_x);
-    Memory_free_flow_variable(grid, params, vof->f_ccf_y);
-    Memory_free_flow_variable(grid, params, vof->f_ccf_z);
-
-    Memory_free_flow_variable(grid, params, vof->t_int_x);
-    Memory_free_flow_variable(grid, params, vof->t_int_y);
-    Memory_free_flow_variable(grid, params, vof->t_int_z);
-
-    Memory_free_flow_variable(grid, params, vof->t_cl_x);
-    Memory_free_flow_variable(grid, params, vof->t_cl_y);
-    Memory_free_flow_variable(grid, params, vof->t_cl_z);
-
-    Memory_free_flow_variable(grid, params, vof->fx_IBM);
-    Memory_free_flow_variable(grid, params, vof->fy_IBM);
-    Memory_free_flow_variable(grid, params, vof->fz_IBM);
-
-
-    Memory_free_flow_variable(grid, params, vof->F_prev);
-    Memory_free_flow_variable(grid, params, vof->F_extended);
-    Memory_free_flow_variable(grid, params, vof->rhs_extended);
-    Memory_free_flow_variable(grid, params, vof->S_gamma);
-    Memory_free_flow_variable(grid, params, vof->gamma_extended);
-    Memory_free_flow_variable(grid, params, vof->solid_mask);
-    Memory_free_flow_variable(grid, params, vof->conv_predictor);
-    #endif
-
 
     /* Finally, free the structure itself */
     free(vof);
@@ -384,13 +163,12 @@ void VOF_reconstruct_interface(Cart3d_bag *data_bag)
         for (int i = Is; i < Ie; i++) {             // Loop over x (width)
           double cval = F[k][j][i];
           // If cell is empty or full => normal=0, alpha=0
-            double EPS_VOF = 1e-6;  // or even 1e-10; tune to taste
-            if (cval <= EPS_VOF || cval >= (1.0 - EPS_VOF)) {
-                nx[k][j][i] = 0.0;
-                ny[k][j][i] = 0.0;
-                nz[k][j][i] = 0.0;
-                alpha[k][j][i] = 0.0;
-            }
+          if (cval <= 0.0 || cval >= 1.0) {
+            nx[k][j][i] = 0.0;
+            ny[k][j][i] = 0.0;
+            nz[k][j][i] = 0.0;
+            alpha[k][j][i] = 0.0;
+          }
           else {
             // 1) compute normal => mycs3D(...) 
             //    (requires ghost cells or boundary checks)
@@ -409,10 +187,9 @@ void VOF_reconstruct_interface(Cart3d_bag *data_bag)
         }
       }
     }
-    VOF_set_boundary_values_normal_vector(vof->normal_x,
-                                         vof->normal_y,
-                                         vof->normal_z,
-                                         data_bag);
+    VOF_set_boundary_values(vof->normal_x, data_bag);
+    VOF_set_boundary_values(vof->normal_y, data_bag);
+    VOF_set_boundary_values(vof->normal_z, data_bag);
     VOF_set_boundary_values(vof->alpha, data_bag);
 }
 
@@ -1340,6 +1117,20 @@ PointType mycs2D(double **c, int i, int j)
     return n;
 }
 
+/******************************************************************************
+ * mycs3D
+ *
+ * Computes a 3D interface normal using a Mixed Youngs and Central (MYC)
+ * scheme. This replicates Basilisk's myc3d.h logic, referencing local
+ * volume-fraction values around (i,j,k).
+ *
+ * Inputs:
+ *   c     - 3D array of volume fractions, e.g. c[x][y][z]
+ *   i, j, k  - current cell indices
+ *
+ * Returns:
+ *   A PointType representing the 3D normal (n.x, n.y, n.z).
+ ******************************************************************************/
 
 /****************************************************************************** 
  * mycs3D
@@ -2312,3 +2103,7 @@ double VOF_InterfaceArea_3D(Cart3d_bag *data_bag)
     return area;
 }
 
+
+
+
+#endif // VOF_PLIC

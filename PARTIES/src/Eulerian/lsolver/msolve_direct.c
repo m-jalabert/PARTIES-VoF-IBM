@@ -192,7 +192,7 @@ int Velocity_solve_explicit(Velocity *vel, Cart3d_bag *data_bag) {
 	double ***rhs = vel -> ng_rhs;
 	double ***vel_data = vel -> data;
 
-	#ifdef VOF
+	#ifdef VOF_PLIC
 		VolumeFraction *vof = data_bag->vof;
 		double ***rho       = vof->rho;   // cell-centered current density (rho^k)
 	#endif
@@ -200,19 +200,18 @@ int Velocity_solve_explicit(Velocity *vel, Cart3d_bag *data_bag) {
 	for (k = Ks; k < Ke; k++) {
 		for (j = Js; j < Je; j++) {
 			for (i = Is; i < Ie; i++) {
-				#ifndef VOF
+				#ifndef VOF_PLIC
 
 								/* Original constant-density behavior */
 								vel_data[k][j][i] = rhs[k][j][i] * dtimeb;
 
 				#else
-								/*
+								/* 
 								* Variable-density correction:
-								* the stage solve is assembled with the current/stage density rho^k
-								* on both the implicit left-hand side and the time term in the RHS.
-								* After multiplying by dtimeb = beta_k * dt, the solve returns a
-								* stage velocity, so we divide by the current face density only when
-								* the explicit direct path is used.
+								* rhs is interpreted as (1 / (alpha_k * dt)) * (rho^k u^* - rho^{k-1} u^{k-1}) + ...
+								* After multiplying by dtimeb = beta_k * dt, we have something proportional
+								* to rho^k u^*. To recover u^*, we must divide by the current density
+								* at the velocity location (face).
 								*/
 
 								double rho_face = 1.0;

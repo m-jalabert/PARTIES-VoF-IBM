@@ -151,39 +151,17 @@
      Output_h5_flow_variable(smag->IMM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  #endif
  
-#ifdef VOF
+ #ifdef VOF_PLIC
      //--------------------------------------------------------------------------
      // VOF data (necessary for resuming)
      //--------------------------------------------------------------------------
      VolumeFraction *vof = data_bag->vof;
-
+     
      sprintf(fieldname, "%s/F", groupname);
      Output_h5_flow_variable(vof->F, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     #ifdef VOF_DIFFUSE
-     sprintf(fieldname, "%s/C_L", groupname);
-     Output_h5_flow_variable(vof->C_L, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/C_S", groupname);
-     Output_h5_flow_variable(vof->C_S, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/ch_rhs_n", groupname);
-     Output_h5_flow_variable(vof->ch_rhs_n, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/ch_rhs_nm1", groupname);
-     Output_h5_flow_variable(vof->ch_rhs_nm1, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/rho_old", groupname);
-     Output_h5_flow_variable(vof->rho_old, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/mu_old", groupname);
-     Output_h5_flow_variable(vof->mu_old, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-     #endif
-
-     #ifdef VOF_PLIC
+     
      sprintf(fieldname, "%s/alpha", groupname);
      Output_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-     #endif
 
      // Write mu
      sprintf(fieldname, "%s/mu", groupname);
@@ -192,35 +170,30 @@
      // Write rho
      sprintf(fieldname, "%s/rho", groupname);
      Output_h5_flow_variable(vof->rho, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     // Write flux x
+ 
+     // Write flux x 
      sprintf(fieldname, "%s/flux_x", groupname);
      Output_h5_flow_variable(vof->flux_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
+ 
      // Write flux y
      sprintf(fieldname, "%s/flux_y", groupname);
      Output_h5_flow_variable(vof->flux_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
+ 
      // Write flux z
      sprintf(fieldname, "%s/flux_z", groupname);
      Output_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
+     
      sprintf(fieldname, "%s/normal_x", groupname);
      Output_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
+     
      sprintf(fieldname, "%s/normal_y", groupname);
      Output_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
+     
      sprintf(fieldname, "%s/normal_z", groupname);
      Output_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
 #ifdef SURFACE_TENSION
-     #ifdef VOF_DIFFUSE
-     sprintf(fieldname, "%s/psi_LG", groupname);
-     Output_h5_flow_variable(vof->psi_LG, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-     #endif
 
-     #ifdef VOF_PLIC
      sprintf(fieldname, "%s/kappa", groupname);
      Output_h5_flow_variable(vof->kappa, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
@@ -233,21 +206,11 @@
      sprintf(fieldname, "%s/normal_y_smooth", groupname);
      Output_h5_flow_variable(vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-       sprintf(fieldname, "%s/normal_z_smooth", groupname);
-       Output_h5_flow_variable(vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-    #endif
-    
-       sprintf(fieldname, "%s/f_sigma_old_x", groupname);
-       Output_h5_noghost_variable(vof->f_sigma_old_x, file_id, fieldname, grid, params, DTRACE("Output_h5_noghost_variable"));
-
-       sprintf(fieldname, "%s/f_sigma_old_y", groupname);
-       Output_h5_noghost_variable(vof->f_sigma_old_y, file_id, fieldname, grid, params, DTRACE("Output_h5_noghost_variable"));
-
-       sprintf(fieldname, "%s/f_sigma_old_z", groupname);
-       Output_h5_noghost_variable(vof->f_sigma_old_z, file_id, fieldname, grid, params, DTRACE("Output_h5_noghost_variable"));
+     sprintf(fieldname, "%s/normal_z_smooth", groupname);
+     Output_h5_flow_variable(vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
  #endif // SURFACE_TENSION
- #endif // VOF
+ #endif // VOF PLIC
  
      //--------------------------------------------------------------------------
      // Close HDF5 file handles
@@ -485,78 +448,47 @@
      } // end for iconc
  #endif
  
- #ifdef VOF
+ #ifdef VOF_PLIC
      //--------------------------------------------------------------------------
      // VOF data
      //--------------------------------------------------------------------------
      sprintf(groupname, "/VOF");
      Output_h5_create_group(file_id, groupname, params, DTRACE("Output_h5_create_group"));
-
+ 
      if (verbose) Display_progress(params, "Output.c: write VOF data\n");
-
+ 
      VolumeFraction *vof = data_bag->vof;
-
+ 
      // Write volume fraction F
      sprintf(fieldname, "%s/F", groupname);
      Output_h5_flow_variable(vof->F, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-     #ifdef VOF_DIFFUSE
-     sprintf(fieldname, "%s/C_L", groupname);
-     Output_h5_flow_variable(vof->C_L, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/C_S", groupname);
-     Output_h5_flow_variable(vof->C_S, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/C_G", groupname);
-     Output_h5_flow_variable(vof->C_G, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/psi", groupname);
-     Output_h5_flow_variable(vof->psi, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/psi_LG", groupname);
-     Output_h5_flow_variable(vof->psi_LG, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/lap_C", groupname);
-     Output_h5_flow_variable(vof->lap_C, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/bulk_S", groupname);
-     Output_h5_flow_variable(vof->bulk_S, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/ch_rhs_n", groupname);
-     Output_h5_flow_variable(vof->ch_rhs_n, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     sprintf(fieldname, "%s/ch_rhs_nm1", groupname);
-     Output_h5_flow_variable(vof->ch_rhs_nm1, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-     #endif
-
-
-     // Write interface normals (PLIC reconstruction normals, or CICSAM gradient)
+ 
+     // Write interface normals
       sprintf(fieldname, "%s/normal_x", groupname);
       Output_h5_flow_variable(vof->normal_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
+ 
       sprintf(fieldname, "%s/normal_y", groupname);
       Output_h5_flow_variable(vof->normal_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
+ 
       sprintf(fieldname, "%s/normal_z", groupname);
       Output_h5_flow_variable(vof->normal_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-     #ifdef VOF_PLIC
-     //Write plane intercept alpha
+ 
+     // Write plane intercept alpha
      sprintf(fieldname, "%s/alpha", groupname);
      Output_h5_flow_variable(vof->alpha, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-     #endif
  
      // Write flux x 
-    //  sprintf(fieldname, "%s/flux_x", groupname);
-    //  Output_h5_flow_variable(vof->flux_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+     sprintf(fieldname, "%s/flux_x", groupname);
+     Output_h5_flow_variable(vof->flux_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  
-    //  // Write flux y
-    //  sprintf(fieldname, "%s/flux_y", groupname);
-    //  Output_h5_flow_variable(vof->flux_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+     // Write flux y
+     sprintf(fieldname, "%s/flux_y", groupname);
+     Output_h5_flow_variable(vof->flux_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  
-    //  // Write flux z
-    //  sprintf(fieldname, "%s/flux_z", groupname);
-    //  Output_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+     // Write flux z
+     sprintf(fieldname, "%s/flux_z", groupname);
+     Output_h5_flow_variable(vof->flux_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  
      // Write mixture density
      sprintf(fieldname, "%s/rho", groupname);
@@ -568,18 +500,7 @@
 
 #ifdef SURFACE_TENSION
 
-     #ifdef VOF_DIFFUSE
-     sprintf(fieldname, "%s/f_sigma_old_x", groupname);
-     Output_h5_noghost_variable(vof->f_sigma_old_x, file_id, fieldname, grid, params, DTRACE("Output_h5_noghost_variable"));
-
-     sprintf(fieldname, "%s/f_sigma_old_y", groupname);
-     Output_h5_noghost_variable(vof->f_sigma_old_y, file_id, fieldname, grid, params, DTRACE("Output_h5_noghost_variable"));
-
-     sprintf(fieldname, "%s/f_sigma_old_z", groupname);
-     Output_h5_noghost_variable(vof->f_sigma_old_z, file_id, fieldname, grid, params, DTRACE("Output_h5_noghost_variable"));
-     #endif
-
-     #ifdef VOF_PLIC 
+      
      // Write curvature kappa
      sprintf(fieldname, "%s/kappa", groupname);
      Output_h5_flow_variable(vof->kappa, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
@@ -588,86 +509,20 @@
      sprintf(fieldname, "%s/F_smooth", groupname);
      Output_h5_flow_variable(vof->F_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-           // Write interface normals
-       sprintf(fieldname, "%s/normal_x_smooth", groupname);
-       Output_h5_flow_variable(vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+          // Write interface normals
+      sprintf(fieldname, "%s/normal_x_smooth", groupname);
+      Output_h5_flow_variable(vof->normal_x_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  
-       sprintf(fieldname, "%s/normal_y_smooth", groupname);
-       Output_h5_flow_variable(vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+      sprintf(fieldname, "%s/normal_y_smooth", groupname);
+      Output_h5_flow_variable(vof->normal_y_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
  
-       sprintf(fieldname, "%s/normal_z_smooth", groupname);
-       Output_h5_flow_variable(vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+      sprintf(fieldname, "%s/normal_z_smooth", groupname);
+      Output_h5_flow_variable(vof->normal_z_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-     #endif
  #endif // SURFACE TENSION 
-
-#ifdef VOF_IBM
-
-       sprintf(fieldname, "%s/nx_IBM", groupname);
-       Output_h5_flow_variable(vof->nx_IBM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/ny_IBM", groupname);
-       Output_h5_flow_variable(vof->ny_IBM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/nz_IBM", groupname);
-       Output_h5_flow_variable(vof->nz_IBM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-    //    sprintf(fieldname, "%s/nx_IBM_smooth", groupname);
-    //    Output_h5_flow_variable(vof->nx_IBM_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-    //    sprintf(fieldname, "%s/ny_IBM_smooth", groupname);
-    //    Output_h5_flow_variable(vof->ny_IBM_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-    //    sprintf(fieldname, "%s/nz_IBM_smooth", groupname);
-    //    Output_h5_flow_variable(vof->nz_IBM_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-    //    sprintf(fieldname, "%s/tx", groupname);
-    //    Output_h5_flow_variable(vof->tx, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-    //    sprintf(fieldname, "%s/ty", groupname);
-    //    Output_h5_flow_variable(vof->ty, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-    //    sprintf(fieldname, "%s/tz", groupname);
-    //    Output_h5_flow_variable(vof->tz, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/uE", groupname);
-       Output_h5_flow_variable(vof->uE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/vE", groupname);
-       Output_h5_flow_variable(vof->vE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/wE", groupname);
-       Output_h5_flow_variable(vof->wE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/fx_IBM", groupname);
-       Output_h5_flow_variable(vof->fx_IBM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/fy_IBM", groupname);
-       Output_h5_flow_variable(vof->fy_IBM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/fz_IBM", groupname);
-       Output_h5_flow_variable(vof->fz_IBM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/f_ccf_x", groupname);
-       Output_h5_flow_variable(vof->f_ccf_x, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/f_ccf_y", groupname);
-       Output_h5_flow_variable(vof->f_ccf_y, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/f_ccf_z", groupname);
-       Output_h5_flow_variable(vof->f_ccf_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/vfc", groupname);
-       Output_h5_flow_variable(vof->vfc, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-       sprintf(fieldname, "%s/vfc_smooth", groupname);
-       Output_h5_flow_variable(vof->vfc_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
-
-#endif
-
- #endif // VOF
-
-
+ #endif // VOF_PLIC
+ 
+ 
  #if defined LAG_PARTICLE_RESOLVED
  
      if (verbose) Display_progress(params,"Output.c: write volume fraction\n");
