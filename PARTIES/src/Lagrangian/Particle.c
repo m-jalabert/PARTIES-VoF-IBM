@@ -238,6 +238,9 @@ void Particle_initialize(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	MPI_Allreduce(&N_L_max_local, &N_L_max, 1, MPI_INT, MPI_MAX, PCW);
 	lag -> Temp_L = Memory_allocate_1D_array(GVG_DOUBLE, N_L_max);
 	lag -> Temp_H = Memory_allocate_1D_array(GVG_DOUBLE, N_L_max);
+	#ifdef VOF_IBM
+	lag -> Temp_L_rho = Memory_allocate_1D_array(GVG_DOUBLE, N_L_max);
+	#endif
 
 
 }
@@ -321,6 +324,10 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Interpolate_add_to_volume_fraction('u', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('v', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('w', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	#ifdef VOF_IBM
+	Interpolate_add_to_volume_fraction('c', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	#endif
+
 	Particle_list_remove(p_fixed_list, FOREIGN, grid, params, DTRACE("Particle_list_remove"));
 
 	// Create linked list of foreign particles
@@ -335,9 +342,41 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	p = p_mobile_list -> start;
 	while (p != NULL) {
 
-		FORI3 p->U[i]     = p->Int_U[i] * p->rho_s / p->M;
-		FORI3 p->Omega[i] = p->Int_Omega[i] * p->rho_s / p->I_p;
+	    #ifdef VOF_IBM
+			// 1. Calculate equilibrium velocity from fluid (likely ~0.0 if quiescent)
+			FORI3 {
+				if (p->Int_rho[i] > 1e-12) {
+					p->U[i]     = p->Int_U[i] / p->Int_rho[i];
+					p->Omega[i] = p->Int_Omega[i] / p->Int_rho[i];
+				} else {
+					p->U[i]     = 0.0;
+					p->Omega[i] = 0.0;
+				}
+			}
+	    #else
+	        // Single-phase: use solid density
+	        FORI3 p->U[i]     = p->Int_U[i] * p->rho_s / p->M;
+	        FORI3 p->Omega[i] = p->Int_Omega[i] * p->rho_s / p->I_p;
+	    #endif
 
+		// ---------------------------------------------------------------------
+		// NEW FIX: Enforce Startup Velocity BEFORE setting U_old
+		// This prevents the "Cold Start Shock" (acceleration from 0 to -1 in 1 step)
+		// ---------------------------------------------------------------------
+		#ifdef VOF_IBM
+		#ifdef STARTUP
+			// Check if startup is active and mode is time-based (standard release)
+			if (params->startup_flag && params->startup_init == STUP_INIT_TIME) {
+				FORI3 p->U[i]     = params->startup_velocity[i];
+				FORI3 p->Omega[i] = 0.0; // Assume zero rotation for impact
+			}
+		#endif
+		#endif
+		// ---------------------------------------------------------------------
+
+		// Now set U_old. Since p->U is now correctly -1.0 (if startup is on),
+		// U_old will also be -1.0. 
+		// Acceleration = (U - U_old)/dt = 0. No unphysical shock.
 		FORI3 p->U_old[i]     = p->U[i];
 		FORI3 p->Omega_old[i] = p->Omega[i];
 
@@ -386,6 +425,10 @@ void Particle_initialize_volume_fraction(Cart3d_bag *data_bag, Debug_trace *dtra
 	Interpolate_add_to_volume_fraction('v', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('w', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 
+	#ifdef VOF_IBM
+	Interpolate_add_to_volume_fraction('c', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	#endif
+
 	Particle_list_remove(p_mobile_list, FOREIGN, grid, params, DTRACE("Particle_MPI_update"));
 	Particle_list_remove(p_fixed_list, FOREIGN, grid, params, DTRACE("Particle_MPI_update"));
 }
@@ -419,6 +462,13 @@ void Particle_initialize_nonessential_data(Particle *p) {
 	DSET_ZERO(p->T_rigid, 3);
 	DSET_ZERO(p->F_coll, 3);
 	DSET_ZERO(p->T_coll, 3);
+
+	#ifdef VOF_IBM
+		DSET_ZERO(p->F_CCF, 3);
+		DSET_ZERO(p->T_CCF, 3);
+		DSET_ZERO(p->F_CCF_cum, 3);
+		DSET_ZERO(p->T_CCF_cum, 3);
+	#endif
 
 
 #ifdef POST_PROCESS

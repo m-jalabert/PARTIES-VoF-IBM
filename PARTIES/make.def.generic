@@ -10,12 +10,13 @@ compiler_cmd :=mpicc
 cflags      +=
 optmz_flags := -O3
 debug_flags := -g
-libs        += -lm -ldl -lfftw3 -lhdf5
+libs        += -lm -ldl -lfftw3 -lhdf5 -lHYPRE
 
 # Location of packages
 fftw_dir:=$(HOME)/Software/PARTIES_Libs
-hdf5_dir:=$(HOME)/Software/PARTIES_Libs
-mpi_dir :=$(HOME)/Software/PARTIES_Libs
+hdf5_dir:=
+mpi_dir :=
+hypre_dir:=$(HOME)/Software/hypre_install
 
 # FFTW
 ifneq ($(strip $(fftw_dir)),) # If not empty
@@ -31,10 +32,17 @@ ifneq ($(strip $(hdf5_dir)),) # If not empty
   includes += -I$(hdf5_dir)/include
 endif
 
+# HYPRE
+ifneq ($(strip $(hypre_dir)),) # If not empty
+  lflags += -L$(hypre_dir)/lib
+  libs += -Wl,-rpath=$(hypre_dir)/lib
+  includes += -I$(hypre_dir)/include
+endif
+
 # MPI
 ifneq ($(strip $(mpi_dir)),) # If not empty
-  lflags += -L$(mpi_dir)/lib/openmpi
-  libs += -Wl,-rpath=$(mpi_dir)/lib/openmpi
+  lflags += -L$(mpi_dir)/lib
+  libs += -Wl,-rpath=$(mpi_dir)/lib
   includes += -I$(mpi_dir)/include
   compiler := $(mpi_dir)/bin/$(compiler_cmd)
 else

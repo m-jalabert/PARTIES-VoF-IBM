@@ -38,7 +38,8 @@
 #include "post_processing.h"
 #include "EPforcing.h"
 #include "VolumeFraction.h"
-#include <math.h>  
+#include "VOF-CICSAM.h"
+#include <math.h>
 
 
 #define TIMEFILE "timesteps.dat"
@@ -570,7 +571,7 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Velocity *w = data_bag -> w;
 	Pressure *p = data_bag -> p;
 
-#ifdef VOF_PLIC
+#ifdef VOF
 	VolumeFraction *vof = data_bag -> vof;
 #endif
 
@@ -670,35 +671,67 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Viscosity_set_cell_edges(data_bag);
 #endif
 
+#ifdef LAG_PARTICLE_RESOLVED
+	Particle_MPI_update(p_mobile_list, data_bag, DTRACE("Particle_MPI_update"));
+	Particle_MPI_update(p_fixed_list, data_bag, DTRACE("Particle_MPI_update"));
+	Lagrangian_flag_points(data_bag, DTRACE("Lagrangian_flag_points"));  // New Langragian points are calculated
 
+	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfc);
+	Interpolate_add_to_volume_fraction('c', data_bag->lag->p_mobile_list,
+	data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('c', data_bag->lag->p_fixed_list,
+	data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 
-	/*------------------------------------------------------------------------*/
-	/*
-	 VoF-PLIC method
-	 */
-	/*------------------------------------------------------------------------*/
- #ifdef VOF_PLIC
+#endif
 
-		int rank = data_bag->params->rank; // if you want the MPI rank
-         // Boundary conditions for F
-         VOF_set_boundary_values(vof->F, data_bag);
+#ifdef VOF
 
-         // Reconstruct interface
-         VOF_reconstruct_interface(data_bag);
+    int rank = data_bag->params->rank;
 
-         // Geometry-based flux computation and RK update
-         VOF_set_advection(data_bag);
-         VOF_update_F(data_bag);
+	#ifdef VOF_IBM
+            VOF_normals_IBM(data_bag);
+            Vfc_smoothing(data_bag);
+    #endif
 
-		 VOF_set_boundary_values(vof->F, data_bag);
+    /* ── VOF advection: method-specific branch ────────────────────────── */
+    #ifdef VOF_PLIC
 
-         // Reconstruct again with the new F
-         VOF_reconstruct_interface(data_bag);
+        // 1) Reconstruct interface (normals + alpha)
+        VOF_reconstruct_interface(data_bag);
 
-         // If using mixture laws for density/viscosity
-		 VOF_update_density_viscosity(data_bag);
+        // 2) Geometry-based flux computation
+        VOF_set_advection(data_bag);
 
- #endif 
+    #elif defined VOF_DIFFUSE
+		#ifdef VOF_IBM
+		VOF_DIFFUSE_compute_C_S(data_bag);
+        VOF_DIFFUSE_apply_contact_angle(data_bag);
+		#endif
+        VOF_DIFFUSE_set_boundary_values(vof->C_L, data_bag);
+        VOF_DIFFUSE_step(data_bag);
+
+    #endif /* advection method */
+
+    // 3) RK stage update of F
+    #ifdef VOF_PLIC
+    VOF_update_F(data_bag);
+    #endif
+
+    #if defined VOF_IBM && defined SURFACE_TENSION
+    #ifdef VOF_PLIC
+        VOF_extend(data_bag);
+    #endif
+    #endif
+
+    #ifdef VOF_PLIC
+    // 4) Reconstruct interface after update (ready for surface tension)
+    VOF_reconstruct_interface(data_bag);
+    #endif
+
+    // 5) Update density/viscosity
+    VOF_update_density_viscosity(data_bag);
+
+#endif /* VOF */
 
 	/*------------------------------------------------------------------------*/
 	/*
@@ -727,6 +760,13 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	 momentum equation
 	 */
 	/*------------------------------------------------------------------------*/
+
+
+	#ifdef VOF_PLIC
+	/* Compute Bussmann-consistent face momentum-flux density arrays */
+	VOF_compute_conservative_momentum_fluxes(data_bag);
+	#endif
+
 	T1 = MPI_Wtime();
 	Velocity_u_set_implicit_explicit(data_bag);
 	Velocity_v_set_implicit_explicit(data_bag);
@@ -743,22 +783,7 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 
 
-#ifdef LAG_PARTICLE_RESOLVED
-	Particle_MPI_update(p_mobile_list, data_bag, DTRACE("Particle_MPI_update"));
-	Particle_MPI_update(p_fixed_list, data_bag, DTRACE("Particle_MPI_update"));
-	Lagrangian_flag_points(data_bag, DTRACE("Lagrangian_flag_points"));  // New Langragian points are calculated
 
-
-	#ifdef IBM_SCALAR
-		Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfc);
-		Interpolate_add_to_volume_fraction('c', data_bag->lag->p_mobile_list,
-		data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
-		Interpolate_add_to_volume_fraction('c', data_bag->lag->p_fixed_list,
-		data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
-
-
-	#endif
-#endif
 
 
 
@@ -875,17 +900,23 @@ if(which_stage == 0){
 
 #ifdef SURFACE_TENSION
 
+	#ifdef VOF_DIFFUSE
+	VOF_DIFFUSE_compute_psi_LG(data_bag);
+	VOF_DIFFUSE_compute_f_sigma(data_bag);
+	VOF_apply_f_sigma_old(data_bag);
+
+	#else
+
     // /* Smooth VOF*/
      VoF_smoothing(data_bag);
-
 
     // /*  Reconstruct interface curvature */
      curvature_patel(data_bag);
 
+    VOF_compute_f_sigma(data_bag);     // compute f_σ^k → f_sigma_new  (from F^k)
+    VOF_apply_f_sigma_old(data_bag);   // add   f_σ^{k-1} → RHS        (balances ∇p^{k-1})
 
-    // /*  Add surface‐tension RHS 
-     Velocity_add_surfacetension_2_RHS_patel(data_bag);
-
+	#endif
 
 #endif
 
@@ -994,7 +1025,6 @@ if(which_stage == 0){
 	#endif
 
 
-
 	/*------------------------------------------------------------------------*/
 	/*
 	 Immersed boundary stuff
@@ -1017,6 +1047,7 @@ if(which_stage == 0){
 
 		// Prepare and solve for pressure correction
 		T1 = MPI_Wtime();
+		Memory_reset_flow_variable(grid, params, p->deltap);
 		Pressure_set_RHS(data_bag);
 		T2 = MPI_Wtime();
 
@@ -1025,9 +1056,15 @@ if(which_stage == 0){
 
 		T1 = MPI_Wtime();
 
-#ifdef VOF_PLIC // Pressure solved with CG method for VOF
+#ifdef VOF // Pressure solved with CG method for VOF
+
+	#ifdef USE_HYPRE
+		Pressure_solve_hypre(data_bag);
+	#else
 		Pressure_compute_preconditioner(data_bag);
 		Pressure_solve_cg(data_bag);
+	#endif
+
 #else
 		Pressure_solve(p, grid, params);
 #endif
@@ -1062,6 +1099,11 @@ if(which_stage == 0){
 		}
 
 	} while (G_div_max > 1e-6);
+
+	// NEW: advance balanced-force arrays for next substep
+    #ifdef SURFACE_TENSION
+    VOF_swap_f_sigma(data_bag);
+    #endif
 
 
 #ifdef VOF_SCALAR
@@ -1148,12 +1190,28 @@ if(which_stage == 0){
 			while (p != NULL) {
 				DSET_ZERO(p->Int_U, 3);
 				DSET_ZERO(p->Int_Omega, 3);
+				#ifdef VOF_IBM
+					DSET_ZERO(p->Int_rho, 3);
+					p->Int_rho_scalar = 0.0;     
+					DSET_ZERO(p->F_CCF, 3);
+					DSET_ZERO(p->T_CCF, 3);
+					DSET_ZERO(p->F_CSF_solid, 3);  
+                    DSET_ZERO(p->T_CSF_solid, 3);  
+				#endif
 				p = p -> next;
 			}
 			p = p_fixed_list -> start;
 			while (p != NULL) {
 				DSET_ZERO(p->Int_U, 3);
 				DSET_ZERO(p->Int_Omega, 3);
+				#ifdef VOF_IBM
+					 DSET_ZERO(p->Int_rho, 3);   
+					 p->Int_rho_scalar = 0.0;    
+					 DSET_ZERO(p->F_CCF, 3);
+					 DSET_ZERO(p->T_CCF, 3);  
+					 DSET_ZERO(p->F_CSF_solid, 3);  
+                     DSET_ZERO(p->T_CSF_solid, 3); 
+				#endif
 				p = p -> next;
 			}
 		}
@@ -1215,6 +1273,5 @@ if(which_stage == 0){
 		} // end of else
 
 }	// end of function
-
 
 

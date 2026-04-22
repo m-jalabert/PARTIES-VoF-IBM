@@ -15,6 +15,8 @@
 #include "Memory.h"
 #include "Particle.h"
 #include "Rotate.h"
+#include "VolumeFraction.h"
+#include "VOF-CICSAM.h"
 
 #include "qr_solve.h"
 #include "r8lib.h"
@@ -144,6 +146,9 @@ void Lagrangian_destroy(Lagrangian *lag, MAC_grid *grid, Parameters *params) {
 	Memory_free_noghost_variable(grid, params, lag -> ng_temp);
 	free(lag -> Temp_L);
 	free(lag -> Temp_H);
+	#ifdef VOF_IBM
+	free(lag -> Temp_L_rho);
+	#endif
 
 
 #ifdef POST_PROCESS
@@ -273,6 +278,45 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 	Display_assert_list_state(p_mobile_list, LIST_STATE_BOTH, params, DTRACE("Display_assert_list_state"));
 	Display_assert_list_state(p_fixed_list, LIST_STATE_BOTH, params, DTRACE("Display_assert_list_state"));
 
+	#ifdef VOF_IBM
+	//==========================================================================
+    // 0. Compute Capillary Forces (CCF)
+    //==========================================================================
+    // We do this BEFORE collecting forces so that the CCF force calculated
+    // on each processor is added to the local particle copy, then summed globally.
+
+    // Loop over mobile particles
+    p = p_mobile_list -> start;
+    while (p != NULL) {
+        // Calculate CCF for this particle
+        VOF_accumulate_solid_capillary_force(p, data_bag);
+        p = p -> next;
+    }
+
+    // Loop over fixed particles (if they interact with capillary interface)
+    p = p_fixed_list -> start;
+    while (p != NULL) {
+         VOF_accumulate_solid_capillary_force(p, data_bag);
+         p = p -> next;
+    }
+
+
+
+	//     // Compute spurious CSF force inside solid (to be subtracted)
+    // {
+    //     Particle *p = p_mobile_list->start;
+    //     while (p != NULL) {
+    //         VOF_integrate_CSF_over_solid(p, data_bag);
+    //         p = p->next;
+    //     }
+    //     p = p_fixed_list->start;
+    //     while (p != NULL) {
+    //         VOF_integrate_CSF_over_solid(p, data_bag);
+    //         p = p->next;
+    //     }
+    // }
+	#endif
+
 	//--------------------------------------------------------------------------
 	// Collect hydrodynamic forces
 	//--------------------------------------------------------------------------
@@ -312,6 +356,46 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 		F_rigid = p -> F_rigid;
 		T_rigid = p -> T_rigid;
 
+
+		/* ======================================================================
+		 * SYMMETRY CORRECTION FOR HALF-DOMAIN
+		 * ====================================================================== 
+		 * By applying this to the raw single-stage variables at the very top,
+		 * ALL downstream variables (F_IBM, F_CCF_cum, F_rigid) automatically 
+		 * inherit the correct full-domain values without RK compounding errors!
+		 * ====================================================================== */
+		#ifdef LEFT_WALL_VELOCITY_FREESLIP
+			// 1. Hydrodynamic Forces & Torques (from Lagrangian_collect_forces)
+			F[0] = 0.0;         // Normal force cancels out exactly
+			F[1] *= 2.0;        // Tangential drag is doubled
+			F[2] *= 2.0;        // Tangential lateral force is doubled
+
+			T[0] *= 2.0;        // Normal torque (rotation in Y-Z plane) is doubled
+			T[1] = 0.0;         // Tangential torque cancels out exactly
+			T[2] = 0.0;         // Tangential torque cancels out exactly
+
+			// 2. Rigid Body Velocity Integrals (from fluid velocity inside particle)
+			Int_U[0] = 0.0;     
+			Int_U[1] *= 2.0;    
+			Int_U[2] *= 2.0;    
+
+			Int_Omega[0] *= 2.0; 
+			Int_Omega[1] = 0.0;  
+			Int_Omega[2] = 0.0;  
+
+			#ifdef VOF_IBM
+			// 3. Capillary Forces & Torques (from VOF_accumulate_solid_capillary_force)
+			p->F_CCF[0] = 0.0;  
+			p->F_CCF[1] *= 2.0; 
+			p->F_CCF[2] *= 2.0; 
+
+			p->T_CCF[0] *= 2.0; 
+			p->T_CCF[1] = 0.0;  
+			p->T_CCF[2] = 0.0;  
+			#endif
+		#endif
+		/* ====================================================================== */
+
 		#ifdef FORCES_DAT_OLD
 			// Output fluid forces
 			if (params->Np_mobile == 1) {
@@ -340,6 +424,10 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			DSET_ZERO(T_rigid, 3);
 			DSET_ZERO(p->F_coll, 3);
 			DSET_ZERO(p->T_coll, 3);
+			#ifdef VOF_IBM
+				DSET_ZERO(p->F_CCF_cum, 3); // Reset CCF accumulator
+				DSET_ZERO(p->T_CCF_cum, 3);
+			#endif
 			#ifdef POST_PROCESS
 				DSET_ZERO(p->Fc_norm_cum, 3);
 				DSET_ZERO(p->Fc_tan_cum, 3);
@@ -353,6 +441,34 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 		#ifndef ONE_WAY
 			FORI3 F_IBM[i] += 2.0 * bet * F[i];
 			FORI3 T_IBM[i] += 2.0 * bet * T[i];
+
+			#ifdef VOF_IBM
+				// CCF force acting on particle over entire timestep
+				FORI3 p->F_CCF_cum[i] += 2.0 * bet * p->F_CCF[i];
+				FORI3 p->T_CCF_cum[i] += 2.0 * bet * p->T_CCF[i];
+			    
+				// Add instantaneous CCF force to total fluid force
+				F[0] += p->F_CCF[0];
+				F[1] += p->F_CCF[1];
+				F[2] += p->F_CCF[2];
+
+				T[0] += p->T_CCF[0];
+				T[1] += p->T_CCF[1];
+				T[2] += p->T_CCF[2];
+
+				//----------------------------------------------------------------------
+				// Subtract spurious CSF force inside solid
+				//----------------------------------------------------------------------
+				
+				//  F[0] -= p->F_CSF_solid[0];
+				//  F[1] -= p->F_CSF_solid[1];
+				//  F[2] -= p->F_CSF_solid[2];
+
+				//  T[0] -= p->T_CSF_solid[0];
+				//  T[1] -= p->T_CSF_solid[1];
+				//  T[2] -= p->T_CSF_solid[2];
+
+			#endif
 
 
 			//----------------------------------------------------------------------
@@ -449,9 +565,19 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 			#endif
 
-    		F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
-			F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-			F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+		#ifdef VOF_IBM         /* gravity logic ---------------------- */
+		{
+
+				p->F[0] += ( p->M  - p->Int_rho_scalar ) * params->grav[0];
+				p->F[1] += ( p->M  - p->Int_rho_scalar ) * params->grav[1];
+				p->F[2] += ( p->M  - p->Int_rho_scalar ) * params->grav[2];
+
+		}
+			#else                  /* original single-phase expression --------------- */
+				F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
+				F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+				F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+			#endif
 
 
 			#ifdef OSCILLATION
@@ -503,6 +629,10 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			DSET_ZERO(T_rigid, 3);
 			DSET_ZERO(p->F_coll, 3);
 			DSET_ZERO(p->T_coll, 3);
+			#ifdef VOF_IBM
+				DSET_ZERO(p->F_CCF_cum, 3); // Reset CCF accumulator
+				DSET_ZERO(p->T_CCF_cum, 3);
+			#endif
 			#ifdef POST_PROCESS
 				DSET_ZERO(p->Fc_norm_cum, 3);
 				DSET_ZERO(p->Fc_tan_cum, 3);
@@ -515,6 +645,21 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 		#ifndef ONE_WAY
 			FORI3 F_IBM[i] += 2.0 * bet * F[i];
 			FORI3 T_IBM[i] += 2.0 * bet * T[i];
+
+			#ifdef VOF_IBM
+				// CCF force acting on particle over entire timestep
+				FORI3 p->F_CCF_cum[i] += 2.0 * bet * p->F_CCF[i];
+				FORI3 p->T_CCF_cum[i] += 2.0 * bet * p->T_CCF[i];
+			    
+				// Add instantaneous CCF force to total fluid force
+				F[0] += p->F_CCF[0];
+				F[1] += p->F_CCF[1];
+				F[2] += p->F_CCF[2];
+
+				T[0] += p->T_CCF[0];
+				T[1] += p->T_CCF[1];
+				T[2] += p->T_CCF[2];
+			#endif
 
 			// Rigid body force acting on particle over entire timestep
 			FORI3 F_rigid[i] += 1.0 / dt * (Int_U[i] - Int_U_old[i]);
@@ -566,9 +711,17 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 		#else
 
-    		F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
-			F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
-			F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+    		 #ifdef VOF_IBM         /* gravity logic ---------------------- */
+				{
+				p->F[0] += ( p->M  - p->Int_rho_scalar ) * params->grav[0];
+				p->F[1] += ( p->M  - p->Int_rho_scalar ) * params->grav[1];
+				p->F[2] += ( p->M  - p->Int_rho_scalar ) * params->grav[2];
+				}
+			#else                  /* original single-phase expression --------------- */
+				F[0] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[0];
+				F[1] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[1];
+				F[2] += p->M * (1.0 - 1.0 / p->rho_s) * params->grav[2];
+			#endif
 
 
 		#endif
@@ -743,6 +896,15 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		X[2] = X_old[2] + dt * bet * ( U[2] + U_old[2] );
 
 		Rotate_particle(p, params);
+
+		/* ── Symmetry-plane constraint: pin sphere to x = 0 ── */
+		#ifdef LEFT_WALL_VELOCITY_FREESLIP
+		X[0]     = 0.0;
+		U[0]     = 0.0;
+		U_old[0] = 0.0;
+		DSET_ZERO(Omega, 3);
+		DSET_ZERO(Omega_old, 3);
+		#endif
 
 		p = p -> next;
 	}	
@@ -1037,6 +1199,15 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 
 		Rotate_particle(p, params);
 
+		/* ── Symmetry-plane constraint: pin sphere to x = 0 ── */
+		#ifdef LEFT_WALL_VELOCITY_FREESLIP
+		X[0]     = 0.0;
+		U[0]     = 0.0;
+		U_old[0] = 0.0;
+		DSET_ZERO(Omega, 3);
+		DSET_ZERO(Omega_old, 3);
+		#endif
+
 
 		//printf("Particle position x,y,z: %f %f %f \n", X[0], X[1], X[2] );
 
@@ -1254,6 +1425,15 @@ void Lagrangian_collect_forces(Particle_list *p_list, Particle_list *p_list_fore
 				if (type == LAG_COLLECT_ALL || type == LAG_COLLECT_HYDRO) {
 					FORI3 p -> F[i] += pf -> F[i];
 					FORI3 p -> T[i] += pf -> T[i];
+					
+					#ifdef VOF_IBM
+					FORI3 p -> F_CCF[i] += pf -> F_CCF[i]; 
+					FORI3 p -> T_CCF[i] += pf -> T_CCF[i];
+					FORI3 p -> Int_rho[i] += pf -> Int_rho[i];
+					p->Int_rho_scalar += pf->Int_rho_scalar;  
+					FORI3 p->F_CSF_solid[i] += pf->F_CSF_solid[i]; 
+					FORI3 p->T_CSF_solid[i] += pf->T_CSF_solid[i];  
+					#endif
 
 					FORI3 p -> Int_U[i] += pf -> Int_U[i];
 					FORI3 p -> Int_Omega[i] += pf -> Int_Omega[i];
@@ -1422,9 +1602,16 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
 				for (k = Ks; k < Ke; k++) {
 					for (j = Js; j < Je; j++) {
 						for (i = Is; i < Ie; i++) {
+							#ifdef VOF_IBM
+							u_data[k][j][i] += dtbeta * u_rhs[k][j][i] / ( 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k][j][i-1]) );
+							v_data[k][j][i] += dtbeta * v_rhs[k][j][i] / ( 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k][j-1][i]) );
+							w_data[k][j][i] += dtbeta * w_rhs[k][j][i] / ( 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k-1][j][i]) );
+
+							#else
 							u_data[k][j][i] += dtbeta * u_rhs[k][j][i];
 							v_data[k][j][i] += dtbeta * v_rhs[k][j][i];
 							w_data[k][j][i] += dtbeta * w_rhs[k][j][i];
+							#endif //VOF_IBM
 
 
 						}
@@ -1459,10 +1646,10 @@ void Lagrangian_force(int force_iter, Cart3d_bag *data_bag, Debug_trace *dtrace)
 /*
  Calculates forcing between an individual particle and the velocity field:
      1. Interpolate velocity field onto each Lagrangian marker
-     2. Calculate force required for marker to achieve desired velocity (of
+     2. Calculate acceleration required for marker to achieve desired velocity (of
         rigid body motion)
      3. Add the Lagrangian force to the force on the particle
-     4. Spread the Lagrangian force onto the Eulerian fluid velocity field
+     4. Spread the Lagrangian acceleration onto the Eulerian fluid velocity field
  */
 /******************************************************************************/
 void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_bag *data_bag) {
@@ -1512,6 +1699,10 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 	double ***u_data = u -> data;
 	double ***v_data = v -> data;
 	double ***w_data = w -> data;
+
+	double ***fx_IBM = data_bag->vof->fx_IBM;;
+	double ***fy_IBM = data_bag->vof->fy_IBM;
+	double ***fz_IBM = data_bag->vof->fz_IBM;
 
 
 	double ***u_rhs = u -> ng_rhs;
@@ -1610,6 +1801,21 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		double r_s_norm_threshold = 0.001 * r_norm;
 	#endif
 
+	#ifdef VOF_IBM
+		/* --- new density interpolation ------------------------------------- */
+		double *Temp_Rho_L = lag->Temp_L_rho;  /* per-marker mixture density    */
+
+		/* cell-centred mixture density already computed by VoF code */
+		double ***rho_cc = data_bag->vof->rho;   /* Eulerian cell-centred mixture density */
+
+		/* interpolate ρ̃ from Eulerian cells to all *local* Lagrangian markers */
+		Interpolate_Eul_to_Lag(rho_cc,      /* source field                    */
+							Temp_Rho_L,  /* destination                     */
+							'c',         /* dummy flag for cell centres     */
+							p, grid);
+
+	#endif
+
 
 	/*------------------------------------------------------------------------*/
 	/*
@@ -1632,6 +1838,15 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			Temp_F_L[mv] = 0.0;
 			continue;
 		}
+
+		#ifdef LEFT_WALL_VELOCITY_FREESLIP
+		// SKIP ALL MARKERS OUTSIDE THE PHYSICAL DOMAIN!
+		// The parity logic in the interpolator handles their effect automatically.
+		if (X_L[mv] < 0.0) {
+			Temp_F_L[mv] = 0.0;
+			continue;
+		}
+        #endif
 
 		r[0] = X_L[mv] - X[0];
 		r[1] = Y_L[mv] - X[1];
@@ -1687,7 +1902,16 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 					U_d = U_d - u_theta*e_theta[0];
 		#endif
 
-		// Force required to produce desired velocity at Lagrangian point
+		/* NEW: convert to momentum forcing with local mixture density */
+		#ifdef VOF_IBM
+			double rho_L = Temp_Rho_L[mv];
+		#else
+			double rho_L = 1.0;
+		#endif
+
+
+
+		// Acceleration required to produce desired velocity at Lagrangian point
 		F_L = idt2beta * (U_d - Temp_U_L[mv]);
 
 		//----------------------------------------------------------------------
@@ -1696,23 +1920,29 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		//    counting when we communicate and add these forces later.
 		//----------------------------------------------------------------------
 		if (LOCAL_POINT(X_L[mv], Y_L[mv], Z_L[mv])) {
-			F[0] -= M_L * F_L;
-			T[1] -= M_L * r[2] * F_L;
-			T[2] += M_L * r[1] * F_L;
+			F[0] -= rho_L * M_L * F_L;  // Density-weighted reaction force
+			T[1] -= rho_L * M_L * r[2] * F_L;
+			T[2] += rho_L * M_L * r[1] * F_L;
 		}
 
-		// Store force in temporary array to be spread back onto fluid
+		// Store pure velocity forcing
 		Temp_F_L[mv] = F_L;
 	}
 
 	//--------------------------------------------------------------------------
-	// 4. Spread Lagrangian marker forces onto flow field
+	// 4. Spread Lagrangian marker acceleration onto flow field
 	//--------------------------------------------------------------------------
 	Interpolate_Lag_to_Eul(Temp_F_L, temp_f, 'u', p, grid);
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
+				#ifdef VOF_IBM
+				double rho_face = 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k][j][i-1]);
+				fx_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
+				u_rhs[k][j][i] += fx_IBM[k][j][i];
+				#else
 				u_rhs[k][j][i] += 2.0 * temp_f[k][j][i];
+				#endif
 			}
 		}
 	}
@@ -1761,6 +1991,15 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			Temp_F_L[mv] = 0.0;
 			continue;
 		}
+
+		#ifdef LEFT_WALL_VELOCITY_FREESLIP
+		// SKIP ALL MARKERS OUTSIDE THE PHYSICAL DOMAIN!
+		// The parity logic in the interpolator handles their effect automatically.
+		if (X_L[mv] < 0.0) {
+			Temp_F_L[mv] = 0.0;
+			continue;
+		}
+        #endif
 
 		r[0] = X_L[mv] - X[0];
 		r[1] = Y_L[mv] - X[1];
@@ -1816,7 +2055,14 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 					U_d = U_d - u_theta*e_theta[1];
 		#endif
 
-		// Force required to produce desired velocity at Lagrangian point
+		/* NEW: convert to momentum forcing with local mixture density */
+		#ifdef VOF_IBM
+			double rho_L = Temp_Rho_L[mv];
+		#else
+			double rho_L = 1.0;
+		#endif
+
+		// Acceleration required to produce desired velocity at Lagrangian point 
 		F_L = idt2beta * (U_d - Temp_U_L[mv]);
 
 		//----------------------------------------------------------------------
@@ -1825,23 +2071,29 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		//    counting when we communicate and add these forces later.
 		//----------------------------------------------------------------------
 		if (LOCAL_POINT(X_L[mv], Y_L[mv], Z_L[mv])) {
-			F[1] -= M_L * F_L;
-			T[0] += M_L * r[2] * F_L;
-			T[2] -= M_L * r[0] * F_L;
+			F[1] -= rho_L * M_L * F_L;  // Density-weighted reaction force
+			T[0] += rho_L * M_L * r[2] * F_L;
+			T[2] -= rho_L * M_L * r[0] * F_L;
 		}
 
-		// Store force in temporary array to be spread back onto fluid
+		// Store pure velocity forcing
 		Temp_F_L[mv] = F_L;
 	}
 
 	//--------------------------------------------------------------------------
-	// 4. Spread Lagrangian marker forces onto flow field
+	// 4. Spread Lagrangian marker acceleration onto flow field
 	//--------------------------------------------------------------------------
 	Interpolate_Lag_to_Eul(Temp_F_L, temp_f, 'v', p, grid);
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
+				#ifdef VOF_IBM
+				double rho_face = 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k][j-1][i]);
+				fy_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
+				v_rhs[k][j][i] += fy_IBM[k][j][i];
+				#else
 				v_rhs[k][j][i] += 2.0 * temp_f[k][j][i];
+				#endif
 			}
 		}
 	}
@@ -1890,6 +2142,15 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			Temp_F_L[mv] = 0.0;
 			continue;
 		}
+
+		#ifdef LEFT_WALL_VELOCITY_FREESLIP
+		// SKIP ALL MARKERS OUTSIDE THE PHYSICAL DOMAIN!
+		// The parity logic in the interpolator handles their effect automatically.
+		if (X_L[mv] < 0.0) {
+			Temp_F_L[mv] = 0.0;
+			continue;
+		}
+        #endif
 
 		r[0] = X_L[mv] - X[0];
 		r[1] = Y_L[mv] - X[1];
@@ -1945,7 +2206,14 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 					U_d = U_d - u_theta*e_theta[2];
 		#endif
 
-		// Force required to produce desired velocity at Lagrangian point
+		/* NEW: convert to momentum forcing with local mixture density */
+		#ifdef VOF_IBM
+			double rho_L = Temp_Rho_L[mv];
+		#else
+			double rho_L = 1.0;
+		#endif
+
+		// Acceleration required to produce desired velocity at Lagrangian point 
 		F_L = idt2beta * (U_d - Temp_U_L[mv]);
 
 		//----------------------------------------------------------------------
@@ -1954,28 +2222,35 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		//    counting when we communicate and add these forces later.
 		//----------------------------------------------------------------------
 		if (LOCAL_POINT(X_L[mv], Y_L[mv], Z_L[mv])) {
-			F[2] -= M_L * F_L;
-			T[0] -= M_L * r[1] * F_L;
-			T[1] += M_L * r[0] * F_L;
+			F[2] -= rho_L * M_L * F_L;  // Density-weighted reaction force
+			T[0] -= rho_L * M_L * r[1] * F_L;
+			T[1] += rho_L * M_L * r[0] * F_L;
 		}
 
-		// Store force in temporary array to be spread back onto fluid
+		// Store pure velocity forcing
 		Temp_F_L[mv] = F_L;
 	}
 
 	//--------------------------------------------------------------------------
-	// 4. Spread Lagrangian marker forces onto flow field
+	// 4. Spread Lagrangian marker acceleration onto flow field
 	//--------------------------------------------------------------------------
 	Interpolate_Lag_to_Eul(Temp_F_L, temp_f, 'w', p, grid);
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
+				#ifdef VOF_IBM
+				double rho_face = 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k-1][j][i]);
+				fz_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
+				w_rhs[k][j][i] += fz_IBM[k][j][i];
+				#else
 				w_rhs[k][j][i] += 2.0 * temp_f[k][j][i];
+				#endif
 			}
 		}
 	}
 
 }
+
 
 
 /******************************************************************************/

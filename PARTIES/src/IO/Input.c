@@ -17,6 +17,57 @@
 #include "Input.h"
 #include "Memory.h"
 
+static void Input_set_twod_mode_parameters(Parameters *params)
+{
+	params->twod_mode_enabled = NO;
+	params->twod_cartesian_enabled = NO;
+	params->axisym_rz_enabled = NO;
+	params->axisym_no_swirl = NO;
+
+#ifdef TWOD_CARTESIAN
+	params->twod_mode_enabled = YES;
+	params->twod_cartesian_enabled = YES;
+#endif
+#ifdef AXISYM_RZ
+	params->twod_mode_enabled = YES;
+	params->axisym_rz_enabled = YES;
+#endif
+#ifdef AXISYM_NO_SWIRL
+	params->axisym_no_swirl = YES;
+#endif
+
+	if (params->axisym_theta_cells <= 0)
+		params->axisym_theta_cells = 1;
+
+	if (params->axisym_theta_span <= 0.0)
+		params->axisym_theta_span = TWOD_AXISYM_THETA_SPAN_FULL;
+
+	if (!params->twod_mode_enabled) {
+		if (params->twod_slab_thickness <= 0.0)
+			params->twod_slab_thickness = params->Lz;
+		return;
+	}
+
+	{
+		double hx = params->Lx / (double)params->NXM;
+		double hy = params->Ly / (double)params->NYM;
+		double slab_thickness = params->twod_slab_thickness;
+		double h_ref_xy = hx;
+
+		if (hy < h_ref_xy)
+			h_ref_xy = hy;
+
+		if (slab_thickness <= 0.0)
+			slab_thickness = h_ref_xy;
+		if (slab_thickness <= 0.0)
+			slab_thickness = 1.0;
+
+		params->twod_slab_thickness = slab_thickness;
+		params->Lz = slab_thickness;
+		params->zmax = params->zmin + slab_thickness;
+	}
+}
+
 
 
 /******************************************************************************/
@@ -54,6 +105,26 @@ void Input_set_parameters(Parameters *params, char *infile)
 	params->Lx = params->xmax - params->xmin;
 	params->Ly = params->ymax - params->ymin;
 	params->Lz = params->zmax - params->zmin;
+
+	Input_set_twod_mode_parameters(params);
+
+	{
+		double hx = params->Lx / (double)params->NXM;
+		double hy = params->Ly / (double)params->NYM;
+		double hz = params->Lz / (double)params->NZM;
+		double h_ref = hx;
+
+		if (hy < h_ref)
+			h_ref = hy;
+		if (hz < h_ref)
+			h_ref = hz;
+
+		if (params->Cn <= 0.0)
+			params->Cn = 0.75 * h_ref;
+
+		if (params->Pe_CH <= 0.0 && params->Cn > 0.0)
+			params->Pe_CH = 0.9 / params->Cn;
+	}
 
 	if (params->front_location_output == 1 && params->ave_height_output == 0) {
 		Display_throw_warning("Warning: specified 'front_location_output' but not "
