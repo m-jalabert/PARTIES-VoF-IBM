@@ -80,7 +80,7 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 //	double ***nut = data_bag->rans->nut;
 //#endif
 
-#ifdef VOF_PLIC
+#ifdef VOF
     VolumeFraction *vof = data_bag->vof;  // Access VOF data
 #endif
 
@@ -115,7 +115,7 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 
 				convective = u_cfl * idx_u[i] + v_cfl * idy_v[j] + w_cfl * idz_w[k];
 
-#ifdef VOF_PLIC
+#ifdef VOF
                 nu_cell = vof->mu[k][j][i] / vof->rho[k][j][i];
 #else
 #ifdef VAR_VISC
