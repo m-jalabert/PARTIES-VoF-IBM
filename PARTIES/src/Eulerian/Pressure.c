@@ -34,7 +34,7 @@ Pressure *Pressure_create(MAC_grid *grid, Parameters *params) {
 	new_p->p_data_avg = Memory_allocate_flow_variable(grid, params);
 #endif
 
-#ifdef VOF_PLIC
+#ifdef VOF
     // ALLOCATIONS for CG solver 
     new_p->res     = Memory_allocate_flow_variable(grid, params);  // residual array
     new_p->d       = Memory_allocate_flow_variable(grid, params);  // search direction
@@ -72,7 +72,7 @@ void Pressure_destroy(Pressure *p, MAC_grid *grid, Parameters *params) {
 	Memory_free_flow_variable(grid, params, p->p_data_avg);
 #endif
 
-#ifdef VOF_PLIC
+#ifdef VOF
     // FREES for CG arrays 
     Memory_free_flow_variable(grid, params, p->res);
     Memory_free_flow_variable(grid, params, p->d);
@@ -211,8 +211,8 @@ void Pressure_set_RHS(Cart3d_bag *data_bag) {
  This function updates the velocity field using projection method to get a
  divergence free velocity field
 
- - Single-phase (no #define VOF_PLIC): uses rho_f = 1.
- - VOF multi-phase (#define VOF_PLIC in Boundary.h): uses per-cell rho from data_bag->vof->rho.
+ - Single-phase (no #define VOF): uses rho_f = 1.
+ - VOF multi-phase (#define VOF in Boundary.h): uses per-cell rho from data_bag->vof->rho.
 
  The velocity correction is:
    u^k = u^* - 2 alpha_k dt (1/rho) ∇φ     (VOF case)
@@ -239,7 +239,7 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 	double ***w_data = data_bag -> w -> data;
 	double ***p_data = p -> p_data;
 
-#ifdef VOF_PLIC
+#ifdef VOF
     // For VOF (variable density), fetch the local density field
     VolumeFraction *vof = data_bag->vof;
     double ***rho       = vof->rho;
@@ -286,9 +286,12 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 	double ***deltap = p -> deltap;
 
 
-	// Phi. Get the ghost nodes from the neighboring processors
+	// Enforce the physical pressure BCs before using deltap in the
+	// face-centered projection update, then exchange across MPI neighbors.
 	T1 = MPI_Wtime();
-	Communication_update_ghost_nodes_flow_variable(deltap, CONCENTRATION_PERTURBATION, 3, data_bag);
+	Pressure_apply_BCs(deltap, grid, params);
+	Communication_update_ghost_nodes_flow_variable(deltap, CONCENTRATION_PERTURBATION,
+	                                              params->ghost_nodes, data_bag);
 	T2 = MPI_Wtime();
 
 
@@ -335,7 +338,7 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 
 	T1 = MPI_Wtime();
 
-	#ifdef VOF_PLIC
+	#ifdef VOF
 	// Apply boundary conditions for pressure perturbation (VOF)
 	Pressure_apply_BCs(p_data, grid, params);
 	#endif
@@ -347,10 +350,12 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 
 	//--------------------------------------------------------------------------
 	// Update u_star to u_new (divergence free velocity field)
-	//    u^k = u^* - ( deltap[i] - deltap[i-1] ) * idxdt[i-1] / rho^k-1  (VOF)
-    //    u^k = u^* - ( deltap[i] - deltap[i-1] ) * idxdt[i-1]        (single-phase)
+	//    u^k = u^* - ( deltap[i] - deltap[i-1] ) * idxdt[i-1] / rho_stage  (VOF)
+    //    u^k = u^* - ( deltap[i] - deltap[i-1] ) * idxdt[i-1]             (single-phase)
     //
-    //    Repeat similarly for v, w in j, k directions.
+    // rho_stage is the current/stage density field already refreshed before
+    // the momentum and pressure solves in this RK substep.
+    // Repeat similarly for v, w in j, k directions.
 	//--------------------------------------------------------------------------
 	i_start = max(1, Is); // i=0 not included
 	j_start = Js;
@@ -369,7 +374,7 @@ void Pressure_project_velocity(Cart3d_bag *data_bag) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
 
-#ifdef VOF_PLIC
+#ifdef VOF
 				double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k][j][i-1]);
                 u_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j][i-1] )
                                    * ( idxdt[i-1] * inv_rho_face );
@@ -410,7 +415,7 @@ if (j_end == NY-1)
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
 				
-#ifdef VOF_PLIC
+#ifdef VOF
 				double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k][j-1][i]);
                 v_data[k][j][i] -= ( deltap[k][j][i] - deltap[k][j-1][i] )
                                    * ( idydt[j-1] * inv_rho_face );
@@ -445,7 +450,7 @@ if (j_end == NY-1)
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
 
-#ifdef VOF_PLIC
+#ifdef VOF
 				double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k-1][j][i]);
                 w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
                                    * ( idzdt[k-1] * inv_rho_face );
@@ -719,9 +724,12 @@ void Pressure_project_velocity_vof(Cart3d_bag *data_bag) {
 	//local data since ghost nodes are required
 	double ***deltap = p -> deltap;
 
-	// Phi. Get the ghost nodes from the neighboring processors
+	// Enforce the physical pressure BCs before using deltap in the
+	// face-centered projection update, then exchange across MPI neighbors.
 	T1 = MPI_Wtime();
-	Communication_update_ghost_nodes_flow_variable(deltap, CONCENTRATION_PERTURBATION, 1, data_bag);
+	Pressure_apply_BCs(deltap, grid, params);
+	Communication_update_ghost_nodes_flow_variable(deltap, CONCENTRATION_PERTURBATION,
+	                                              params->ghost_nodes, data_bag);
 	T2 = MPI_Wtime();
 	p->project_comm_cpu_time += T2-T1;
 
@@ -875,84 +883,136 @@ void Pressure_project_velocity_vof(Cart3d_bag *data_bag) {
 }
 #endif
 
-#ifdef VOF_IBM
 void Pressure_init_hydrostatic_VOF(Cart3d_bag *data_bag)
 {
     MAC_grid       *grid   = data_bag->grid;
     Parameters     *params = data_bag->params;
     Pressure       *p      = data_bag->p;
     VolumeFraction *vof    = data_bag->vof;
-    
+
     double ***p_data = p->p_data;
     double ***rho    = vof->rho;
-    
-    double g = params->grav[1];  // gravity component in y-direction (e.g., -1.0)
-    
-    int NX = grid->NX;
-    int NY = grid->NY;
-    int NZ = grid->NZ;
-    
-    int Is = grid->G_Is, Ie = grid->G_Ie;
-    int Js = grid->G_Js, Je = grid->G_Je;
-    int Ks = grid->G_Ks, Ke = grid->G_Ke;
-    
-    double *yc = grid->yc;
-    double *dy_c = grid->dy_c;
-    
-    // Reference pressure at top (y_max) - typically 0 for non-dimensional
-    double p_ref = 0.0;
-    
-    // Clamp indices to valid range (exclude ghost cells beyond NX-1, NY-1, NZ-1)
-    int i_end = min(NX-1, Ie);
-    int j_end = min(NY-1, Je);
-    int k_end = min(NZ-1, Ke);
-    
-    // IMPORTANT: The momentum RHS uses "+2.0*ρ*g - 2.0*dp/dy", so for hydrostatic balance:
-    //   0 = 2.0*ρ*g - 2.0*dp/dy
-    //   => dp/dy = ρ*g
-    //
-    // Note: g < 0 (downward in -y direction), so dp/dy < 0 (pressure decreases upward in +y)
-    //
-    // Integrate downward from top (j = NY-2) to bottom (j = 0)
-    // Since dp/dy = ρ*g and dy > 0 going down:
-    //   p(j) = p(j+1) - ∫(j+1 to j) (dp/dy) dy
-    //   p(j) = p(j+1) - ρ_avg * g * dy
-    
-    // Initialize all cells on this processor
-    for (int j = NY-2; j >= 0; j--) {
-        if (j < Js || j >= j_end) continue; // Skip if outside processor domain
-        
-        for (int k = Ks; k < k_end; k++) {
-            for (int i = Is; i < i_end; i++) {
-                
-                if (j == NY-2) {
-                    // Top layer: integrate from y_max to cell center
-                    // p(NY-2) = p_ref - ρ(NY-2) * g * dy/2
-                    double rho_cell = rho[k][j][i];
-                    p_data[k][j][i] = p_ref - rho_cell * g * (0.5 * dy_c[j]);
-                } else {
-                    // Interior: average density at interface between j and j+1
-                    double rho_avg = 0.5 * (rho[k][j][i] + rho[k][j+1][i]);
-                    
-                    // Hydrostatic: dp/dy = ρg
-                    // Going down (from j+1 to j): p(j) = p(j+1) - ρ_avg * g * dy
-                    // Since g < 0, this means p increases going down (as expected)
-                    p_data[k][j][i] = p_data[k][j+1][i] - rho_avg * g * dy_c[j];
-                }
+
+    const double *grav = params->grav;
+    const double *rich = params->richardson;
+    const double Ri = (rich != NULL) ? rich[0] : 1.0;
+    const double gmag = sqrt(grav[0] * grav[0] +
+                             grav[1] * grav[1] +
+                             grav[2] * grav[2]);
+    const double gy = (gmag > 0.0) ? grav[1] / gmag : 0.0;
+    const double hydro_coeff = Ri * gy;
+    const double p_ref = 0.0;
+
+    const int NX = grid->NX;
+    const int NY = grid->NY;
+    const int NZ = grid->NZ;
+
+    const int Is = grid->G_Is;
+    const int Ie = grid->G_Ie;
+    const int Js = grid->G_Js;
+    const int Je = grid->G_Je;
+    const int Ks = grid->G_Ks;
+    const int Ke = grid->G_Ke;
+
+    const int i_end = min(NX - 1, Ie);
+    const int j_end = min(NY - 1, Je);
+    const int k_end = min(NZ - 1, Ke);
+    const int nx_local = i_end - Is;
+    const int nz_local = k_end - Ks;
+    const int nplane = max(0, nx_local * nz_local);
+    const int j_top = j_end - 1;
+    const int tag = 9187;
+
+    Memory_reset_flow_variable(grid, params, p_data);
+
+    if (j_end <= Js || nplane == 0) {
+        Communication_update_ghost_nodes_flow_variable(
+            p_data, CONCENTRATION_PERTURBATION, params->ghost_nodes, data_bag);
+        return;
+    }
+
+    if (fabs(grav[0]) > 1.0e-12 || fabs(grav[2]) > 1.0e-12) {
+        if (params->rank == 0) {
+            printf("Pressure_init_hydrostatic_VOF: skipping hydrostatic initialization "
+                   "because gravity is not aligned with y.\n");
+        }
+        Communication_update_ghost_nodes_flow_variable(
+            p_data, CONCENTRATION_PERTURBATION, params->ghost_nodes, data_bag);
+        return;
+    }
+
+    if (fabs(hydro_coeff) < 1.0e-14) {
+        if (params->rank == 0) {
+            printf("Pressure_init_hydrostatic_VOF: hydrostatic coefficient is zero; "
+                   "leaving pressure at zero.\n");
+        }
+        Communication_update_ghost_nodes_flow_variable(
+            p_data, CONCENTRATION_PERTURBATION, params->ghost_nodes, data_bag);
+        return;
+    }
+
+    double *plane_from_above = NULL;
+    if (params->yproccoord != params->NPY - 1) {
+        plane_from_above = (double *)malloc((size_t)nplane * sizeof(double));
+        Memory_check_allocation(plane_from_above);
+        MPI_Recv(plane_from_above, nplane, MPI_DOUBLE, params->npyplus, tag, PCW,
+                 MPI_STATUS_IGNORE);
+    }
+
+    for (int k = Ks; k < k_end; ++k) {
+        for (int i = Is; i < i_end; ++i) {
+            const int plane_idx = (k - Ks) * nx_local + (i - Is);
+
+            if (params->yproccoord == params->NPY - 1) {
+                const double top_offset = params->ymax - grid->yc[j_top];
+                p_data[k][j_top][i] =
+                    p_ref - rho[k][j_top][i] * hydro_coeff * top_offset;
+            } else {
+                const double dy = grid->yc[j_top + 1] - grid->yc[j_top];
+                const double rho_avg = 0.5 * (rho[k][j_top][i] + rho[k][j_top + 1][i]);
+                p_data[k][j_top][i] =
+                    plane_from_above[plane_idx] - rho_avg * hydro_coeff * dy;
             }
         }
     }
-    
-    // Update ghost nodes to ensure consistency across processors
-    Communication_update_ghost_nodes_flow_variable(p_data, CONCENTRATION_PERTURBATION, 
-                                                   params->ghost_nodes, data_bag);
-    
+
+    for (int j = j_top - 1; j >= Js; --j) {
+        const double dy = grid->yc[j + 1] - grid->yc[j];
+        for (int k = Ks; k < k_end; ++k) {
+            for (int i = Is; i < i_end; ++i) {
+                const double rho_avg = 0.5 * (rho[k][j][i] + rho[k][j + 1][i]);
+                p_data[k][j][i] = p_data[k][j + 1][i] - rho_avg * hydro_coeff * dy;
+            }
+        }
+    }
+
+    if (plane_from_above != NULL) {
+        free(plane_from_above);
+    }
+
+    if (params->yproccoord != 0) {
+        double *plane_to_below = (double *)malloc((size_t)nplane * sizeof(double));
+        Memory_check_allocation(plane_to_below);
+
+        for (int k = Ks; k < k_end; ++k) {
+            for (int i = Is; i < i_end; ++i) {
+                const int plane_idx = (k - Ks) * nx_local + (i - Is);
+                plane_to_below[plane_idx] = p_data[k][Js][i];
+            }
+        }
+
+        MPI_Send(plane_to_below, nplane, MPI_DOUBLE, params->npyminus, tag, PCW);
+        free(plane_to_below);
+    }
+
+    Communication_update_ghost_nodes_flow_variable(
+        p_data, CONCENTRATION_PERTURBATION, params->ghost_nodes, data_bag);
+
     if (params->rank == 0) {
-        printf("Pressure_init_hydrostatic_VOF: Initialized hydrostatic pressure field\n");
-        printf("  (Hydrostatic balance: 2.0*ρ*g = 2.0*dp/dy => dp/dy = ρ*g)\n");
+        printf("Pressure_init_hydrostatic_VOF: initialized hydrostatic pressure "
+               "(Ri = %g, gy = %g).\n", Ri, gy);
     }
 }
-#endif //VOF_IBM
 
 #include "lsolver/psolve_fft.c"
 #include "lsolver/psolve_cg.c"
