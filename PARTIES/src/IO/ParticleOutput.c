@@ -368,6 +368,11 @@ void ParticleOutput_h5_data(Particle_list *p_list, hid_t file_id,
 	OUTPUT_ELEMENT("Int_U_old", 3);
 	OUTPUT_ELEMENT("Int_Omega_old", 3);
 
+	#ifdef VOF_IBM
+    OUTPUT_ELEMENT("F_CCF_cum", 3);
+    OUTPUT_ELEMENT("T_CCF_cum", 3);
+	#endif
+
 #ifdef POST_PROCESS
 	OUTPUT_ELEMENT("Fc_norm_cum", 3);
 	OUTPUT_ELEMENT("Fc_tan_cum", 3);
@@ -586,6 +591,22 @@ void ParticleOutput_h5_data_element(Particle_list *p_list, int Np_local,
 			p = p -> next;
 		}
 	}
+
+#ifdef VOF_IBM
+    else if (strcmp(element, "F_CCF_cum") == 0) {
+        for (j = 0; j < Np_local; j++) {
+            FORI3 data[j][i] = p -> F_CCF_cum[i];
+            p = p -> next;
+        }
+    }
+    else if (strcmp(element, "T_CCF_cum") == 0) {
+        for (j = 0; j < Np_local; j++) {
+            FORI3 data[j][i] = p -> T_CCF_cum[i];
+            p = p -> next;
+        }
+    }
+#endif
+
 
 #ifdef POST_PROCESS
 	else if (strcmp(element, "Fc_norm_cum") == 0) {
