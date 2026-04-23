@@ -580,15 +580,16 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 		#ifdef SURFACE_TENSION
 
-	    // Curvature (kappa)
+
+
+
+		#ifdef VOF_PLIC 
+		// Curvature (kappa)
         sprintf(fieldname, "%s/kappa", groupname);
         if (Resume_h5_field_exists(file_id, fieldname)) {
             Resume_h5_flow_variable(data_bag->vof->kappa, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
             Communication_update_ghost_nodes_flow_variable(data_bag->vof->kappa, VOLUME_FRACTION, pnodes, data_bag);
         }
-
-
-		#ifdef VOF_PLIC 
 		//Write F_smooth
 		sprintf(fieldname, "%s/F_smooth", groupname);
         if (Resume_h5_field_exists(file_id, fieldname)) {
