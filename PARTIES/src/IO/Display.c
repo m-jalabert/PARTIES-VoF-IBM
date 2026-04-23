@@ -178,7 +178,9 @@ int Display_parameters(Parameters *params) {
 #ifdef XPERIODIC
 	printf("X-Boundaries: ... periodic\n");
 #endif
-#ifdef LEFT_WALL_VELOCITY_NOSLIP
+#ifdef AXISYM_RZ
+	printf("Left boundary: .. axis (r = 0)\n");
+#elif defined LEFT_WALL_VELOCITY_NOSLIP
 	printf("Left wall: ...... no-slip\n");
 #elif defined LEFT_WALL_VELOCITY_FREESLIP
 	printf("Left wall: ...... free-slip\n");

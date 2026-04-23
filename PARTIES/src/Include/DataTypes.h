@@ -16,32 +16,93 @@ extern MPI_Datatype MPI_COLLISION;
 /******************************************************************************/
 /*                               VOF-PLIC	                                  */
 /******************************************************************************/
-#ifdef VOF_PLIC    // only compile if VOF_PLIC definied in Boundary.h
 
 struct volume_fraction {
 
 	double ***F; 										// The main cell-centered volume fraction array e.g. F[i][j][k] in 3D
-	double ***F_smooth;         						// Smoothed volume fraction
+	
 	double ***mu; 										// Cell-centered Viscosity
 	double ***rho; 										// Cell-centered Density
 	double ***normal_x, ***normal_y, ***normal_z;       // Interface PLIC normal
+
+	#ifdef VOF_PLIC
+	double ***F_smooth;         						// Smoothed volume fraction
 	double ***alpha;  									// plane intercept for the PLIC plane in each cell
-
-
-	double ***flux_x, ***flux_y, ***flux_z;       		// fluxes for convective terms
 	double ***conv; 									// Convective term storage for advection equation [k][j][i]
 	double ***conv_old; 							    // Storage for previous stage's convective term		
 	double ***ng_rhs;									// Right-hand side of the volume fraction equation
-
 	double ***normal_x_smooth, ***normal_y_smooth, ***normal_z_smooth;       // Curvature normals from F_smooth
-	double ***kappa;        												 // Mean curvature κ = ∇·n at cell centres        
+	double ***kappa;        												 // Mean curvature κ = ∇·n at cell centres
+	double ***mass_flux_x, ***mass_flux_y, ***mass_flux_z;  // ρ_f^PLIC * u^{k-1} at faces for momentum advection
+	#endif
+
+
+	double ***flux_x, ***flux_y, ***flux_z;       		// fluxes for convective terms
+
+	
+	double initial_volume;                   // Initial fluid volume for mass conservation check
+
+	double ***f_sigma_old_x;   // force at x-faces, from F^{k-1}
+	double ***f_sigma_old_y;   // force at y-faces, from F^{k-1}
+	double ***f_sigma_old_z;   // force at z-faces, from F^{k-1}
+	double ***f_sigma_new_x;   // force at x-faces, from F^k  (freshly computed)
+	double ***f_sigma_new_y;
+	double ***f_sigma_new_z;
+
+	double ***grad_mag;
+
+	double V_fluid_before;   /* total liquid volume in fluid domain (vfc<0.5)
+                                stored before VOF advection for mass correction */
+	
+
+	#ifdef VOF_DIFFUSE
+	double ***C_L;          // Liquid color function solved by the CH model
+	double ***C_S;          // Diffuse solid field used by the CH model
+	double ***C_G;          // Cached gas color function = 1 - C_L - C_S
+
+	double ***psi;          // Full chemical potential with solid coupling
+	double ***psi_LG;       // Liquid-gas chemical potential for capillary forcing
+	double ***lap_C;        // Laplacian of C_L
+	double ***bulk_S;       // Nonlinear bulk source S(C_L)
+
+	double ***ch_rhs_n;     // CH RHS at the previous RK/time level
+	double ***ch_rhs_nm1;   // CH RHS history term
+
+	double ***ch_aux1;      // Auxiliary workspace for implicit CH solves
+	double ***ch_aux2;      // Auxiliary workspace for implicit CH solves
+	double ***ch_res;       // Residual workspace for CH CG
+	double ***ch_dir;       // Search direction for CH CG
+	#endif
+
+	#ifdef VOF_IBM
+	double ***nx_IBM, ***ny_IBM, ***nz_IBM;       // Solid Interface normal at the contact line
+	double ***uE, ***vE, ***wE;                // Extension velocity field
+	double ***vfc_smooth;                       // Lagrangian solid volume fraction field smoothed
+	double ***vfc;                              // Lagrangian solid volume fraction field
+
+	double ***nx_IBM_smooth, ***ny_IBM_smooth, ***nz_IBM_smooth; // Smoothed IBM normals
+	double ***tx, ***ty, ***tz;           // wall-tangent direction used for characteristics
+
+		// NEW: CCF arrays
+	double ***f_ccf_x, ***f_ccf_y, ***f_ccf_z;  // CCF force density field
+	double ***t_int_x, ***t_int_y, ***t_int_z;  // Interface tangent (contact-line direction)
+	double ***t_cl_x, ***t_cl_y, ***t_cl_z;     // Wall tangent (perpendicular to CL)
+
+	double ***F_prev;
+	double ***F_extended;        // Extended VOF field
+	double ***rhs_extended;    // RHS for extended VOF field
+	double ***S_gamma;
+	double ***gamma_extended;  // Extended VOF field into solid region
+	double ***solid_mask;      // Solid mask field (1 = solid, 0 = fluid)
+	double ***ray_dir_x;    // Selected ray direction x-component
+	double ***conv_predictor;
+	double ***fx_IBM, ***fy_IBM, ***fz_IBM;  // IBM force density field
+	#endif
 
 
 
 };
 typedef struct volume_fraction VolumeFraction;
-
-#endif  // VOF_PLIC
 
 
 /******************************************************************************/
@@ -204,11 +265,13 @@ struct pressure {
 	double ***p_data_avg;
 #endif
 
+#ifdef VOF
     // Arrays for CG-based solver
     double ***res;       // Residual r
     double ***d;         // Search direction d
     double ***Ad;        // A*d
 	double ***M_inv;	 // Preconditioner 
+#endif
 
 
 	fft *xfft, *zfft;
@@ -275,6 +338,15 @@ struct parameters {
 
 	// Boolean to either import a grid or generate a uniform grid
 	int ImportGridFromFile;
+
+	// Compile-time 2D mode state carried at runtime for centralized dispatch.
+	int twod_mode_enabled;
+	int twod_cartesian_enabled;
+	int axisym_rz_enabled;
+	int axisym_no_swirl;
+	int axisym_theta_cells;
+	double axisym_theta_span;
+	double twod_slab_thickness;
 
 
 	/*------------------------------ SIMULATION ------------------------------*/
@@ -385,12 +457,19 @@ struct parameters {
     int init_type;       // Initialization type
     
     // Contact angle parameters 
-    double contact_angle;     // Static contact angle (degrees)
+    double contact_angle_deg;     // Static contact angle (degrees)
     int wall_adhesion_model;  // 0=none, 1=constant angle
 
 	// Test cases parameters
 	// Rider & Kothe Advection testcase (1998) 
 	double advection_test_time;     // Parameter for Time Reversal
+
+	/* ----- Cahn-Hilliard / diffuse-interface parameters ----- */
+	double Cn;            // Cahn number
+	double Pe_CH;         // CH Peclet number
+	int weno_order;       // Advection order for diffuse-interface transport
+	int ch_iter_max;      // Max iterations for implicit CH solve
+	double ch_tol;        // Tolerance for implicit CH solve
 
 
 
@@ -586,6 +665,10 @@ struct velocity {
 	// Convective and viscous terms
 	double ***ng_explicit, ***ng_explicit_old, ***ng_implicit;
 
+	// split explicit viscous out so we don't scale it by rho in RHS
+    double ***ng_visc_explicit;       // explicit viscous part
+    double ***ng_visc_explicit_old;   // RK history for explicit viscous
+
 #ifdef TURB_FORCING
 	double ***fturb;
 #endif
@@ -594,7 +677,7 @@ struct velocity {
 	double ***d;
 	double ***ng_r;
 	double ***ng_Ad;
-	#ifdef VOF_PLIC
+	#ifdef VOF
 	double ***M_inv; // Preconditioner
 	#endif
 #endif
@@ -831,6 +914,10 @@ struct mac_grid {
 
 	double *xc, *yc, *zc;	// Arrays storing the cell center coordinates in the x, y, and z directions.
 	double *xu, *yv, *zw;	// Arrays storing the staggered grid coordinates where velocity components (u, v, w) are stored.
+	double *twod_x_c, *twod_x_u;   // 2D Cartesian aliases onto xc/xu.
+	double *twod_y_c, *twod_y_v;   // 2D Cartesian aliases onto yc/yv.
+	double *axisym_r_coords_c, *axisym_r_coords_u; // Axisymmetric aliases onto xc/xu.
+	double *axisym_z_coords_c, *axisym_z_coords_v; // Axisymmetric aliases onto yc/yv.
 	int NX, NY, NZ, NT;     // Number of computational grid cells in the x, y, and z directions.
 	int NI, NJ, NK;			// Number of grid points including ghost cells.
 	double **interface_position;
@@ -868,6 +955,10 @@ struct mac_grid {
 	double *idx_u, *idy_v, *idz_w; // Inverse of the grid spacing at velocity cell locations.
 	double *idx_c, *idy_c, *idz_c; // Inverse of the grid spacing at cell center locations.
 	double *i2dx_c, *i2dy_c, *i2dz_c; // Stores second-order inverse grid spacings for certain derivative calculations.
+	double *r_u, *r_c;             // Axisymmetric metric radii built from xu/xc.
+	double *inv_r_u, *inv_r_c;     // Safe inverse radii for axisymmetric operators.
+	double *ring_wt_u, *ring_wt_c; // Azimuthal ring weights = theta_span * r.
+	double dummy_z_slab_thickness; // Storage-only thickness of the collapsed third direction.
 #ifndef GRID_UNIFORM
 	double *wc2vN, *wc2vS, *wc2uW, *wc2uE, *wc2wB, *wc2wF;
 #endif
@@ -1176,6 +1267,10 @@ struct lagrangian {
 	// Temporary arrays to be used only within individual functions
 	double *Temp_L;
 	double *Temp_H;
+	/* --- NEW: density at Lagrangian markers ----------------------------- */
+	#ifdef VOF_IBM
+		double *Temp_L_rho;                    /* mixture density, per marker   */
+	#endif
 	double ***ng_temp;
 	double ***temp;
 
@@ -1310,6 +1405,20 @@ struct particle {
 
 	// Force and torque from collisions
 	double F_coll[3], T_coll[3];
+
+	#ifdef VOF_IBM
+		/*–– Continuum Capillary Force method (CCF) variables ––*/
+	double F_CCF[3];
+	double T_CCF[3];
+	double F_CCF_cum[3];
+	double T_CCF_cum[3];
+
+	double Int_rho[3]; // Volume integral of density
+	double Int_rho_scalar; // Volume integral of scalar
+
+	double F_CSF_solid[3];      // CSF force integrated over solid (to subtract)
+    double T_CSF_solid[3];      // CSF torque integrated over solid (to subtract)
+	#endif
 
 
 #ifdef POST_PROCESS
@@ -1501,7 +1610,7 @@ struct cart3d_bag {
 	Subgrid *smag;
 	Rans *rans;
 	Fourier *fourier;
-	#ifdef VOF_PLIC
+	#ifdef VOF
     VolumeFraction *vof; // New pointer for the volume-fraction data
     #endif
 

@@ -21,6 +21,15 @@ CFG(grid, NYM, 64, atoi)               // number of grid points in y direction
 CFG(grid, NZM, 64, atoi)               // number of grid points in z direction
 CFG(grid, ImportGridFromFile, 0, atoi) // Import grid from file? (YES/NO -> 1/0)
 
+/******************************************************************************/
+/*                                   2D MODES                                 */
+/*----------------------------------------------------------------------------*/
+/*    Shared configuration for planar and axisymmetric slab storage           */
+/******************************************************************************/
+CFG(twod, axisym_theta_cells, 1, atoi)
+CFG(twod, axisym_theta_span, 6.283185307179586, atof)
+CFG(twod, twod_slab_thickness, -1.0, atof)
+
 
 /******************************************************************************/
 /*                                 SIMULATION                                 */
@@ -105,7 +114,14 @@ CFG(vof, mu2, 1.0, atof)       // Viscosity fluid 2
 CFG(vof, init_type, 0, atoi)     // 1=Advection test case, 2=Stationary Bubble test case
 
 //Contact angle inputs
-CFG(vof, contact_angle_deg, 90.0, atof) 
+CFG(vof, contact_angle_deg, 90.0, atof)
+
+// Diffuse-interface / Cahn-Hilliard controls
+CFG(vof, Cn, -1.0, atof)          // If <= 0, set to 0.75 * h_ref in Input.c
+CFG(vof, Pe_CH, -1.0, atof)       // If <= 0, set to 0.9 / Cn in Input.c
+CFG(vof, weno_order, 5, atoi)     // Advection order for diffuse-interface transport
+CFG(vof, ch_iter_max, 300, atoi)  // Max iterations for implicit CH solve
+CFG(vof, ch_tol, 1e-9, atof)      // Tolerance for implicit CH solve
 
 // Test cases 
 // Rider & Kothe Advection testcase (1998) 

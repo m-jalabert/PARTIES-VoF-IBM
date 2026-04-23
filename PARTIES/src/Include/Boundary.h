@@ -10,14 +10,15 @@
 #undef TEST_OUTPUT
 #undef  DIRTY_FIX  // if 1 fix is one; to disable put 0
 
-
+#undef PERIODIC_X_NOSLIP_BOX
+#undef PERIODIC_Z_NOSLIP_BOX
 #undef PERIODIC_NOSLIP_BOX
 #undef PERIODIC_FREESLIP_BOX
 #undef XPERIODIC_FREESLIP_BOX
 #undef PERIODIC_SHEAR_FLOW
 #undef PERIODIC_DOUBLE_SHEAR_FLOW
 #undef DOUBLE_PERIODIC_FREESLIP_BOX
-#define NOSLIP_BOX
+#undef NOSLIP_BOX
 #undef FREESLIP_DUCT
 #undef NOSLIP_DUCT
 #undef GRAVITY_CURRENT
@@ -25,8 +26,16 @@
 #undef TRIPLE_PERIODIC
 #undef TRIPLE_PERIODIC_SHEAR
 #undef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
-#undef RISING_BUBBLE
+#undef YANG_RISING_BUBBLE_3D
 #undef FREESLIP_BOX
+#undef QUARTER_SPHERE
+#undef RISING_BUBBLE
+
+
+#define TWOD_CARTESIAN
+#undef AXISYM_RZ
+#undef AXISYM_NO_SWIRL
+
 
 #ifdef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
         #define LEFT_INFLOW
@@ -36,13 +45,21 @@
         #define TOP_WALL_VELOCITY_FREESLIP
 		#define TOP_WALL_OUTFLOW
 
+#elif defined QUARTER_SPHERE
+		#define LEFT_WALL_VELOCITY_FREESLIP
+		#define RIGHT_WALL_VELOCITY_NOSLIP
+		#define BACK_WALL_VELOCITY_NOSLIP
+		#define FRONT_WALL_VELOCITY_NOSLIP
+		#define BOTTOM_WALL_VELOCITY_NOSLIP
+		#define TOP_WALL_VELOCITY_NOSLIP
+
 #elif defined RISING_BUBBLE
-		#define BACK_WALL_VELOCITY_FREESLIP
-		#define FRONT_WALL_VELOCITY_FREESLIP
-		#define LEFT_WALL_VELOCITY_NOSLIP		// We want no-slip at x=0, x=2
-		#define RIGHT_WALL_VELOCITY_NOSLIP		// We want no-slip at x=0, x=2
-		#define BOTTOM_WALL_VELOCITY_NOSLIP  // We want slip at y=0, y=0.5
-		#define TOP_WALL_VELOCITY_NOSLIP		// We want slip at y=0, y=0.5
+		#define BACK_WALL_VELOCITY_FREESLIP     // Change from NOSLIP
+		#define FRONT_WALL_VELOCITY_FREESLIP    // Change from NOSLIP
+		#define LEFT_WALL_VELOCITY_FREESLIP     // Change from NOSLIP
+		#define RIGHT_WALL_VELOCITY_FREESLIP    // Change from NOSLIP
+		#define BOTTOM_WALL_VELOCITY_FREESLIP   // Correct
+		#define TOP_WALL_VELOCITY_FREESLIP      // Correct
 
 #elif defined GRAVITY_CURRENT_PERIODIC
         #define LEFT_WALL_VELOCITY_NOSLIP
@@ -50,6 +67,14 @@
         #define ZPERIODIC
         #define BOTTOM_WALL_VELOCITY_NOSLIP
         #define TOP_WALL_VELOCITY_FREESLIP
+
+#elif defined YANG_RISING_BUBBLE_3D
+    #define LEFT_WALL_VELOCITY_NOSLIP
+    #define RIGHT_WALL_VELOCITY_NOSLIP
+    #define BACK_WALL_VELOCITY_NOSLIP
+    #define FRONT_WALL_VELOCITY_NOSLIP
+    #define BOTTOM_WALL_VELOCITY_NOSLIP
+    #define TOP_WALL_VELOCITY_FREESLIP
 
 
 #elif defined GRAVITY_CURRENT
@@ -65,6 +90,20 @@
 	#define ZPERIODIC
 	#define BOTTOM_WALL_VELOCITY_NOSLIP
 	#define TOP_WALL_VELOCITY_NOSLIP
+
+#elif defined PERIODIC_X_NOSLIP_BOX
+	#define XPERIODIC
+	#define BACK_WALL_VELOCITY_NOSLIP
+	#define FRONT_WALL_VELOCITY_NOSLIP
+	#define BOTTOM_WALL_VELOCITY_NOSLIP
+	#define TOP_WALL_VELOCITY_NOSLIP
+
+#elif defined PERIODIC_Z_NOSLIP_BOX
+	#define LEFT_WALL_VELOCITY_NOSLIP
+	#define RIGHT_WALL_VELOCITY_NOSLIP
+	#define BOTTOM_WALL_VELOCITY_NOSLIP
+	#define TOP_WALL_VELOCITY_NOSLIP
+	#define ZPERIODIC
 
 #elif defined PERIODIC_FREESLIP_BOX
 	#define XPERIODIC
@@ -135,18 +174,25 @@
 		#define YPERIODIC
 		#define SHEARED_PERIODIC
 #else
-/******************************************************************************/
-/*                                X-Boundaries                                */
-/******************************************************************************/
-	#undef  LEFT_WALL_VELOCITY_NOSLIP
-	#undef LEFT_WALL_VELOCITY_FREESLIP
-	#define  LEFT_INFLOW
-	#undef  LEFT_OUTFLOW
+	/******************************************************************************/
+	/*                                X-Boundaries                                */
+	/******************************************************************************/
+#ifdef AXISYM_RZ
+		#undef  LEFT_WALL_VELOCITY_NOSLIP
+		#undef LEFT_WALL_VELOCITY_FREESLIP
+		#undef  LEFT_INFLOW
+		#undef  LEFT_OUTFLOW
+#else
+		#define  LEFT_WALL_VELOCITY_NOSLIP
+		#undef LEFT_WALL_VELOCITY_FREESLIP
+		#undef  LEFT_INFLOW
+		#undef  LEFT_OUTFLOW
+#endif
 
-	#undef  RIGHT_WALL_VELOCITY_NOSLIP
-	#undef RIGHT_WALL_VELOCITY_FREESLIP
+		#define  RIGHT_WALL_VELOCITY_NOSLIP
+		#undef RIGHT_WALL_VELOCITY_FREESLIP
 	#undef  RIGHT_INFLOW
-	#define  RIGHT_OUTFLOW
+	#undef  RIGHT_OUTFLOW
 
 	#undef  XPERIODIC
 
@@ -196,12 +242,26 @@
 
 
 /******************************************************************************/
-/* 						Volume of Fluid - PLIC with CSF					      */
+/* 						Volume of Fluid                                       */
+/* Choose exactly ONE advection method: VOF_PLIC, VOF_CICSAM, or VOF_DIFFUSE */
 /******************************************************************************/
-#define VOF_PLIC
-#define SURFACE_TENSION
+#define VOF
+#undef  VOF_PLIC
+#undef  VOF_CICSAM
+#define VOF_DIFFUSE
+
+#undef SURFACE_TENSION
 #undef STATIC_BUBBLE_TESTCASE
 #define VOF_GRAVITY
+
+
+#define USE_HYPRE
+
+/******************************************************************************/
+/* 						Volume of Fluid - Immersed Boundary coupling	      */
+/******************************************************************************/
+#undef VOF_WETTING
+#undef VOF_IBM
 
 
 
@@ -302,7 +362,7 @@
 // Continuously moves top wall from params->ymax to params->vel_init_y0 over the
 // time interval {0, time_max}.  Only usable for dry simulations.
 #undef  DOWNWARD_MOVING_WALL
-#undef GRID_UNIFORM
+#define GRID_UNIFORM
 #undef RETRACTION  // give a number here the Lagrangian points are shifted by xx dx inside
 #undef MASKING_OUTSIDE // the ibm heating is only applied inside the particle
 
@@ -525,13 +585,18 @@
 	#elif defined RIGHT_WALL_VELOCITY_FREESLIP
 		#error Incompatible boundary conditions 'XPERIODIC' and 'RIGHT_WALL_VELOCITY_FREESLIP'
 	#endif
+	#else
+		//-----------
+		// Left Wall
+		//-----------
+#if defined AXISYM_RZ
+		#if defined LEFT_INFLOW || defined LEFT_OUTFLOW || defined LEFT_WALL_VELOCITY_NOSLIP || defined LEFT_WALL_VELOCITY_FREESLIP
+			#error AXISYM_RZ reserves the left boundary for the symmetry axis; do not define generic left-wall, inflow, or outflow macros
+		#endif
 #else
-	//-----------
-	// Left Wall
-	//-----------
-	#if defined LEFT_INFLOW && defined LEFT_WALL_VELOCITY_NOSLIP
-		#error Incompatible boundary conditions 'LEFT_INFLOW' and 'LEFT_WALL_VELOCITY_NOSLIP'
-	#elif defined LEFT_INFLOW && defined LEFT_WALL_VELOCITY_FREESLIP
+		#if defined LEFT_INFLOW && defined LEFT_WALL_VELOCITY_NOSLIP
+			#error Incompatible boundary conditions 'LEFT_INFLOW' and 'LEFT_WALL_VELOCITY_NOSLIP'
+		#elif defined LEFT_INFLOW && defined LEFT_WALL_VELOCITY_FREESLIP
 		#error Incompatible boundary conditions 'LEFT_INFLOW' and 'LEFT_WALL_VELOCITY_FREESLIP'
 	#elif defined LEFT_INFLOW && defined LEFT_OUTFLOW
 		#error Incompatible boundary conditions 'LEFT_INFLOW' and 'LEFT_OUTFLOW'
@@ -541,13 +606,14 @@
 		#error Incompatible boundary conditions 'LEFT_OUTFLOW' and 'LEFT_WALL_VELOCITY_FREESLIP'
 	#elif defined LEFT_WALL_VELOCITY_NOSLIP && defined LEFT_WALL_VELOCITY_FREESLIP
 		#error Incompatible boundary conditions 'LEFT_WALL_VELOCITY_NOSLIP' and 'LEFT_WALL_VELOCITY_FREESLIP'
-	#endif
-	#if !defined LEFT_INFLOW && !defined LEFT_OUTFLOW && !defined LEFT_WALL_VELOCITY_NOSLIP && !defined LEFT_WALL_VELOCITY_FREESLIP
-		#error No left wall boundary condition specified
-	#endif
+		#endif
+		#if !defined LEFT_INFLOW && !defined LEFT_OUTFLOW && !defined LEFT_WALL_VELOCITY_NOSLIP && !defined LEFT_WALL_VELOCITY_FREESLIP
+			#error No left wall boundary condition specified
+		#endif
+#endif
 
-	//------------
-	// Right Wall
+		//------------
+		// Right Wall
 	//------------
 	#if defined RIGHT_INFLOW && defined RIGHT_WALL_VELOCITY_NOSLIP
 		#error Incompatible boundary conditions 'RIGHT_INFLOW' and 'RIGHT_WALL_VELOCITY_NOSLIP'
@@ -744,6 +810,63 @@
 
 #if  defined VOF_NO_VOLUME  && !defined VOF_SMOOTH_VELO
 	#error 'vof_no_velo does not work without vof_smooth_velo'
+#endif
+
+
+//------------------------------------------------------------------------------
+// VoF
+//------------------------------------------------------------------------------
+#if defined VOF_PLIC && defined VOF_CICSAM
+	#error 'VOF_PLIC and VOF_CICSAM are mutually exclusive — choose one advection method'
+#endif
+
+// Parent macro: defined whenever any VOF method is active
+#if defined VOF_PLIC || defined VOF_CICSAM || defined VOF_DIFFUSE
+	#define VOF
+#endif
+
+#if defined VOF_PLIC && defined VOF_DIFFUSE
+  #error 'VOF_PLIC and VOF_DIFFUSE are mutually exclusive'
+#endif
+#if defined VOF_CICSAM && defined VOF_DIFFUSE
+  #error 'VOF_CICSAM and VOF_DIFFUSE are mutually exclusive'
+#endif
+#if defined VOF_DIFFUSE
+  #define VOF
+#endif
+#if defined VOF_DIFFUSE && defined VOF_WETTING
+  #error 'VOF_WETTING is replaced by the CH MCL ghost model'
+#endif
+
+#if defined TWOD_CARTESIAN && defined AXISYM_RZ
+	#error 'TWOD_CARTESIAN and AXISYM_RZ are mutually exclusive'
+#endif
+
+#if defined AXISYM_NO_SWIRL && !defined AXISYM_RZ
+	#error 'AXISYM_NO_SWIRL requires AXISYM_RZ'
+#endif
+
+#if defined TWOD_CARTESIAN || defined AXISYM_RZ
+	#define TWOD_MODE
+#endif
+
+#ifdef TWOD_MODE
+	#ifndef VOF_DIFFUSE
+		#error 'TWOD_MODE is currently supported only with VOF_DIFFUSE'
+	#endif
+	#ifdef VOF_PLIC
+		#error 'TWOD_MODE does not support VOF_PLIC'
+	#endif
+	#ifdef VOF_CICSAM
+		#error 'TWOD_MODE does not support VOF_CICSAM'
+	#endif
+	#ifndef ZPERIODIC
+		#error 'TWOD_MODE requires ZPERIODIC for the dummy storage slab'
+	#endif
+#endif
+
+#if defined SURFACE_TENSION && !defined VOF
+	#error 'Surface Tension requires a VOF method (VOF_PLIC, VOF_CICSAM, or VOF_DIFFUSE)'
 #endif
 
 #endif
