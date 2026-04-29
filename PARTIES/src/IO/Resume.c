@@ -640,13 +640,13 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
  #ifdef VOF_IBM
 		
-		sprintf(fieldname, "%s/vfc", groupname);
-		Resume_h5_flow_variable(data_bag->vof->vfc, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->vfc, VOLUME_FRACTION, pnodes, data_bag);
+		// sprintf(fieldname, "%s/vfc", groupname);
+		// Resume_h5_flow_variable(data_bag->vof->vfc, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		// Communication_update_ghost_nodes_flow_variable(data_bag->vof->vfc, VOLUME_FRACTION, pnodes, data_bag);
 
-		sprintf(fieldname, "%s/vfc_smooth", groupname);
-		Resume_h5_flow_variable(data_bag->vof->vfc_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->vfc_smooth, VOLUME_FRACTION, pnodes, data_bag);
+		// sprintf(fieldname, "%s/vfc_smooth", groupname);
+		// Resume_h5_flow_variable(data_bag->vof->vfc_smooth, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		// Communication_update_ghost_nodes_flow_variable(data_bag->vof->vfc_smooth, VOLUME_FRACTION, pnodes, data_bag);
 
 		sprintf(fieldname, "%s/nx_IBM", groupname);
 		Resume_h5_flow_variable(data_bag->vof->nx_IBM, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
@@ -660,17 +660,17 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		Resume_h5_flow_variable(data_bag->vof->nz_IBM, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
 		Communication_update_ghost_nodes_flow_variable(data_bag->vof->nz_IBM, VOLUME_FRACTION, pnodes, data_bag);
 
-		sprintf(fieldname, "%s/uE", groupname);
-		Resume_h5_flow_variable(data_bag->vof->uE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->uE, VOLUME_FRACTION, pnodes, data_bag);
+		// sprintf(fieldname, "%s/uE", groupname);
+		// Resume_h5_flow_variable(data_bag->vof->uE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		// Communication_update_ghost_nodes_flow_variable(data_bag->vof->uE, VOLUME_FRACTION, pnodes, data_bag);
 
-		sprintf(fieldname, "%s/vE", groupname);
-		Resume_h5_flow_variable(data_bag->vof->vE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->vE, VOLUME_FRACTION, pnodes, data_bag);
+		// sprintf(fieldname, "%s/vE", groupname);
+		// Resume_h5_flow_variable(data_bag->vof->vE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		// Communication_update_ghost_nodes_flow_variable(data_bag->vof->vE, VOLUME_FRACTION, pnodes, data_bag);
 
-		sprintf(fieldname, "%s/wE", groupname);
-		Resume_h5_flow_variable(data_bag->vof->wE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
-		Communication_update_ghost_nodes_flow_variable(data_bag->vof->wE, VOLUME_FRACTION, pnodes, data_bag);
+		// sprintf(fieldname, "%s/wE", groupname);
+		// Resume_h5_flow_variable(data_bag->vof->wE, file_id, fieldname, grid, params, DTRACE("Resume_h5_flow_variable"));
+		// Communication_update_ghost_nodes_flow_variable(data_bag->vof->wE, VOLUME_FRACTION, pnodes, data_bag);
 
  #endif // VOF_IBM
 

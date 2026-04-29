@@ -209,13 +209,40 @@ int N_read_data = 4;
 		// 	break;
 		// }
 
-		if (X[i][0] >= G_xmin && X[i][0] <  G_xmax && X[i][1] >= G_ymin &&
-			X[i][1] <  G_ymax && X[i][2] >= G_zmin && X[i][2] <  G_zmax) {
+		int particle_is_local =
+			(X[i][0] >= G_xmin && X[i][0] < G_xmax &&
+			 X[i][1] >= G_ymin && X[i][1] < G_ymax &&
+			 X[i][2] >= G_zmin && X[i][2] < G_zmax);
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+		/*
+		 * Phase-3 2D IBM keeps the collapsed z direction as storage only.
+		 * Particle ownership is therefore in-plane only; the z coordinate is
+		 * re-centered in the single physical slab below.
+		 */
+		particle_is_local =
+			(X[i][0] >= G_xmin && X[i][0] < G_xmax &&
+			 X[i][1] >= G_ymin && X[i][1] < G_ymax);
+#ifdef AXISYM_RZ
+		if (fabs(X[i][0]) > 1.0e-12) {
+			sprintf(message,
+			        "AXISYM_RZ IBM v1 supports only on-axis particles; "
+			        "%s particle %d has radial coordinate %.16g",
+			        filename, i, X[i][0]);
+			ierr = -7;
+			break;
+		}
+#endif
+#endif
+
+		if (particle_is_local) {
 
 			// Assign values to particle
 			p -> X[0] = X[i][0];
 			p -> X[1] = X[i][1];
 			p -> X[2] = X[i][2];
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+			p -> X[2] = grid->zc[grid->G_Ks];
+#endif
 			p -> R = R[i];
 
 			// Fixed and mobile particles should have unique IDs
@@ -405,10 +432,10 @@ void ParticleInput_h5_data(Particle_list *p_list, hid_t file_id, char *groupname
 	for (j = 0; j < Np_global; j++) {
 
 		// Check that particle fits within subdomain
-		if (G_xmax-G_xmin < R_data[j][0] || G_ymax-G_ymin < R_data[j][0] || G_zmax-G_zmin < R_data[j][0]) {
-			ierr = -1;
-			break;
-		}
+		// if (G_xmax-G_xmin < R_data[j][0] || G_ymax-G_ymin < R_data[j][0] || G_zmax-G_zmin < R_data[j][0]) {
+		// 	ierr = -1;
+		// 	break;
+		// }
 
 		// Check if particle belongs to this processor
 		X = X_data[j];

@@ -627,14 +627,14 @@
     //    sprintf(fieldname, "%s/tz", groupname);
     //    Output_h5_flow_variable(vof->tz, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-       sprintf(fieldname, "%s/uE", groupname);
-       Output_h5_flow_variable(vof->uE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    //    sprintf(fieldname, "%s/uE", groupname);
+    //    Output_h5_flow_variable(vof->uE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-       sprintf(fieldname, "%s/vE", groupname);
-       Output_h5_flow_variable(vof->vE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    //    sprintf(fieldname, "%s/vE", groupname);
+    //    Output_h5_flow_variable(vof->vE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-       sprintf(fieldname, "%s/wE", groupname);
-       Output_h5_flow_variable(vof->wE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    //    sprintf(fieldname, "%s/wE", groupname);
+    //    Output_h5_flow_variable(vof->wE, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
        sprintf(fieldname, "%s/fx_IBM", groupname);
        Output_h5_flow_variable(vof->fx_IBM, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
@@ -654,11 +654,11 @@
        sprintf(fieldname, "%s/f_ccf_z", groupname);
        Output_h5_flow_variable(vof->f_ccf_z, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-       sprintf(fieldname, "%s/vfc", groupname);
-       Output_h5_flow_variable(vof->vfc, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    //    sprintf(fieldname, "%s/vfc", groupname);
+    //    Output_h5_flow_variable(vof->vfc, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
-       sprintf(fieldname, "%s/vfc_smooth", groupname);
-       Output_h5_flow_variable(vof->vfc_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
+    //    sprintf(fieldname, "%s/vfc_smooth", groupname);
+    //    Output_h5_flow_variable(vof->vfc_smooth, file_id, fieldname, grid, params, DTRACE("Output_h5_flow_variable"));
 
 #endif
 
@@ -890,7 +890,7 @@
  
          if (params->susp_mass_output) {
              if (verbose) Display_progress(params,"Output.c: write suspended mass\n");
-             Conc_compute_total_suspended_mass(c[iconc], grid);
+             Conc_compute_total_suspended_mass(c[iconc], grid, params);
  
              dim_1d[0] = 1;
              sprintf(fieldname, "%s/suspendedMass", groupname);

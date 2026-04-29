@@ -94,6 +94,7 @@ CFG(flow, oscillation_frame, 1.0, atof)     // define observer: 0 = inertial (fi
 //------------------------------------------------------------------------------
 CFG(flow, vel_init_type, 0, atoi)  // Type of initial velocity profile
 CFG(flow, vel_init_y0, 0.0, atof)  // y-coordinate to start velocity profile
+CFG(simulation, freeze_velocity, 0, atoi)  // Smoke-test: skip momentum/pressure, force u=v=w=0 (1 = on)
 
 /******************************************************************************/ 
 /*                                VOF_PLIC                                    */

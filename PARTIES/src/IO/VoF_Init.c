@@ -796,12 +796,12 @@ void VoF_init_rayleigh_taylor_2d(Cart3d_bag *data_bag)
 /*
  * VoF_init_axisymmetric_rising_bubble_2d
  * --------------------------------------
- * Quasi-2D version of the classic axisymmetric rising-bubble benchmark.
+ * Meridional r-z version of the classic axisymmetric rising-bubble benchmark.
  *
- * We use the x-y plane as the meridional plane and keep only a few uniform
- * cells in z. The left free-slip wall acts as the symmetry axis, so the
- * initial bubble is a circle of radius R centred at x = xmin and y = ymin+1.6R,
- * extruded through the thin z direction.
+ * The code reuses x as the radial coordinate r and y as the axial coordinate z.
+ * The bubble is centred on the symmetry axis at r = xmin and sits 2R above the
+ * bottom boundary, matching the standard "bubble on the axis" setup from the
+ * roadmap. The third storage direction remains a bookkeeping-only slab.
  *
  * Expected benchmark box in the meridional plane:
  *   x in [0, 4R],  y in [0, 8R]
@@ -815,8 +815,8 @@ void VoF_init_axisymmetric_rising_bubble_2d(Cart3d_bag *data_bag)
     double       ***F      = vof->F;
 
     const double R   = 1.0;
-    const double x_c = 4.0;
-    const double y_c = 2.0;
+    const double x_c = 0.0;
+    const double y_c = 1.6;
 
     const double dx = grid->dx_c[0];
     const double dy = grid->dy_c[0];
@@ -1970,6 +1970,453 @@ void VoF_init_meniscus_154deg(Cart3d_bag *data_bag)
         F[k][j][i] = frac * w_samp;   /* 0 ≤ F ≤ 1 */
 
     }}}  /* end cells */
+}
+
+
+/*******************************************************************************
+ * Lens area between two intersecting disks of radii R, r at center distance d.
+ * Returns 0 if they do not overlap and pi*min(R,r)^2 if one contains the other.
+ ******************************************************************************/
+static double mcl_disk_lens_area(double R, double r, double d)
+{
+    if (d >= R + r) return 0.0;
+    if (d <= fabs(R - r)) {
+        double rmin = (R < r) ? R : r;
+        return M_PI * rmin * rmin;
+    }
+    double cosA = (d * d + R * R - r * r) / (2.0 * d * R);
+    double cosB = (d * d + r * r - R * R) / (2.0 * d * r);
+    if (cosA >  1.0) cosA =  1.0; if (cosA < -1.0) cosA = -1.0;
+    if (cosB >  1.0) cosB =  1.0; if (cosB < -1.0) cosB = -1.0;
+    double term = (-d + R + r) * (d + R - r) * (d - R + r) * (d + R + r);
+    if (term < 0.0) term = 0.0;
+    return R * R * acos(cosA) + r * r * acos(cosB) - 0.5 * sqrt(term);
+}
+
+
+/*******************************************************************************
+ * VoF_init_planar_droplet_on_static_cylinder_theta
+ *
+ * Initial condition for the Liu and Ding (2015) section 4.1 half-cylinder
+ * wetting test in TWOD_CARTESIAN.  Domain x in [0, 1], y in [0, 2.5];
+ * cylinder R_s = 0.5 sitting on the left symmetry plane at (0, 0.8).
+ *
+ * Liu15 starts the dynamic relaxation from the *equilibrium* shape at a fixed
+ * geometric contact angle theta_IC = 60 deg with a clipped-circle volume that
+ * matches a free droplet of radius R_0 = 0.5 (D = 1).  The two-circle
+ * geometry is:
+ *   l(R_f) = sqrt(R_s^2 + R_f^2 + 2 R_s R_f cos(theta_IC))
+ *   A_liquid(R_f) = pi R_f^2 - A_lens(R_s, R_f, l(R_f))
+ *   Find R_f s.t. A_liquid = pi R_0^2.
+ *
+ * The interface is rendered as a diffuse tanh profile around the L-G circle
+ * (radius R_f, center on the y-axis), then clipped inside the diffuse solid
+ * via C_L = min(C_L, 1 - C_S) by the MCL post-init pass.
+ *
+ * Reproduces Liu15 §4.1 IC; theta_IC is intentionally fixed at 60 deg
+ * regardless of params->contact_angle_deg, so the *prescribed* contact angle
+ * can differ from the IC and we observe relaxation toward equilibrium.
+ ******************************************************************************/
+void VoF_init_planar_droplet_on_static_cylinder_theta(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+    double       ***F      = vof->F;
+
+    const double Rs = 0.5;
+    const double xs = 0.0;
+    const double ys = 0.8;
+    const double R0 = 0.5;
+    const double V_target = M_PI * R0 * R0;
+
+    /* Liu15 IC: geometric contact angle 60 deg.
+    Note that parties.inp needs to take 180 - contact angle since the convention differs.
+     */
+    const double theta_IC = 60.0 * M_PI / 180.0; 
+    const double cosTH = cos(theta_IC);
+
+    /* Newton iteration on R_f.  Free-droplet R_0 is a good seed because the
+     * IC volume equals the free-droplet volume exactly. */
+    double R_f = R0;
+    for (int it = 0; it < 200; ++it) {
+        double l  = sqrt(Rs * Rs + R_f * R_f + 2.0 * Rs * R_f * cosTH);
+        double A  = M_PI * R_f * R_f - mcl_disk_lens_area(Rs, R_f, l);
+        double res = A - V_target;
+        if (fabs(res) < 1.0e-12) break;
+
+        double h    = 1.0e-6 * fmax(R_f, 0.1);
+        double R2   = R_f + h;
+        double l2   = sqrt(Rs * Rs + R2 * R2 + 2.0 * Rs * R2 * cosTH);
+        double A2   = M_PI * R2 * R2 - mcl_disk_lens_area(Rs, R2, l2);
+        double dA   = (A2 - A) / h;
+        if (fabs(dA) < 1.0e-12) break;
+        double step = res / dA;
+        if (step >  0.5 * R_f) step =  0.5 * R_f;
+        if (step < -0.5 * R_f) step = -0.5 * R_f;
+        R_f -= step;
+        if (R_f < 0.05) R_f = 0.05;
+    }
+
+    const double l_c = sqrt(Rs * Rs + R_f * R_f + 2.0 * Rs * R_f * cosTH);
+    const double xd  = xs;
+    const double yd  = ys + l_c;
+
+    /* Diffuse interface bandwidth follows the Cn used by VOF_DIFFUSE.  If the
+     * caller has not yet set Cn (init runs before Input.c finalizes Cn when
+     * Cn was given as -1 in parties.inp), fall back to 0.75 * h_ref. */
+    const double dx_c = grid->dx_c[0];
+    const double dy_c = grid->dy_c[0];
+    double Cn = params->Cn;
+    if (Cn <= 0.0) {
+        double href = (dx_c < dy_c) ? dx_c : dy_c;
+        Cn = 0.75 * href;
+    }
+    const double bw = 2.0 * sqrt(2.0) * Cn;
+
+    {
+        char msg[200];
+        snprintf(msg, sizeof(msg),
+                 "Liu15 IC: theta_IC=%.1fdeg R_f=%.6f l_c=%.6f V_target=%.6f Cn=%.4g\n",
+                 theta_IC * 180.0 / M_PI, R_f, l_c, V_target, Cn);
+        Display_progress(params, msg);
+    }
+
+    const int    S  = 5;
+    const double inv_S = 1.0 / (double)S;
+    const double w_samp = inv_S * inv_S;
+
+    const int Is = grid->G_Is, Ie = grid->G_Ie;
+    const int Js = grid->G_Js, Je = grid->G_Je;
+    const int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    for (int k = Ks; k < Ke; ++k) {
+        for (int j = Js; j < Je; ++j) {
+            const double y_min = grid->yc[j] - 0.5 * dy_c;
+            for (int i = Is; i < Ie; ++i) {
+                const double x_min = grid->xc[i] - 0.5 * dx_c;
+                double frac = 0.0;
+
+                /*
+                 * Diffuse C_S analytic profile, identical to the one rebuilt
+                 * by VOF_DIFFUSE_compute_C_S so the IC limiter clips C_L
+                 * inside the cylinder before t = 0.  Without this the H5
+                 * snapshot at t = 0 shows liquid bleeding through the
+                 * diffuse solid; the next time step would clip it via the
+                 * MCL limiter, but the IC frame would still mislead users.
+                 */
+                const double shift_S = sqrt(2.0) * log(19.0) * Cn;
+                const double denom_S = 2.0 * sqrt(2.0) * Cn;
+
+                for (int sj = 0; sj < S; ++sj) {
+                    const double y = y_min + (sj + 0.5) * dy_c * inv_S;
+                    for (int si = 0; si < S; ++si) {
+                        const double x = x_min + (si + 0.5) * dx_c * inv_S;
+
+                        /* Signed distance to the L-G circle, positive inside
+                         * the droplet.  This drives the diffuse C_L profile. */
+                        double rd = sqrt((x - xd) * (x - xd) +
+                                         (y - yd) * (y - yd));
+                        double s_lg = R_f - rd;
+                        double C_L_pre = 0.5 * (1.0 + tanh(s_lg / bw));
+
+                        /* Diffuse C_S around the cylinder. */
+                        double rs = sqrt((x - xs) * (x - xs) +
+                                         (y - ys) * (y - ys));
+                        double arg_S = (rs - (Rs - shift_S)) / denom_S;
+                        double C_S_pre = 0.5 - 0.5 * tanh(arg_S);
+
+                        /* Liu15 mass limiter applied at the sub-sample level
+                         * so the diffuse C_L matches the contour the MCL
+                         * post-step hook would produce (no liquid leaks into
+                         * the diffuse solid). */
+                        double cap = 1.0 - C_S_pre;
+                        if (cap < 0.0) cap = 0.0;
+                        if (C_L_pre > cap) C_L_pre = cap;
+                        if (C_L_pre < 0.0) C_L_pre = 0.0;
+                        frac += w_samp * C_L_pre;
+                    }
+                }
+
+                F[k][j][i] = frac;
+            }
+        }
+    }
+
+#ifdef VOF_DIFFUSE
+    for (int k = Ks; k < Ke; ++k)
+        for (int j = Js; j < Je; ++j)
+            for (int i = Is; i < Ie; ++i) {
+                vof->C_L[k][j][i] = F[k][j][i];
+            }
+#endif
+
+    vof->initial_volume = -1.0;
+}
+
+/*******************************************************************************
+ * Lens volume between two intersecting spheres of radii R and r separated by d.
+ * Returns 0 if separated and the full smaller sphere volume if one sphere
+ * contains the other.
+ ******************************************************************************/
+static double mcl_sphere_lens_volume(double R, double r, double d)
+{
+    if (R <= 0.0 || r <= 0.0)
+        return 0.0;
+
+    const double V_R = (4.0 / 3.0) * M_PI * R * R * R;
+    const double V_r = (4.0 / 3.0) * M_PI * r * r * r;
+
+    if (d >= R + r)
+        return 0.0;
+
+    if (d <= fabs(R - r))
+        return (V_R < V_r) ? V_R : V_r;
+
+    if (d < 1.0e-14)
+        return (V_R < V_r) ? V_R : V_r;
+
+    const double h = R + r - d;
+
+    double V = M_PI * h * h *
+               (d * d + 2.0 * d * (R + r) - 3.0 * (R - r) * (R - r)) /
+               (12.0 * d);
+
+    if (V < 0.0) V = 0.0;
+
+    return V;
+}
+
+
+/*******************************************************************************
+ * VoF_init_axisymmetric_droplet_on_static_sphere_theta
+ *
+ * Axisymmetric static droplet on a fixed sphere.
+ *
+ * The initial liquid-gas interface is an intersecting sphere chosen so that the
+ * contact angle through the liquid is theta_IC = 120 deg.  The liquid field is
+ * initialized directly as a diffuse tanh profile, then clipped by the diffuse
+ * solid indicator through C_L <= 1 - C_S.
+ *
+ * Coordinates:
+ *   x -> r
+ *   y -> z
+ *
+ * Default geometry:
+ *   solid sphere radius Rs = 1
+ *   solid sphere center    (r_s, z_s) = (0, 1.5)
+ *   target free-droplet diameter D = 1
+ *
+ * The liquid-gas curvature radius R_f is solved so that the sharp intersecting
+ * cap has the same volume as a free sphere of radius D/2.
+ ******************************************************************************/
+void VoF_init_axisymmetric_droplet_on_static_sphere_theta(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+    double       ***F      = vof->F;
+
+    /*
+     * Keep this consistent with p_fixed.inp.
+     * In AXISYM_RZ: x is radius r, y is axial coordinate z.
+     */
+    const double Rs = 1.0;
+    const double r_s = 0.0;
+    const double z_s = 1.5;
+
+    /*
+     * Target free-droplet volume.  D = 1 follows the Liu-type setup.
+     */
+    const double D_free = 1.0;
+    const double R_free = 0.5 * D_free;
+    const double V_target = (4.0 / 3.0) * M_PI * R_free * R_free * R_free;
+
+    /*
+     * Desired physical contact angle through the liquid.
+     *
+     * The two-sphere center-distance formula uses the supplementary geometric
+     * angle, exactly like the 2D cylinder initializer:
+     *
+     *   l^2 = Rs^2 + R_f^2 + 2 Rs R_f cos(pi - theta_liquid)
+     *
+     * For theta_liquid = 120 deg, the droplet center is above the solid sphere
+     * and the liquid-gas sphere intersects the solid sphere.
+     */
+    const double theta_liquid_deg = 120.0;
+    const double theta_liquid     = theta_liquid_deg * M_PI / 180.0;
+    const double theta_geom       = M_PI - theta_liquid;
+    const double cosTG            = cos(theta_geom);
+
+    /*
+     * Solve for the liquid-gas curvature radius R_f such that the sharp
+     * cap volume outside the solid sphere equals the target free-droplet volume.
+     */
+    double R_f = R_free;
+
+    for (int it = 0; it < 200; ++it) {
+        const double l = sqrt(Rs * Rs + R_f * R_f + 2.0 * Rs * R_f * cosTG);
+
+        const double V_drop =
+            (4.0 / 3.0) * M_PI * R_f * R_f * R_f
+            - mcl_sphere_lens_volume(Rs, R_f, l);
+
+        const double res = V_drop - V_target;
+
+        if (fabs(res) < 1.0e-13)
+            break;
+
+        const double h  = 1.0e-6 * fmax(R_f, 0.1);
+        const double R2 = R_f + h;
+        const double l2 = sqrt(Rs * Rs + R2 * R2 + 2.0 * Rs * R2 * cosTG);
+
+        const double V2 =
+            (4.0 / 3.0) * M_PI * R2 * R2 * R2
+            - mcl_sphere_lens_volume(Rs, R2, l2);
+
+        const double dV = (V2 - V_drop) / h;
+
+        if (fabs(dV) < 1.0e-14)
+            break;
+
+        double step = res / dV;
+
+        if (step >  0.5 * R_f) step =  0.5 * R_f;
+        if (step < -0.5 * R_f) step = -0.5 * R_f;
+
+        R_f -= step;
+
+        if (R_f < 0.05)
+            R_f = 0.05;
+    }
+
+    const double l_c = sqrt(Rs * Rs + R_f * R_f + 2.0 * Rs * R_f * cosTG);
+
+    const double r_d = r_s;
+    const double z_d = z_s + l_c;
+
+    /*
+     * Diffuse interface bandwidth.  This is the same convention as the planar
+     * initializer:
+     *
+     *   C_L = 0.5 * [1 + tanh(s_lg / (2 sqrt(2) Cn))]
+     *
+     * where s_lg > 0 inside the droplet.
+     */
+    const double dr = grid->dx_c[0];
+    const double dz = grid->dy_c[0];
+
+    double Cn = params->Cn;
+    if (Cn <= 0.0) {
+        const double href = (dr < dz) ? dr : dz;
+        Cn = 0.75 * href;
+    }
+
+    const double bw = 2.0 * sqrt(2.0) * Cn;
+
+    /*
+     * Diffuse solid profile used only for IC clipping.  This should match the
+     * solid C_S construction used later by VOF_DIFFUSE_compute_C_S.
+     */
+    const double shift_S = sqrt(2.0) * log(19.0) * Cn;
+    const double denom_S = 2.0 * sqrt(2.0) * Cn;
+
+    {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "Axisym sphere IC: theta=%.1fdeg R_f=%.8f l_c=%.8f "
+                 "center=(%.6f, %.6f) V_target=%.8e Cn=%.4g\n",
+                 theta_liquid_deg, R_f, l_c, r_d, z_d, V_target, Cn);
+        Display_progress(params, msg);
+    }
+
+    const int    S = 5;
+    const double inv_S = 1.0 / (double)S;
+
+    const int Is = grid->G_Is, Ie = grid->G_Ie;
+    const int Js = grid->G_Js, Je = grid->G_Je;
+    const int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    for (int k = Ks; k < Ke; ++k) {
+        for (int j = Js; j < Je; ++j) {
+            const double z_min = grid->yc[j] - 0.5 * dz;
+
+            for (int i = Is; i < Ie; ++i) {
+                const double r_min = grid->xc[i] - 0.5 * dr;
+
+                double sum_CL = 0.0;
+                double sum_w  = 0.0;
+
+                for (int sj = 0; sj < S; ++sj) {
+                    const double z = z_min + (sj + 0.5) * dz * inv_S;
+
+                    for (int si = 0; si < S; ++si) {
+                        const double r = r_min + (si + 0.5) * dr * inv_S;
+
+                        /*
+                         * Axisymmetric volume weighting.  For normal interior
+                         * cells away from the axis this is almost identical to
+                         * arithmetic averaging, but it is more consistent near
+                         * r = 0.
+                         */
+                        const double w_axi = fabs(r);
+
+                        /*
+                         * Signed distance to the liquid-gas sphere.
+                         * Positive inside the droplet.
+                         */
+                        const double dist_lg =
+                            sqrt((r - r_d) * (r - r_d) +
+                                 (z - z_d) * (z - z_d));
+
+                        const double s_lg = R_f - dist_lg;
+
+                        double C_L_pre = 0.5 * (1.0 + tanh(s_lg / bw));
+
+                        /*
+                         * Diffuse solid sphere.  C_S = 1 inside solid,
+                         * C_S = 0 outside solid.
+                         */
+                        const double dist_s =
+                            sqrt((r - r_s) * (r - r_s) +
+                                 (z - z_s) * (z - z_s));
+
+                        const double arg_S = (dist_s - (Rs - shift_S)) / denom_S;
+                        const double C_S_pre = 0.5 - 0.5 * tanh(arg_S);
+
+                        /*
+                         * Enforce no liquid inside the diffuse solid at t = 0.
+                         * This avoids a spurious first-step mass correction.
+                         */
+                        double cap = 1.0 - C_S_pre;
+                        if (cap < 0.0) cap = 0.0;
+                        if (cap > 1.0) cap = 1.0;
+
+                        if (C_L_pre > cap) C_L_pre = cap;
+                        if (C_L_pre < 0.0) C_L_pre = 0.0;
+                        if (C_L_pre > 1.0) C_L_pre = 1.0;
+
+                        sum_CL += w_axi * C_L_pre;
+                        sum_w  += w_axi;
+                    }
+                }
+
+                if (sum_w > 1.0e-30)
+                    F[k][j][i] = sum_CL / sum_w;
+                else
+                    F[k][j][i] = 0.0;
+            }
+        }
+    }
+
+#ifdef VOF_DIFFUSE
+    for (int k = Ks; k < Ke; ++k)
+        for (int j = Js; j < Je; ++j)
+            for (int i = Is; i < Ie; ++i)
+                vof->C_L[k][j][i] = F[k][j][i];
+#endif
+
+    vof->initial_volume = -1.0;
 }
 
 #endif // VOF_PLIC
