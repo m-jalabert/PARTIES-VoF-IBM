@@ -1,5 +1,5 @@
 void Post_processing_conc(Cart3d_bag *data_bag);
-void Conc_compute_total_suspended_mass(Concentration *c, MAC_grid *grid) ;
+void Conc_compute_total_suspended_mass(Concentration *c, MAC_grid *grid, Parameters *params) ;
 void Conc_compute_ave_height_x(Concentration **c, MAC_grid *grid, Parameters *params) ;
 void Conc_find_front_location(Concentration **c, MAC_grid *grid, Parameters *params, double front_limit) ;
 void Conc_integrate_deposited_height(Concentration *c, MAC_grid *grid, Parameters *params, double weight_factor) ;

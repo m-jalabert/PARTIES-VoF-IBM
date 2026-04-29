@@ -183,8 +183,8 @@
 		#undef  LEFT_INFLOW
 		#undef  LEFT_OUTFLOW
 #else
-		#define  LEFT_WALL_VELOCITY_NOSLIP
-		#undef LEFT_WALL_VELOCITY_FREESLIP
+		#undef  LEFT_WALL_VELOCITY_NOSLIP
+		#define LEFT_WALL_VELOCITY_FREESLIP
 		#undef  LEFT_INFLOW
 		#undef  LEFT_OUTFLOW
 #endif
@@ -250,9 +250,9 @@
 #undef  VOF_CICSAM
 #define VOF_DIFFUSE
 
-#undef SURFACE_TENSION
+#define SURFACE_TENSION
 #undef STATIC_BUBBLE_TESTCASE
-#define VOF_GRAVITY
+#undef VOF_GRAVITY
 
 
 #define USE_HYPRE
@@ -261,7 +261,7 @@
 /* 						Volume of Fluid - Immersed Boundary coupling	      */
 /******************************************************************************/
 #undef VOF_WETTING
-#undef VOF_IBM
+#define VOF_IBM
 
 
 
@@ -320,7 +320,7 @@
 /******************************************************************************/
 /*                                 Particles                                  */
 /******************************************************************************/
-#undef LAG_PARTICLE_RESOLVED  // Turn on Lagrangian particles
+#define LAG_PARTICLE_RESOLVED  // Turn on Lagrangian particles
 #undef  PARTICLE_TRN           // Save Particle_*.h5 files for every timestep in
                                //     subfolder './trn'
 #undef  SUBSTEP                // Resolve particle collisions with sub-timesteps

@@ -485,26 +485,29 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 	/*------------------------------------------------------------------------*/
 	if (!params->resume) {
 
-		// Use MAC_grid to identify which cells are fluid, and which are solid
 		Cart3d_identify_geometry(data_bag);
 
-		// This function initializes the inflow and initial configuration of the
-		// concentration fields
+	#ifdef LAG_PARTICLE_RESOLVED
+	#if defined(VOF_DIFFUSE) && defined(VOF_IBM)
+		/*
+		* Diffuse VOF/IBM needs p_fixed/p_mobile before VOF_DIFFUSE_init(),
+		* because C_S is built from the particle lists.
+		*/
+		Particle_initialize(data_bag, DTRACE("Particle_initialize"));
+	#endif
+	#endif
 
-		params -> which_stage =0; // used in Outflow_vel_impose_convective_boundary fix that TODO
-		Cart3d_initialize_primitive_data(data_bag, DTRACE("Cart3d_initialize_primitive_data"));
-		Display_progress(params,"Primitive data initialized\n");
+		params->which_stage = 0;
+		Cart3d_initialize_primitive_data(data_bag,
+										DTRACE("Cart3d_initialize_primitive_data"));
+		Display_progress(params, "Primitive data initialized\n");
 
-#ifdef IMMERSED_BOUNDARY
-//		int pnodes = params -> ghost_nodes;
-//		Communication_update_ghost_nodes_flow_variable(u->data, 'u', pnodes, data_bag);
-//		Communication_update_ghost_nodes_flow_variable(v->data, 'v', pnodes, data_bag);
-//		Communication_update_ghost_nodes_flow_variable(w->data, 'w', pnodes, data_bag);
+	#ifdef IMMERSED_BOUNDARY
 		Array_copy_withghost(u->data, u->data_old, grid, params);
 		Array_copy_withghost(v->data, v->data_old, grid, params);
 		Array_copy_withghost(w->data, w->data_old, grid, params);
-#endif
-	} // if new simulation
+	#endif
+	}	// if new simulation
 	/*------------------------------------------------------------------------*/
 	/*
 	 If resuming simulation
@@ -524,9 +527,19 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 	 Particle Initialization
 	 */
 	/*------------------------------------------------------------------------*/
-#ifdef LAG_PARTICLE_RESOLVED
-	Particle_initialize(data_bag, DTRACE("Particle_initialize"));
-#endif
+	#ifdef LAG_PARTICLE_RESOLVED
+	#if defined(VOF_DIFFUSE) && defined(VOF_IBM)
+		/*
+		* For new diffuse VOF/IBM runs, particles were already initialized before
+		* VOF_DIFFUSE_init().  For resume runs, still initialize them here.
+		*/
+		if (params->resume) {
+			Particle_initialize(data_bag, DTRACE("Particle_initialize"));
+		}
+	#else
+		Particle_initialize(data_bag, DTRACE("Particle_initialize"));
+	#endif
+	#endif
 
 
 	/*------------------------------------------------------------------------*/
@@ -981,14 +994,42 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			init_hydrostatic_pressure = 1;
 			break;
 
-		case 15: // quasi-2D axisymmetric rising bubble using a thin z span
+		case 15: // roadmap Phase 1 planar 2D rising bubble
+			if (!params->twod_cartesian_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 15 requires TWOD_CARTESIAN (planar 2D rising bubble).");
+			VoF_init_planar_rising_bubble_2d(data_bag);
+			init_hydrostatic_pressure = 1;
+			break;
+
+		case 16: // temporary legacy alias kept for existing thin-slab bubble inputs
+			if (!params->twod_cartesian_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 16 requires TWOD_CARTESIAN.");
+			VoF_init_planar_rising_bubble_2d(data_bag);
+			init_hydrostatic_pressure = 1;
+			break;
+
+		case 17: // roadmap Phase 1 axisymmetric rising bubble on the axis
+			if (!params->axisym_rz_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 17 requires AXISYM_RZ (axisymmetric rising bubble).");
 			VoF_init_axisymmetric_rising_bubble_2d(data_bag);
 			init_hydrostatic_pressure = 1;
 			break;
 
-		case 16: // planar 2D rising-bubble benchmark in x-y, extruded through thin z
-			VoF_init_planar_rising_bubble_2d(data_bag);
-			init_hydrostatic_pressure = 1;
+		case 18: // Liu15 section 4.1 planar droplet on a static cylinder
+			if (!params->twod_cartesian_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 18 requires TWOD_CARTESIAN.");
+			VoF_init_planar_droplet_on_static_cylinder_theta(data_bag);
+			break;
+
+		case 19: // Liu17 section 6.2 axisymmetric droplet on a static sphere
+			if (!params->axisym_rz_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 19 requires AXISYM_RZ.");
+			VoF_init_axisymmetric_droplet_on_static_sphere_theta(data_bag);
 			break;
 
 

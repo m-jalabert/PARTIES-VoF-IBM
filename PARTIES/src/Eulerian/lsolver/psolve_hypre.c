@@ -156,10 +156,6 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     const int Is = hypre_Is, Js = hypre_Js, Ks = hypre_Ks;
     const int Ie = hypre_Ie, Je = hypre_Je, Ke = hypre_Ke;
 
-    const double idx2 = grid->idx_c[1] * grid->idx_c[1];
-    const double idy2 = grid->idy_c[1] * grid->idy_c[1];
-    const double idz2 = grid->idz_c[1] * grid->idz_c[1];
-
     /* ================================================================== *
      *  1. Fill matrix coefficients and RHS vector
      * ================================================================== */
@@ -168,13 +164,26 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
         for (int j = Js; j < Je; j++) {
             for (int i = Is; i < Ie; i++, n++) {
 
-                double cxm = 2.0 / (rho[k][j][i] + rho[k][j][i-1]) * idx2; 
-                double cxp = 2.0 / (rho[k][j][i] + rho[k][j][i+1]) * idx2; 
-                double cym = 2.0 / (rho[k][j][i] + rho[k][j-1][i]) * idy2; 
-                double cyp = 2.0 / (rho[k][j][i] + rho[k][j+1][i]) * idy2; 
-                double czm = 2.0 / (rho[k][j][i] + rho[k-1][j][i]) * idz2; 
-                double czp = 2.0 / (rho[k][j][i] + rho[k+1][j][i]) * idz2; 
+                double beta_xm = 2.0 / (rho[k][j][i] + rho[k][j][i-1]);
+                double beta_xp = 2.0 / (rho[k][j][i] + rho[k][j][i+1]);
+                double beta_ym = 2.0 / (rho[k][j][i] + rho[k][j-1][i]);
+                double beta_yp = 2.0 / (rho[k][j][i] + rho[k][j+1][i]);
+                double beta_zm = 2.0 / (rho[k][j][i] + rho[k-1][j][i]);
+                double beta_zp = 2.0 / (rho[k][j][i] + rho[k+1][j][i]);
+                double cxm, cxp, cym, cyp, czm, czp;
+                double row_w = TwodOps_pressure_row_weight(grid, params, i);
 
+                TwodOps_build_scalar_face_coeffs(
+                    grid, params, i, j, k,
+                    beta_xm, beta_xp, beta_ym, beta_yp, beta_zm, beta_zp,
+                    &cxm, &cxp, &cym, &cyp, &czm, &czp);
+
+                cxm *= row_w;
+                cxp *= row_w;
+                cym *= row_w;
+                cyp *= row_w;
+                czm *= row_w;
+                czp *= row_w;
                 double diag = cxm + cxp + cym + cyp + czm + czp;
 
 #ifndef XPERIODIC
@@ -198,7 +207,7 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
                 hypre_vals[5 * hypre_n_local + n] = -czm;
                 hypre_vals[6 * hypre_n_local + n] = -czp;
 
-                hypre_rhs[n] = -rhs[k][j][i];
+                hypre_rhs[n] = -row_w * rhs[k][j][i];
                 hypre_sol[n] = phi[k][j][i];
             }
         }

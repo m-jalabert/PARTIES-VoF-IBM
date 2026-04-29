@@ -14,6 +14,7 @@
 #include "hdf5.h"
 #include "Particle.h"
 #include "Interpolate.h"
+#include "TwodOps.h"
 
 /******************************************************************************/
 /*
@@ -524,6 +525,7 @@ if (params -> post_processing_switch){	// if this is to be used as post processi
 	double Lx=params->Lx;
 	double Ly=params->Ly;
 	double Lz=params->Lz;
+	double domain_measure = TwodOps_domain_measure(grid, params);
 
 
 	/*------------------------------------------------------------------------*/
@@ -550,7 +552,7 @@ if (params -> post_processing_switch){	// if this is to be used as post processi
 #ifdef CONC
 	for (iconc = 0; iconc < NConc; iconc++) {
 		Statistics2d_horizontalMean2d(c[iconc], mean_c[iconc], 'c', data_bag);
-		st2d->integral_conc_full[iconc]= Statistics2d_volume_integral(c[iconc],  FULL_DOMAIN, data_bag)/Lx/Ly/Lz;
+		st2d->integral_conc_full[iconc]= Statistics2d_volume_integral(c[iconc],  FULL_DOMAIN, data_bag)/domain_measure;
 		Statistics2d_histocalc(c[iconc], histo[iconc], range[iconc], data_bag);
 
 		Statistics2d_covarcalc(avg_uc[iconc], c[iconc],u_cell, avg_vf, avg_c[iconc], work_avg, data_bag);
@@ -559,7 +561,7 @@ if (params -> post_processing_switch){	// if this is to be used as post processi
 
 
 #ifdef LAG_PARTICLE_RESOLVED
-		st2d->integral_conc_fluid[iconc]= Statistics2d_volume_integral(c[iconc], FLUID_DOMAIN, data_bag)/Lx/Ly/Lz;
+		st2d->integral_conc_fluid[iconc]= Statistics2d_volume_integral(c[iconc], FLUID_DOMAIN, data_bag)/domain_measure;
 #endif
 
 		Statistics2d_horizontalSlice2d(c[iconc], slice_c[iconc], 'c', data_bag);
@@ -1663,8 +1665,6 @@ double Statistics2d_volume_integral(double ***c,   int domain, Cart3d_bag *data_
 	int i, j, k;
 	int Is, Js, Ks;
 	int Ie, Je, Ke;
-	double *dx, *dy, *dz;
-	double cellVolume;
 	int NX, NY, NZ;
 
 	MAC_grid   *grid   	= data_bag -> grid;
@@ -1674,10 +1674,6 @@ double Statistics2d_volume_integral(double ***c,   int domain, Cart3d_bag *data_
 	NX = grid->NX;
 	NY = grid->NY;
 	NZ = grid->NZ;
-
-	dx = grid->dx_u;
-	dy = grid->dy_v;
-	dz = grid->dz_w;
 
 	Is = grid->G_Is;
 	Js = grid->G_Js;
@@ -1695,7 +1691,7 @@ double Statistics2d_volume_integral(double ***c,   int domain, Cart3d_bag *data_
 	for(k = Ks; k < Ke; k++) {
 		for(j = Js; j < Je; j++) {
 			for(i = Is; i < Ie; i++) {
-				cellVolume = dx[i] * dy[j] * dz[k];
+				double cellVolume = TwodOps_cell_measure_c(grid, params, i, j, k);
 #ifdef LAG_PARTICLE_RESOLVED
 
 				if ( domain == FLUID_DOMAIN) {

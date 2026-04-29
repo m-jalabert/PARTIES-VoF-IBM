@@ -24,6 +24,494 @@
 #define SMOOTH(eta, delta_s) (erf( eta/delta_s)+1)/2  // version OII
 #define SMOOTH_BL(eta, delta_s,bl_thick) (erf((bl_thick + eta)/delta_s)+1)/2  // version OII
 
+#if defined(LAG_PARTICLE_RESOLVED)
+
+/* Geometry-only view used by the Eulerian solid-volume rasterization. */
+typedef struct {
+	double X[3];
+	double R;
+} Interp_solid_geom;
+
+static Interp_solid_geom *
+Interpolate_collect_owned_particle_geometry(Particle_list *p_list,
+                                            Cart3d_bag *data_bag,
+                                            int *n_local)
+{
+	int n_particles = 0;
+	Particle *particles =
+	    Particle_collect_owned_overlaps(p_list, data_bag, 0.0, -1.0,
+	                                    1, &n_particles);
+
+	if (n_particles == 0) {
+		*n_local = 0;
+		return NULL;
+	}
+
+	Interp_solid_geom *geom =
+	    (Interp_solid_geom *)malloc(n_particles * sizeof(Interp_solid_geom));
+	Memory_check_allocation(geom);
+
+	for (int n = 0; n < n_particles; n++) {
+		geom[n].X[0] = particles[n].X[0];
+		geom[n].X[1] = particles[n].X[1];
+		geom[n].X[2] = particles[n].X[2];
+		geom[n].R = particles[n].R;
+	}
+
+	free(particles);
+	*n_local = n_particles;
+	return geom;
+}
+
+static inline double Interpolate_geom_level_set_3d(double x, double y, double z,
+                                                   const Interp_solid_geom *g)
+{
+	const double dx = x - g->X[0];
+	const double dy = y - g->X[1];
+	const double dz = z - g->X[2];
+
+#if defined(TWOD_CARTESIAN) || defined(AXISYM_RZ)
+	return sqrt(dx * dx + dy * dy) / (g->R + 1.0e-30) - 1.0;
+#else
+	return sqrt(dx * dx + dy * dy + dz * dz) / (g->R + 1.0e-30) - 1.0;
+#endif
+}
+
+static inline double Interpolate_volume_fraction_from_phi_3d(double phi[2][2][2])
+{
+	double vf_cell = 0.0;
+	double sum_phi = 0.0;
+
+	for (int kk = 0; kk < 2; ++kk)
+	for (int jj = 0; jj < 2; ++jj)
+	for (int ii = 0; ii < 2; ++ii) {
+		const double temp = phi[kk][jj][ii];
+		if (temp < 0.0)
+			vf_cell -= temp;
+		sum_phi += fabs(temp);
+	}
+
+	return (sum_phi > 0.0) ? vf_cell / sum_phi : 0.0;
+}
+
+static inline double Interpolate_volume_fraction_from_phi_2d(double phi00,
+                                                             double phi10,
+                                                             double phi01,
+                                                             double phi11)
+{
+	double vf_cell = 0.0;
+	double sum_phi = fabs(phi00) + fabs(phi10) + fabs(phi01) + fabs(phi11);
+
+	if (phi00 < 0.0) vf_cell -= phi00;
+	if (phi10 < 0.0) vf_cell -= phi10;
+	if (phi01 < 0.0) vf_cell -= phi01;
+	if (phi11 < 0.0) vf_cell -= phi11;
+
+	return (sum_phi > 0.0) ? vf_cell / sum_phi : 0.0;
+}
+
+static void Interpolate_add_to_volume_fraction_global(char component,
+                                                      Particle_list *p_list,
+                                                      Cart3d_bag *data_bag,
+                                                      Debug_trace *dtrace)
+{
+	(void)dtrace;
+
+	Parameters *params = data_bag->params;
+	MAC_grid   *grid   = data_bag->grid;
+	Lagrangian *lag    = data_bag->lag;
+
+	double ***vf = NULL;
+
+	double *xe = grid->xu;
+	double *ye = grid->yv;
+	double *ze = grid->zw;
+
+	if (component == 'u') {
+		xe = &(grid->xc[-1]);
+		vf = lag->ng_vfu;
+	}
+	else if (component == 'v') {
+		ye = &(grid->yc[-1]);
+		vf = lag->ng_vfv;
+	}
+	else if (component == 'w') {
+#if defined(TWOD_MODE)
+		return;
+#else
+		ze = &(grid->zc[-1]);
+		vf = lag->ng_vfw;
+#endif
+	}
+	else if (component == 'c') {
+		vf = lag->ng_vfc;
+	}
+	else if (component == 'z') {
+		xe = &(grid->xc[-1]);
+		ye = &(grid->yc[-1]);
+		vf = lag->ng_vfz;
+	}
+	else {
+		char message[100];
+		sprintf(message, "Incorrect component = '%c'", component);
+		Display_throw_error(message, params, DTRACE("Display_throw_error"));
+	}
+
+	int n_geom = 0;
+	Interp_solid_geom *geom =
+	    Interpolate_collect_owned_particle_geometry(p_list, data_bag, &n_geom);
+
+	const double h = grid->dx_u[1];
+
+#if defined(TWOD_MODE)
+
+	const int k = grid->G_Ks;
+
+	for (int n = 0; n < n_geom; ++n) {
+		const double R = geom[n].R;
+		const double *X = geom[n].X;
+
+		int i_start = (int)floor((X[0] - R - xe[0]) / h);
+		int j_start = (int)floor((X[1] - R - ye[0]) / h);
+		int i_end   = (int)ceil ((X[0] + R - xe[0]) / h);
+		int j_end   = (int)ceil ((X[1] + R - ye[0]) / h);
+
+		i_start = max(i_start, grid->G_Is);
+		j_start = max(j_start, grid->G_Js);
+
+		i_end = min(min(i_end, grid->G_Ie), grid->NX - 1);
+		j_end = min(min(j_end, grid->G_Je), grid->NY - 1);
+
+		for (int j = j_start; j < j_end; ++j) {
+			for (int i = i_start; i < i_end; ++i) {
+				const double phi00 =
+				    Interpolate_geom_level_set_3d(xe[i],     ye[j],     0.0, &geom[n]);
+				const double phi10 =
+				    Interpolate_geom_level_set_3d(xe[i + 1], ye[j],     0.0, &geom[n]);
+				const double phi01 =
+				    Interpolate_geom_level_set_3d(xe[i],     ye[j + 1], 0.0, &geom[n]);
+				const double phi11 =
+				    Interpolate_geom_level_set_3d(xe[i + 1], ye[j + 1], 0.0, &geom[n]);
+
+				vf[k][j][i] += Interpolate_volume_fraction_from_phi_2d(
+					phi00, phi10, phi01, phi11);
+			}
+		}
+	}
+
+#else
+
+	for (int n = 0; n < n_geom; ++n) {
+		const double R = geom[n].R;
+		const double *X = geom[n].X;
+
+		int i_start = (int)floor((X[0] - R - xe[0]) / h);
+		int j_start = (int)floor((X[1] - R - ye[0]) / h);
+		int k_start = (int)floor((X[2] - R - ze[0]) / h);
+
+		int i_end = (int)ceil((X[0] + R - xe[0]) / h);
+		int j_end = (int)ceil((X[1] + R - ye[0]) / h);
+		int k_end = (int)ceil((X[2] + R - ze[0]) / h);
+
+		i_start = max(i_start, grid->G_Is);
+		j_start = max(j_start, grid->G_Js);
+		k_start = max(k_start, grid->G_Ks);
+
+		i_end = min(i_end, grid->G_Ie);
+		j_end = min(j_end, grid->G_Je);
+		k_end = min(k_end, grid->G_Ke);
+
+		i_end = min(i_end, grid->NX - 1);
+		j_end = min(j_end, grid->NY - 1);
+		k_end = min(k_end, grid->NZ - 1);
+
+		for (int k = k_start; k < k_end; ++k) {
+			for (int j = j_start; j < j_end; ++j) {
+				for (int i = i_start; i < i_end; ++i) {
+					double phi[2][2][2];
+
+					for (int kk = 0; kk < 2; ++kk)
+					for (int jj = 0; jj < 2; ++jj)
+					for (int ii = 0; ii < 2; ++ii) {
+						phi[kk][jj][ii] =
+						    Interpolate_geom_level_set_3d(xe[i + ii],
+						                                  ye[j + jj],
+						                                  ze[k + kk],
+						                                  &geom[n]);
+					}
+
+					vf[k][j][i] += Interpolate_volume_fraction_from_phi_3d(phi);
+				}
+			}
+		}
+	}
+
+#endif
+
+	free(geom);
+}
+
+#endif /* LAG_PARTICLE_RESOLVED */
+
+double delta(double r);
+
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+static double interp_kernel_2d(double h, const double *r)
+{
+	return delta(r[0] / h) * delta(r[1] / h);
+}
+
+static double Interpolate_twod_marker_volume(const Particle *p, int mv)
+{
+	if (p->Vol_L_marker != NULL)
+		return p->Vol_L_marker[mv];
+	return p->Vol_L;
+}
+
+static double Interpolate_twod_cell_volume(const MAC_grid *grid, char which,
+                                           const double *x, int i, int j)
+{
+#ifdef AXISYM_RZ
+	/*
+	 * A 2D axisymmetric cell represents a full ring.  For u-faces the control
+	 * volume is centered on r_u; for all scalar/v/w-style quantities we use the
+	 * local interpolation coordinate, which is xc for the physical branches.
+	 */
+	double radius = (which == 'u') ? fabs(grid->xu[i]) : fabs(x[i]);
+	if (radius < TWOD_RADIAL_EPS)
+		radius = 0.5 * grid->dx_u[1];
+	double ring_weight = (which == 'u' && grid->ring_wt_u != NULL) ?
+	                     grid->ring_wt_u[i] :
+	                     ((grid->ring_wt_c != NULL) ? grid->ring_wt_c[i] :
+	                      TWOD_AXISYM_THETA_SPAN_FULL * radius);
+	if (ring_weight < TWOD_RADIAL_EPS)
+		ring_weight = TWOD_AXISYM_THETA_SPAN_FULL * radius;
+	return grid->dx_u[1] * grid->dy_v[j] * ring_weight;
+#else
+	double slab = grid->dummy_z_slab_thickness;
+	if (slab <= 0.0)
+		slab = grid->dx_u[1];
+	return grid->dx_u[1] * grid->dy_v[j] * slab;
+#endif
+}
+
+static double Interpolate_twod_level_set(double x, double y, const Particle *p)
+{
+	const double *X = p->X;
+	const double R = p->R;
+	return sqrt((x - X[0]) * (x - X[0]) +
+	            (y - X[1]) * (y - X[1])) / R - 1.0;
+}
+
+/*
+ * Index parity helpers across the left x-boundary.
+ *
+ * AXISYM_RZ: the left boundary is the symmetry axis r = 0.  u-faces have
+ * radial parity (odd), all scalar/v-style quantities have even parity.
+ *
+ * TWOD_CARTESIAN with LEFT_WALL_VELOCITY_FREESLIP: a half-domain whose left
+ * edge is a symmetry plane.  Markers spawned on the negative-x side of the
+ * plane fold back into the physical half-domain; u-faces still keep odd
+ * parity so the normal velocity at the symmetry face stays zero.  This split
+ * matches the "Left-symmetry IBM strategy" rule in the roadmap.
+ */
+static int Interpolate_axis_index_for_spread(int i, char which,
+                                             const MAC_grid *grid, int *sign)
+{
+	*sign = 1;
+#ifdef AXISYM_RZ
+	if (grid->G_Is == 0 && i < grid->G_Is) {
+		if (which == 'u') {
+			*sign = -1;
+			return grid->G_Is + (grid->G_Is - i);
+		}
+		return grid->G_Is + (grid->G_Is - 1 - i);
+	}
+	if (grid->G_Is == 0 && which == 'u' && i == grid->G_Is)
+		return -1;
+#elif defined(TWOD_CARTESIAN) && defined(LEFT_WALL_VELOCITY_FREESLIP)
+	if (grid->G_Is == 0 && i < grid->G_Is) {
+		if (which == 'u') {
+			*sign = -1;
+			return grid->G_Is + (grid->G_Is - i);
+		}
+		return grid->G_Is + (grid->G_Is - 1 - i);
+	}
+	if (grid->G_Is == 0 && which == 'u' && i == grid->G_Is)
+		return -1;
+#endif
+	return i;
+}
+
+static int Interpolate_axis_index_for_sample(int i, char which,
+                                             const MAC_grid *grid, int *sign)
+{
+	*sign = 1;
+#ifdef AXISYM_RZ
+	if (grid->G_Is == 0 && i < grid->G_Is) {
+		if (which == 'u') {
+			*sign = -1;
+			return grid->G_Is + (grid->G_Is - i);
+		}
+		return grid->G_Is + (grid->G_Is - 1 - i);
+	}
+	if (grid->G_Is == 0 && which == 'u' && i == grid->G_Is)
+		return -1;
+#elif defined(TWOD_CARTESIAN) && defined(LEFT_WALL_VELOCITY_FREESLIP)
+	if (grid->G_Is == 0 && i < grid->G_Is) {
+		if (which == 'u') {
+			*sign = -1;
+			return grid->G_Is + (grid->G_Is - i);
+		}
+		return grid->G_Is + (grid->G_Is - 1 - i);
+	}
+	if (grid->G_Is == 0 && which == 'u' && i == grid->G_Is)
+		return -1;
+#endif
+	return i;
+}
+
+static void Interpolate_Lag_to_Eul_uniform_twod(double *A, double ***a,
+        char which, Particle *p, MAC_grid *grid)
+{
+	int i, j, k, mv;
+	double r[3];
+	double *x = grid->xc;
+	double *y = grid->yc;
+
+	if (which == 'u')
+		x = grid->xu;
+	else if (which == 'v')
+		y = grid->yv;
+
+	double *a_1d = &a[grid->G_Ks][grid->G_Js][grid->G_Is];
+	for (i = 0; i < grid->ng_total_nodes; i++)
+		a_1d[i] = 0.0;
+
+	if (which == 'w')
+		return;
+
+	const double h = grid->dx_u[1];
+	const int k_start = grid->G_Ks;
+	const int k_end = grid->G_Ke;
+	double *X_L = p->X_L;
+	double *Y_L = p->Y_L;
+
+	for (mv = 0; mv < p->N_L_local; mv++) {
+		int i_start = (int)round((X_L[mv] - x[0]) / h) - 1;
+		int j_start = (int)round((Y_L[mv] - y[0]) / h) - 1;
+		int i_end = i_start + 3;
+		int j_end = j_start + 3;
+
+#ifdef AXISYM_RZ
+		if (grid->G_Is == 0)
+			i_start = max(i_start, grid->L_Is);
+		else
+			i_start = max(i_start, grid->G_Is);
+#elif defined(TWOD_CARTESIAN) && defined(LEFT_WALL_VELOCITY_FREESLIP)
+		/*
+		 * Cartesian half-domain with left symmetry: keep the i < G_Is rows in
+		 * range so the parity helper can fold negative-x markers back into the
+		 * physical half-domain instead of dropping them silently.
+		 */
+		if (grid->G_Is == 0)
+			i_start = max(i_start, grid->L_Is);
+		else
+			i_start = max(i_start, grid->G_Is);
+#else
+		i_start = max(i_start, grid->G_Is);
+#endif
+		i_end = min(max(i_end, grid->G_Is), grid->G_Ie);
+		j_start = min(max(j_start, grid->G_Js), grid->G_Je);
+		j_end = min(max(j_end, grid->G_Js), grid->G_Je);
+
+		for (k = k_start; k < k_end; k++) {
+			for (j = j_start; j < j_end; j++) {
+				r[1] = Y_L[mv] - y[j];
+				for (i = i_start; i < i_end; i++) {
+					int parity, ii = Interpolate_axis_index_for_spread(i, which, grid, &parity);
+					if (ii < grid->G_Is || ii >= grid->G_Ie)
+						continue;
+					r[0] = X_L[mv] - x[i];
+					double value = (A == NULL) ? 1.0 : A[mv];
+					double dV = Interpolate_twod_marker_volume(p, mv) /
+					            Interpolate_twod_cell_volume(grid, which, x, ii, j);
+					a[k][j][ii] += parity * value * interp_kernel_2d(h, r) * dV;
+				}
+			}
+		}
+	}
+}
+
+static void Interpolate_Eul_to_Lag_twod(double ***a, double *A, char which,
+                                        Particle *p, MAC_grid *grid)
+{
+	int i, j, mv;
+	double r[3];
+	double *x = grid->xc;
+	double *y = grid->yc;
+	double *X_L = p->X_L;
+	double *Y_L = p->Y_L;
+
+	if (which == 'u')
+		x = grid->xu;
+	else if (which == 'v')
+		y = grid->yv;
+	else if (which == 'w') {
+		for (mv = 0; mv < p->N_L_local; mv++)
+			A[mv] = 0.0;
+		return;
+	}
+
+#ifdef IBM_SCALAR
+	if (which == 'H') {
+		X_L = p->X_H;
+		Y_L = p->Y_H;
+	}
+#endif
+
+	const double h = grid->dx_u[1];
+	const int k = grid->G_Ks;
+	for (mv = 0; mv < p->N_L_local; mv++) {
+		int i_start = (int)round((X_L[mv] - x[0]) / h) - 1;
+		int j_start = (int)round((Y_L[mv] - y[0]) / h) - 1;
+		int i_end = i_start + 3;
+		int j_end = j_start + 3;
+
+		i_start = max(i_start, grid->L_Is);
+		j_start = max(j_start, grid->L_Js);
+		i_end = min(i_end, grid->L_Ie);
+		j_end = min(j_end, grid->L_Je);
+
+		A[mv] = 0.0;
+		for (j = j_start; j < j_end; j++) {
+			r[1] = Y_L[mv] - y[j];
+			for (i = i_start; i < i_end; i++) {
+				int parity, ii = Interpolate_axis_index_for_sample(i, which, grid, &parity);
+				if (ii < grid->L_Is || ii >= grid->L_Ie)
+					continue;
+				r[0] = X_L[mv] - x[i];
+				A[mv] += parity * a[k][j][ii] * interp_kernel_2d(h, r);
+			}
+		}
+	}
+}
+
+static double Interpolate_twod_volume_fraction_from_phi(double phi00,
+                                                        double phi10,
+                                                        double phi01,
+                                                        double phi11)
+{
+	double vf_cell = 0.0;
+	double sum_phi = fabs(phi00) + fabs(phi10) + fabs(phi01) + fabs(phi11);
+	if (phi00 < 0.0) vf_cell -= phi00;
+	if (phi10 < 0.0) vf_cell -= phi10;
+	if (phi01 < 0.0) vf_cell -= phi01;
+	if (phi11 < 0.0) vf_cell -= phi11;
+	return (sum_phi > 0.0) ? vf_cell / sum_phi : 0.0;
+}
+#endif
+
 
 /******************************************************************************/
 /*
@@ -121,6 +609,182 @@ double delta_mod_3D(double x, double X, double y, double Y, double z, double Z, 
 }
 
 
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+static void Interpolate_integrate_momentum_twod(Velocity *vel,
+                                                Particle_list *p_list,
+                                                Cart3d_bag *data_bag,
+                                                Debug_trace *dtrace)
+{
+	int i, j, ii, jj;
+	int component = -1;
+	double *xc = data_bag->grid->xc;
+	double *yc = data_bag->grid->yc;
+	double *xe = data_bag->grid->xu;
+	double *ye = data_bag->grid->yv;
+	double ***vf = NULL;
+
+	Parameters *params = data_bag->params;
+	MAC_grid *grid = data_bag->grid;
+	Lagrangian *lag = data_bag->lag;
+	double ***data = vel->data;
+
+	if (vel->component == 'u') {
+		xc = grid->xu;
+		xe = &(grid->xc[-1]);
+		component = 0;
+		vf = lag->ng_vfu;
+	} else if (vel->component == 'v') {
+		yc = grid->yv;
+		ye = &(grid->yc[-1]);
+		component = 1;
+		vf = lag->ng_vfv;
+	} else if (vel->component == 'w') {
+		return; // No physical momentum lives in the collapsed direction.
+	}
+
+	Display_assert_list_state(p_list, LIST_STATE_BOTH,
+	                          params, DTRACE("Display_assert_list_state"));
+
+	const double h = grid->dx_u[1];
+	const int k = grid->G_Ks;
+	Particle *p = p_list->start;
+	while (p != NULL) {
+		const double R = p->R;
+		const double *X = p->X;
+
+		int i_start = (int)floor((X[0] - R - xe[0]) / h);
+		int j_start = (int)floor((X[1] - R - ye[0]) / h);
+		int i_end = (int)ceil((X[0] + R - xe[0]) / h);
+		int j_end = (int)ceil((X[1] + R - ye[0]) / h);
+
+		i_start = max(i_start, grid->G_Is);
+		j_start = max(j_start, grid->G_Js);
+		i_end = min(min(i_end, grid->G_Ie), grid->NX - 1);
+		j_end = min(min(j_end, grid->G_Je), grid->NY - 1);
+
+		for (j = j_start; j < j_end; j++) {
+			for (i = i_start; i < i_end; i++) {
+				double phi[2][2];
+				for (jj = 0; jj < 2; jj++)
+					for (ii = 0; ii < 2; ii++)
+						phi[jj][ii] = Interpolate_twod_level_set(xe[i + ii],
+						                                          ye[j + jj], p);
+
+				double vf_cell = Interpolate_twod_volume_fraction_from_phi(
+					phi[0][0], phi[0][1], phi[1][0], phi[1][1]);
+				vf[k][j][i] += vf_cell;
+
+#ifdef VOF_IBM
+				VolumeFraction *vof = data_bag->vof;
+				double ***rho_cc = vof->rho;
+				double rho_loc = (component == 0) ?
+					0.5 * (rho_cc[k][j][i] + rho_cc[k][j][i - 1]) :
+					0.5 * (rho_cc[k][j][i] + rho_cc[k][j - 1][i]);
+				if (component == 0) {
+					double dV_scalar = Interpolate_twod_cell_volume(grid, 'c',
+					                                                grid->xc, i, j);
+					p->Int_rho_scalar += vof->vfc[k][j][i] *
+					                     rho_cc[k][j][i] * dV_scalar;
+				}
+#else
+				const double rho_loc = 1.0;
+#endif
+				double r[2] = {xc[i] - X[0], yc[j] - X[1]};
+				double dV = Interpolate_twod_cell_volume(grid, vel->component,
+				                                         xc, i, j);
+				double dP = vf_cell * rho_loc * data[k][j][i] * dV;
+
+#ifdef VOF_IBM
+				p->Int_rho[component] += vf_cell * rho_loc * dV;
+#endif
+				p->Int_U[component] += dP;
+#ifdef TWOD_CARTESIAN
+				/* Cylinder rotation is about the collapsed z axis only. */
+				if (component == 0)
+					p->Int_Omega[2] -= dP * r[1];
+				else
+					p->Int_Omega[2] += dP * r[0];
+#endif
+			}
+		}
+		p = p->next;
+	}
+}
+
+static void Interpolate_add_to_volume_fraction_twod(char component,
+                                                    Particle_list *p_list,
+                                                    Cart3d_bag *data_bag,
+                                                    Debug_trace *dtrace)
+{
+	int i, j, ii, jj;
+	double *xe = data_bag->grid->xu;
+	double *ye = data_bag->grid->yv;
+	double ***vf = NULL;
+
+	Parameters *params = data_bag->params;
+	MAC_grid *grid = data_bag->grid;
+	Lagrangian *lag = data_bag->lag;
+
+	if (component == 'u') {
+		xe = &(grid->xc[-1]);
+		vf = lag->ng_vfu;
+	} else if (component == 'v') {
+		ye = &(grid->yc[-1]);
+		vf = lag->ng_vfv;
+	} else if (component == 'w') {
+		return;
+	}
+#if defined LAG_PARTICLE_RESOLVED
+	else if (component == 'c') {
+		vf = lag->ng_vfc;
+	}
+#endif
+	else if (component == 'z') {
+		xe = &(grid->xc[-1]);
+		ye = &(grid->yc[-1]);
+		vf = lag->ng_vfz;
+	} else {
+		char message[100];
+		sprintf(message, "Incorrect component = '%c'", component);
+		Display_throw_error(message, params, DTRACE("Display_throw_error"));
+	}
+
+	Display_assert_list_state(p_list, LIST_STATE_BOTH,
+	                          params, DTRACE("Display_assert_list_state"));
+
+	const double h = grid->dx_u[1];
+	const int k = grid->G_Ks;
+	Particle *p = p_list->start;
+	while (p != NULL) {
+		const double R = p->R;
+		const double *X = p->X;
+		int i_start = (int)floor((X[0] - R - xe[0]) / h);
+		int j_start = (int)floor((X[1] - R - ye[0]) / h);
+		int i_end = (int)ceil((X[0] + R - xe[0]) / h);
+		int j_end = (int)ceil((X[1] + R - ye[0]) / h);
+
+		i_start = max(i_start, grid->G_Is);
+		j_start = max(j_start, grid->G_Js);
+		i_end = min(min(i_end, grid->G_Ie), grid->NX - 1);
+		j_end = min(min(j_end, grid->G_Je), grid->NY - 1);
+
+		for (j = j_start; j < j_end; j++) {
+			for (i = i_start; i < i_end; i++) {
+				double phi[2][2];
+				for (jj = 0; jj < 2; jj++)
+					for (ii = 0; ii < 2; ii++)
+						phi[jj][ii] = Interpolate_twod_level_set(xe[i + ii],
+						                                          ye[j + jj], p);
+				vf[k][j][i] += Interpolate_twod_volume_fraction_from_phi(
+					phi[0][0], phi[0][1], phi[1][0], phi[1][1]);
+			}
+		}
+		p = p->next;
+	}
+}
+#endif
+
+
 
 /******************************************************************************/
 /*
@@ -133,6 +797,10 @@ void Interpolate_Lag_to_Eul_uniform(double *A, double ***a, char which,
         Particle *p, MAC_grid *grid) {
 #ifndef GRID_UNIFORM
     printf("Stop __func__ is only working for uniform grids" );
+#endif
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+    Interpolate_Lag_to_Eul_uniform_twod(A, a, which, p, grid);
+    return;
 #endif
     int i, j, k;
     int mv;
@@ -485,6 +1153,10 @@ void Interpolate_Eul_to_Lag(double ***a, double *A, char which, Particle *p,
 #ifndef GRID_UNIFORM
 	printf("Stop __func__ is onyl working for uniform grids" );
 #endif
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+	Interpolate_Eul_to_Lag_twod(a, A, which, p, grid);
+	return;
+#endif
 	int i, j, k;
 	int mv, N_L_local;
 	double r[3], h;
@@ -630,6 +1302,10 @@ void Interpolate_integrate_momentum(Velocity      *vel,
                                     Cart3d_bag    *data_bag,
                                     Debug_trace   *dtrace)
 {
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+    Interpolate_integrate_momentum_twod(vel, p_list, data_bag, dtrace);
+    return;
+#endif
     int i, j, k, ii, jj, kk;
     int i_start, j_start, k_start;
     int i_end,   j_end,   k_end;
@@ -836,6 +1512,20 @@ void Interpolate_integrate_momentum(Velocity      *vel,
 void Interpolate_add_to_volume_fraction(char component, Particle_list *p_list,
 		Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
+#if defined(LAG_PARTICLE_RESOLVED)
+	/*
+	 * Build IBM solid volume fractions from globally gathered particle geometry.
+	 * This removes the processor-cut artifact for solids larger than one MPI
+	 * neighbor exchange width.
+	 */
+	Interpolate_add_to_volume_fraction_global(component, p_list, data_bag, dtrace);
+	return;
+#endif
+
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+	Interpolate_add_to_volume_fraction_twod(component, p_list, data_bag, dtrace);
+	return;
+#endif
 	int i, j ,k, ii, jj, kk;
 	int i_start, j_start, k_start;
 	int i_end, j_end, k_end;

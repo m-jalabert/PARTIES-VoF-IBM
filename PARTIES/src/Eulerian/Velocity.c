@@ -10,6 +10,7 @@
 #include "Immersed.h"
 #include "Memory.h"
 #include "MyMath.h"
+#include "TwodOps.h"
 #include "Velocity.h"
 
 #include <stdlib.h>
@@ -369,12 +370,14 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 	double dudxE, dudxW, dudyN, dudyS, dudzF, dudzB;
 	double dvdxN, dvdxS, dwdxF, dwdxB;
 	double d2udx2, d2udy2, d2udz2, ddxdudx, ddydvdx,  ddzdwdx;
+	double axisym_ur_correction;
 	double vCN, vCS, wCF, wCB;
 	double uuE, uuW, uvN, uvS, uwF, uwB;
 	double duudx, duvdy, duwdz;
 
 	MAC_grid *grid = data_bag -> grid;
 	Parameters *params = data_bag -> params;
+	const int collapsed_z = TwodOps_collapsed_component_is_inactive(params);
 
 	// Same for all quantities
 	int NX = grid -> NX;
@@ -536,30 +539,41 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				// du/dz Front/Back
 				//--------------------------------------------------------------
-				dudzF = ( u_data[k+1][j][i] - u_data[k][j][i] ) * idz_c[k];
-				dudzB = ( u_data[k][j][i] - u_data[k-1][j][i] ) * idz_c[k-1];
+				dudzF = 0.0;
+				dudzB = 0.0;
+				if (!collapsed_z) {
+					dudzF = ( u_data[k+1][j][i] - u_data[k][j][i] ) * idz_c[k];
+					dudzB = ( u_data[k][j][i] - u_data[k-1][j][i] ) * idz_c[k-1];
+				}
 
 #ifdef VOF
 
                 //--------------------------------------------------------------
-                // Diagonal viscous pieces
+                // Axial / collapsed-direction diagonal pieces.
+                // The x/r piece is rebuilt just below with the shared TwodOps
+                // helper so AXISYM_RZ and the CG operator stay in lockstep.
                 //--------------------------------------------------------------
-                d2udx2 = iRe * ( muE * dudxE - muW * dudxW ) * idx_c[i-1];
-
-                // y-diagonal uses bar{μ} on (i-1/2, j±1/2, k)
                 d2udy2 = iRe * ( mu_yp * dudyN - mu_ym * dudyS ) * idy_v[j];
 
-                // z-diagonal uses bar{μ} on (i-1/2, j, k±1/2)
-                d2udz2 = iRe * ( mu_zp * dudzF - mu_zm * dudzB ) * idz_w[k];
+                /*
+                 * In 2D mode the stored z slab has no physical diffusion.
+                 * Axisymmetric radial corrections are added in the dedicated
+                 * mode-specific branch later in Phase 1.
+                 */
+                d2udz2 = 0.0;
+                if (!collapsed_z)
+                    d2udz2 = iRe * ( mu_zp * dudzF - mu_zm * dudzB ) * idz_w[k];
 
 #else
 
 				//--------------------------------------------------------------
-				// d2u/dx2, d2u/dy2, and d2u/dz2
+				// y/z diagonal pieces. The x contribution is rebuilt below with
+				// the shared TwodOps helper for the active 2D geometry.
 				//--------------------------------------------------------------
-				d2udx2 = ( nuE * dudxE - nuW * dudxW ) * idx_c[i-1];
 				d2udy2 = ( nuN * dudyN - nuS * dudyS ) * idy_v[j];
-				d2udz2 = ( nuF * dudzF - nuB * dudzB ) * idz_w[k];
+				d2udz2 = 0.0;
+				if (!collapsed_z)
+					d2udz2 = ( nuF * dudzF - nuB * dudzB ) * idz_w[k];
 
 #endif
 
@@ -568,20 +582,57 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				dvdxN = ( v_data[k][j+1][i] - v_data[k][j+1][i-1] ) * idx_c[i-1];
 				dvdxS = ( v_data[k][j][i]   - v_data[k][j][i-1]   ) * idx_c[i-1];
-				dwdxF = ( w_data[k+1][j][i] - w_data[k+1][j][i-1] ) * idx_c[i-1];
-				dwdxB = ( w_data[k][j][i]   - w_data[k][j][i-1]   ) * idx_c[i-1];
-
-				ddxdudx = d2udx2;
+				dwdxF = 0.0;
+				dwdxB = 0.0;
+				if (!collapsed_z) {
+					dwdxF = ( w_data[k+1][j][i] - w_data[k+1][j][i-1] ) * idx_c[i-1];
+					dwdxB = ( w_data[k][j][i]   - w_data[k][j][i-1]   ) * idx_c[i-1];
+				}
 
 #ifdef VOF
+				/*
+				 * The x/r contribution is the one place where AXISYM_RZ differs
+				 * from planar Cartesian momentum.  We keep that metric weighting
+				 * in TwodOps so the explicit kernel and the implicit CG operator
+				 * share the exact same discrete geometry.
+				 */
+				d2udx2 = iRe * TwodOps_u_cv_x_flux_divergence(
+					grid, params, i,
+					muE * dudxE,
+					muW * dudxW);
+				ddxdudx = d2udx2;
 
 				// Cross terms reuse the same face-μ as the diagonal terms:
 				ddydvdx = iRe * ( mu_yp * dvdxN - mu_ym * dvdxS ) * idy_v[j];
-				ddzdwdx = iRe * ( mu_zp * dwdxF - mu_zm * dwdxB ) * idz_w[k];
+				ddzdwdx = 0.0;
+				if (!collapsed_z)
+					ddzdwdx = iRe * ( mu_zp * dwdxF - mu_zm * dwdxB ) * idz_w[k];
+
+				/*
+				 * Extra cylindrical linear term in radial momentum:
+				 *   -2 μ u_r / (Re r^2)
+				 * There is no corresponding cross-term partner, so it belongs
+				 * only to the implicit/diagonal side of the split.
+				 */
+				axisym_ur_correction = TwodOps_axisym_u_radial_linear_term(
+					grid, params, i,
+					iRe * 0.5 * (muE + muW),
+					u_data[k][j][i]);
 
 #else				
+				d2udx2 = TwodOps_u_cv_x_flux_divergence(
+					grid, params, i,
+					nuE * dudxE,
+					nuW * dudxW);
+				ddxdudx = d2udx2;
 				ddydvdx = ( nuN * dvdxN - nuS * dvdxS ) * idy_v[j];
-				ddzdwdx = ( nuF * dwdxF - nuB * dwdxB ) * idz_w[k];
+				ddzdwdx = 0.0;
+				if (!collapsed_z)
+					ddzdwdx = ( nuF * dwdxF - nuB * dwdxB ) * idz_w[k];
+				axisym_ur_correction = TwodOps_axisym_u_radial_linear_term(
+					grid, params, i,
+					iRe,
+					u_data[k][j][i]);
 #endif
 
 
@@ -611,23 +662,32 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				double u_S   = 0.5*(u_data[k][j-1][i] + u_data[k][j  ][i]);
 				double drhouvdy = (mfy_N*u_N - mfy_S*u_S) * idy_v[j];
 
-				/* ---- Z-flux: d(ρ u w)/dz ---- */
-				double mfz_F = 0.5*(mfz[k+1][j][i-1] + mfz[k+1][j][i]);
-				double mfz_B = 0.5*(mfz[k  ][j][i-1] + mfz[k  ][j][i]);
-				double u_F   = 0.5*(u_data[k][j][i]   + u_data[k+1][j][i]);
-				double u_B   = 0.5*(u_data[k-1][j][i] + u_data[k  ][j][i]);
-				double drhouwdz = (mfz_F*u_F - mfz_B*u_B) * idz_w[k];
+				duwdz = 0.0;
+				if (!collapsed_z) {
+					/* No physical z-flux exists in the storage-only 2D slab. */
+					double mfz_F = 0.5*(mfz[k+1][j][i-1] + mfz[k+1][j][i]);
+					double mfz_B = 0.5*(mfz[k  ][j][i-1] + mfz[k  ][j][i]);
+					double u_F   = 0.5*(u_data[k][j][i]   + u_data[k+1][j][i]);
+					double u_B   = 0.5*(u_data[k-1][j][i] + u_data[k  ][j][i]);
+					duwdz = (mfz_F*u_F - mfz_B*u_B) * idz_w[k];
+				}
 
-				duudx = (mfx_E*u_E - mfx_W*u_W) * idx_c[i-1];
+				duudx = TwodOps_u_cv_x_flux_divergence(
+					grid, params, i,
+					mfx_E*u_E,
+					mfx_W*u_W);
 				duvdy = (mfy_N*u_N - mfy_S*u_S) * idy_v[j];
-				duwdz = (mfz_F*u_F - mfz_B*u_B) * idz_w[k];
 #else
 				/* Velocity-form convection for single-phase and diffuse-VOF runs.
 				 * In the VOF_DIFFUSE case, rho-face weighting is applied in RHS. */
 				vCN =  0.5 * ( v_data[k][j+1][i] + v_data[k][j+1][i-1] );
 				vCS =  0.5 * ( v_data[k][j][i]   + v_data[k][j][i-1]   );
-				wCF =  0.5 * ( w_data[k+1][j][i] + w_data[k+1][j][i-1] );
-				wCB =  0.5 * ( w_data[k][j][i]   + w_data[k][j][i-1]   );
+				wCF = 0.0;
+				wCB = 0.0;
+				if (!collapsed_z) {
+					wCF =  0.5 * ( w_data[k+1][j][i] + w_data[k+1][j][i-1] );
+					wCB =  0.5 * ( w_data[k][j][i]   + w_data[k][j][i-1]   );
+				}
 
 				//--------------------------------------------------------------
 				// uu East/West
@@ -644,15 +704,24 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				// uw Front/Back
 				//--------------------------------------------------------------
-				uwF = 0.5 * ( u_data[k][j][i] + u_data[k+1][j][i] ) * wCF;
-				uwB = 0.5 * ( u_data[k][j][i] + u_data[k-1][j][i] ) * wCB;
+				uwF = 0.0;
+				uwB = 0.0;
+				if (!collapsed_z) {
+					uwF = 0.5 * ( u_data[k][j][i] + u_data[k+1][j][i] ) * wCF;
+					uwB = 0.5 * ( u_data[k][j][i] + u_data[k-1][j][i] ) * wCB;
+				}
 
 				//--------------------------------------------------------------
 				// d/dx(uu), d/dy(uv), and d/dz(uw)
 				//--------------------------------------------------------------
-				duudx = ( uuE - uuW ) * idx_c[i-1];
+				duudx = TwodOps_u_cv_x_flux_divergence(
+					grid, params, i,
+					uuE,
+					uuW);
 				duvdy = ( uvN - uvS ) * idy_v[j];
-				duwdz = ( uwF - uwB ) * idz_w[k];
+				duwdz = 0.0;
+				if (!collapsed_z)
+					duwdz = ( uwF - uwB ) * idz_w[k];
 #endif
 
 
@@ -668,19 +737,19 @@ void Velocity_u_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 #ifdef FULLY_EXPLICIT
 
-				explicit[k][j][i] += d2udx2 + d2udy2 + d2udz2;
+				explicit[k][j][i] += d2udx2 + d2udy2 + d2udz2 + axisym_ur_correction;
 				implicit[k][j][i] = 0.0;
 
 #elif defined VOF
 				// implicit diagonal
-				implicit[k][j][i] = d2udx2 + d2udy2 + d2udz2;
+				implicit[k][j][i] = d2udx2 + d2udy2 + d2udz2 + axisym_ur_correction;
 
 #elif defined FULLY_IMPLICIT
 
-				implicit[k][j][i] = d2udx2 + d2udy2 + d2udz2;
+				implicit[k][j][i] = d2udx2 + d2udy2 + d2udz2 + axisym_ur_correction;
 #else
 
-				explicit[k][j][i] += d2udx2 + d2udz2;
+				explicit[k][j][i] += d2udx2 + d2udz2 + axisym_ur_correction;
 				implicit[k][j][i] = d2udy2;
 
 #endif
@@ -712,6 +781,7 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 	MAC_grid *grid = data_bag -> grid;
 	Parameters *params = data_bag -> params;
+	const int collapsed_z = TwodOps_collapsed_component_is_inactive(params);
 
 	// Same for all quantities
 	int NX = grid -> NX;
@@ -860,8 +930,12 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				// dv/dz Front/Back
 				//--------------------------------------------------------------
-				dvdzF = ( v_data[k+1][j][i] - v_data[k][j][i] ) * idz_c[k];
-				dvdzB = ( v_data[k][j][i] - v_data[k-1][j][i] ) * idz_c[k-1];
+				dvdzF = 0.0;
+				dvdzB = 0.0;
+				if (!collapsed_z) {
+					dvdzF = ( v_data[k+1][j][i] - v_data[k][j][i] ) * idz_c[k];
+					dvdzB = ( v_data[k][j][i] - v_data[k-1][j][i] ) * idz_c[k-1];
+				}
 
 				//--------------------------------------------------------------
 				// d2v/dx2, d2v/dy2, and d2v/dz2
@@ -869,15 +943,24 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 #ifdef VOF
 
-                
-                d2vdx2 = iRe * ( mu_xp * dvdxE - mu_xm * dvdxW ) * idx_u[i];
+                d2vdx2 = iRe * TwodOps_v_cv_x_flux_divergence(
+                    grid, params, i,
+                    mu_xp * dvdxE,
+                    mu_xm * dvdxW);
                 d2vdy2 = iRe * ( mu_yp * dvdyN - mu_ym * dvdyS ) * idy_c[j-1];
-                d2vdz2 = iRe * ( mu_zp * dvdzF - mu_zm * dvdzB ) * idz_w[k];
+                d2vdz2 = 0.0;
+                if (!collapsed_z)
+                    d2vdz2 = iRe * ( mu_zp * dvdzF - mu_zm * dvdzB ) * idz_w[k];
 
 #else
-				d2vdx2 = ( nuE * dvdxE - nuW * dvdxW ) * idx_u[i];
+				d2vdx2 = TwodOps_v_cv_x_flux_divergence(
+					grid, params, i,
+					nuE * dvdxE,
+					nuW * dvdxW);
 				d2vdy2 = ( nuN * dvdyN - nuS * dvdyS ) * idy_c[j-1];
-				d2vdz2 = ( nuF * dvdzF - nuB * dvdzB ) * idz_w[k];
+				d2vdz2 = 0.0;
+				if (!collapsed_z)
+					d2vdz2 = ( nuF * dvdzF - nuB * dvdzB ) * idz_w[k];
 #endif
 
 
@@ -888,22 +971,40 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				dudyE = ( u_data[k][j][i+1] - u_data[k][j-1][i+1] ) * idy_c[j-1];
 				dudyW = ( u_data[k][j][i]   - u_data[k][j-1][i]   ) * idy_c[j-1];
-				dwdyF = ( w_data[k+1][j][i] - w_data[k+1][j-1][i] ) * idy_c[j-1];
-				dwdyB = ( w_data[k][j][i]   - w_data[k][j-1][i]   ) * idy_c[j-1];
+				dwdyF = 0.0;
+				dwdyB = 0.0;
+				if (!collapsed_z) {
+					dwdyF = ( w_data[k+1][j][i] - w_data[k+1][j-1][i] ) * idy_c[j-1];
+					dwdyB = ( w_data[k][j][i]   - w_data[k][j-1][i]   ) * idy_c[j-1];
+				}
 
 #ifdef VOF
 
-				// Cross terms reuse diagonal face-μ:
-				ddxdudy = iRe * ( mu_xp * dudyE - mu_xm * dudyW ) * idx_u[i];
+				/*
+				 * The axial equation uses the same radial metric weighting as
+				 * the pressure and scalar operators, but it does not carry the
+				 * extra -u_r/r^2 correction that is unique to radial momentum.
+				 */
+				ddxdudy = iRe * TwodOps_v_cv_x_flux_divergence(
+					grid, params, i,
+					mu_xp * dudyE,
+					mu_xm * dudyW);
                 ddydvdy = d2vdy2;
-                ddzdwdy = iRe * ( mu_zp * dwdyF - mu_zm * dwdyB ) * idz_w[k];
+                ddzdwdy = 0.0;
+                if (!collapsed_z)
+                    ddzdwdy = iRe * ( mu_zp * dwdyF - mu_zm * dwdyB ) * idz_w[k];
 
 
 #else				
 
-				ddxdudy = ( nuE * dudyE - nuW * dudyW ) * idx_u[i];
+				ddxdudy = TwodOps_v_cv_x_flux_divergence(
+					grid, params, i,
+					nuE * dudyE,
+					nuW * dudyW);
 				ddydvdy = d2vdy2;
-				ddzdwdy = ( nuF * dwdyF - nuB * dwdyB ) * idz_w[k];
+				ddzdwdy = 0.0;
+				if (!collapsed_z)
+					ddzdwdy = ( nuF * dwdyF - nuB * dwdyB ) * idz_w[k];
 
 #endif				
 
@@ -927,7 +1028,10 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				double mfx_W = 0.5*(mfx[k][j-1][i  ] + mfx[k][j][i  ]);
 				double v_E   = 0.5*(v_data[k][j][i  ] + v_data[k][j][i+1]);
 				double v_W   = 0.5*(v_data[k][j][i-1] + v_data[k][j][i  ]);
-				double dvudx = (mfx_E*v_E - mfx_W*v_W) * idx_u[i];
+				double dvudx = TwodOps_v_cv_x_flux_divergence(
+					grid, params, i,
+					mfx_E*v_E,
+					mfx_W*v_W);
 
 				/* ---- Y-flux: d(ρ v v)/dy ---- (diagonal — native direction)
 				* v-CV north/south faces are at cell-centres j, j-1.
@@ -940,22 +1044,29 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				double v_S   = 0.5*(v_data[k][j-1][i] + v_data[k][j  ][i]);
 				double dvvdy = (mfy_N*v_N - mfy_S*v_S) * idy_c[j-1];
 
-				/* ---- Z-flux: d(ρ v w)/dz ----
-				* v-CV front/back faces are at z-faces k+1, k.
-				* mfz lives at z-faces (cell-centred in y) → interpolate in y
-				* across j-1/2: average cells j-1 and j.                          */
-				double mfz_F = 0.5*(mfz[k+1][j-1][i] + mfz[k+1][j][i]);
-				double mfz_B = 0.5*(mfz[k  ][j-1][i] + mfz[k  ][j][i]);
-				double v_F   = 0.5*(v_data[k  ][j][i] + v_data[k+1][j][i]);
-				double v_B   = 0.5*(v_data[k-1][j][i] + v_data[k  ][j][i]);
-				double dvwdz = (mfz_F*v_F - mfz_B*v_B) * idz_w[k];
+				dvwdz = 0.0;
+				if (!collapsed_z) {
+					/*
+					 * No physical z transport exists once the third direction is
+					 * collapsed to a storage-only slab.
+					 */
+					double mfz_F = 0.5*(mfz[k+1][j-1][i] + mfz[k+1][j][i]);
+					double mfz_B = 0.5*(mfz[k  ][j-1][i] + mfz[k  ][j][i]);
+					double v_F   = 0.5*(v_data[k  ][j][i] + v_data[k+1][j][i]);
+					double v_B   = 0.5*(v_data[k-1][j][i] + v_data[k  ][j][i]);
+					dvwdz = (mfz_F*v_F - mfz_B*v_B) * idz_w[k];
+				}
 #else
 				/* Velocity-form convection for single-phase and diffuse-VOF runs.
 				 * In the VOF_DIFFUSE case, rho-face weighting is applied in RHS. */
 				uCE = 0.5 * ( u_data[k][j][i+1] + u_data[k][j-1][i+1] );
 				uCW = 0.5 * ( u_data[k][j][i]   + u_data[k][j-1][i]   );
-				wCF = 0.5 * ( w_data[k+1][j][i] + w_data[k+1][j-1][i] );
-				wCB = 0.5 * ( w_data[k][j][i]   + w_data[k][j-1][i]   );
+				wCF = 0.0;
+				wCB = 0.0;
+				if (!collapsed_z) {
+					wCF = 0.5 * ( w_data[k+1][j][i] + w_data[k+1][j-1][i] );
+					wCB = 0.5 * ( w_data[k][j][i]   + w_data[k][j-1][i]   );
+				}
 
 				//--------------------------------------------------------------
 				// vu East/West
@@ -972,15 +1083,24 @@ void Velocity_v_set_implicit_explicit(Cart3d_bag *data_bag) {
 				//--------------------------------------------------------------
 				// vw Front/Back
 				//--------------------------------------------------------------
-				vwF = 0.5 * ( v_data[k][j][i] + v_data[k+1][j][i] ) * wCF;
-				vwB = 0.5 * ( v_data[k][j][i] + v_data[k-1][j][i] ) * wCB;
+				vwF = 0.0;
+				vwB = 0.0;
+				if (!collapsed_z) {
+					vwF = 0.5 * ( v_data[k][j][i] + v_data[k+1][j][i] ) * wCF;
+					vwB = 0.5 * ( v_data[k][j][i] + v_data[k-1][j][i] ) * wCB;
+				}
 
 				//--------------------------------------------------------------
 				// d/dx(vu), d/dy(vv), and d/dz(vw)
 				//--------------------------------------------------------------
-				dvudx = (vuE - vuW) * idx_u[i];
+				dvudx = TwodOps_v_cv_x_flux_divergence(
+					grid, params, i,
+					vuE,
+					vuW);
 				dvvdy = (vvN - vvS) * idy_c[j-1];
-				dvwdz = (vwF - vwB) * idz_w[k];
+				dvwdz = 0.0;
+				if (!collapsed_z)
+					dvwdz = (vwF - vwB) * idz_w[k];
 #endif
 
 				/*------------------------------------------------------------*/
@@ -1039,6 +1159,13 @@ void Velocity_w_set_implicit_explicit(Cart3d_bag *data_bag) {
 
 	MAC_grid *grid = data_bag -> grid;
 	Parameters *params = data_bag -> params;
+
+	if (TwodOps_collapsed_component_is_inactive(params)) {
+		Memory_reset_noghost_variable(grid, params, data_bag->w->ng_explicit);
+		Memory_reset_noghost_variable(grid, params, data_bag->w->ng_implicit);
+		Memory_reset_noghost_variable(grid, params, data_bag->w->ng_visc_explicit);
+		return;
+	}
 
 	// Same for all quantities
 	int NX = grid -> NX;
@@ -1828,6 +1955,13 @@ void Velocity_w_set_RHS(Cart3d_bag *data_bag) {
 	MAC_grid *grid = data_bag -> grid;
 	Parameters *params = data_bag -> params;
 
+	if (TwodOps_collapsed_component_is_inactive(params)) {
+		Memory_reset_noghost_variable(grid, params, data_bag->w->ng_rhs);
+		Memory_reset_noghost_variable(grid, params, data_bag->w->ng_explicit_old);
+		Memory_reset_noghost_variable(grid, params, data_bag->w->ng_visc_explicit_old);
+		return;
+	}
+
 	// Same for all quantities
 	int NX = grid -> NX;
 	int NY = grid -> NY;
@@ -2394,21 +2528,28 @@ void Velocity_update_boundaries(double ***data, char component, int type, Cart3d
 		// Left wall
 		//----------------------------------------------------------------------
 		if (component == 'u') {
-			// Don't waste time resetting for CG method
-			if (type == VEL_TYPE_NORMAL) {
+			/*
+			 * In AXISYM_RZ the left boundary is the symmetry axis r = 0, so the
+			 * radial component must vanish there for both the physical velocity
+			 * field and the CG correction field used inside the implicit solve.
+			 */
+			if (type == VEL_TYPE_NORMAL || params->axisym_rz_enabled) {
 				for (k = Ks_g; k < Ke_g; k++) {
 					for (j = Js_g; j < Je_g; j++) {
 						data[k][j][i] = 0.0;
 					}
 				}
 			}
-		}
-		else {
-			for (k = Ks; k < Ke; k++) {
-				for (j = Js; j < Je; j++) {
-		#ifdef LEFT_WALL_VELOCITY_NOSLIP
-					data[k][j][i-1] = -data[k][j][i];
-		#endif
+			}
+			else {
+				for (k = Ks; k < Ke; k++) {
+					for (j = Js; j < Je; j++) {
+#ifdef AXISYM_RZ
+						data[k][j][i-1] = data[k][j][i];
+#endif
+			#ifdef LEFT_WALL_VELOCITY_NOSLIP
+						data[k][j][i-1] = -data[k][j][i];
+			#endif
 		#ifdef LEFT_WALL_VELOCITY_FREESLIP
 					data[k][j][i-1] = data[k][j][i];
 		#endif
@@ -2669,9 +2810,6 @@ void Velocity_compute_total_kinetic_energy( Velocity *u, Velocity *v,
 	int Is, Js, Ks;
 	int Ie, Je, Ke;
 	double ***u_data_bc, ***v_data_bc, ***w_data_bc;
-	double *xu, *yv, *zw;
-	double *dx_u, *dy_v, *dz_w;
-	double dx, dy, dz;
 	double dV;
 	double G_kinetic_energy;
 	double u_, v_, w_;
@@ -2684,15 +2822,6 @@ void Velocity_compute_total_kinetic_energy( Velocity *u, Velocity *v,
 	v_data_bc = v->data_bc;
 	w_data_bc = w->data_bc;
 
-	xu = grid->xu;
-	yv = grid->yv;
-	zw = grid->zw;
-
-	// Grid dimensions
-	dx_u = grid->dx_u;
-	dy_v = grid->dy_v;
-	dz_w = grid->dz_w;
-
 	// Start index of bottom-left-back corner on current processor
 	Is = grid->G_Is;
 	Js = grid->G_Js;
@@ -2704,19 +2833,16 @@ void Velocity_compute_total_kinetic_energy( Velocity *u, Velocity *v,
 	Ke = grid->G_Ke;
 
 	for (k=Ks; k<Ke; k++) {
-
-		dz = dz_w[k];
 		for (j=Js; j<Je; j++) {
-
-			dy = dy_v[j];
 			for (i=Is; i<Ie; i++) {
 
 				// Only include if point is fluid
 				if (grid->c_status[k][j][i] == FLUID) {
-
-					dx = dx_u[i];
-
-					dV = dx * dy * dz;
+					/*
+					 * Kinetic energy is a physical volume integral, so use the
+					 * active 2D/3D control-volume measure here as well.
+					 */
+					dV = TwodOps_cell_measure_c(grid, params, i, j, k);
 
 					u_ = u_data_bc[k][j][i];
 					v_ = v_data_bc[k][j][i];

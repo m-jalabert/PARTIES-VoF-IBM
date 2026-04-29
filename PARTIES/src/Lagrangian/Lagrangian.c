@@ -46,6 +46,72 @@
      yv[Js] - y < range && y - yv[Je] < range && \
      zw[Ks] - z < range && z - zw[Ke] < range)
 
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+static int Lagrangian_local_point_2d(double x, double y, MAC_grid *grid);
+static int Lagrangian_near_point_2d(double x, double y, double range,
+                                    MAC_grid *grid);
+static double Lagrangian_marker_volume(const Particle *p, int mv);
+static void Lagrangian_apply_twod_particle_constraints(Particle *p,
+                                                       MAC_grid *grid);
+static void Lagrangian_generate_points_2d(Particle *p, MAC_grid *grid);
+#endif
+
+
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+static int Lagrangian_local_point_2d(double x, double y, MAC_grid *grid)
+{
+	return (x >= grid->xu[grid->G_Is] &&
+	        x <  grid->xu[min(grid->G_Ie, grid->NX - 1)] &&
+	        y >= grid->yv[grid->G_Js] &&
+	        y <  grid->yv[min(grid->G_Je, grid->NY - 1)]);
+}
+
+static int Lagrangian_near_point_2d(double x, double y, double range,
+                                    MAC_grid *grid)
+{
+	int Is = grid->G_Is;
+	int Js = grid->G_Js;
+	int Ie = min(grid->G_Ie, grid->NX - 1);
+	int Je = min(grid->G_Je, grid->NY - 1);
+
+	return (grid->xu[Is] - x < range && x - grid->xu[Ie] < range &&
+	        grid->yv[Js] - y < range && y - grid->yv[Je] < range);
+}
+
+static double Lagrangian_marker_volume(const Particle *p, int mv)
+{
+	if (p->Vol_L_marker != NULL)
+		return p->Vol_L_marker[mv];
+	return p->Vol_L;
+}
+
+static void Lagrangian_apply_twod_particle_constraints(Particle *p,
+                                                       MAC_grid *grid)
+{
+	/*
+	 * The z coordinate is a storage coordinate in both 2D modes. Axisymmetric
+	 * v1 additionally pins the sphere to the symmetry axis and disables all
+	 * rotations; planar 2D keeps only cylinder-axis spin Omega_z.
+	 */
+	p->X[2] = grid->zc[grid->G_Ks];
+	p->X_old[2] = p->X[2];
+	p->U[2] = 0.0;
+	p->U_old[2] = 0.0;
+#ifdef AXISYM_RZ
+	p->X[0] = 0.0;
+	p->X_old[0] = 0.0;
+	p->U[0] = 0.0;
+	p->U_old[0] = 0.0;
+	DSET_ZERO(p->Omega, 3);
+	DSET_ZERO(p->Omega_old, 3);
+#else
+	p->Omega[0] = 0.0;
+	p->Omega[1] = 0.0;
+	p->Omega_old[0] = 0.0;
+	p->Omega_old[1] = 0.0;
+#endif
+}
+#endif
 
 
 /******************************************************************************/
@@ -59,6 +125,13 @@ Lagrangian *Lagrangian_create(MAC_grid *grid, Parameters *params) {
 
 	Particle_list *p_mobile_list = (Particle_list *)malloc(sizeof(Particle_list));
 	Particle_list *p_fixed_list  = (Particle_list *)malloc(sizeof(Particle_list));
+	/*
+	 * Initialize the lists explicitly so callers running before ParticleInput
+	 * (e.g. VOF_DIFFUSE_compute_C_S inside VOF_DIFFUSE_init) see an empty
+	 * list rather than uninitialized struct memory.
+	 */
+	memset(p_mobile_list, 0, sizeof(Particle_list));
+	memset(p_fixed_list,  0, sizeof(Particle_list));
 	lag -> p_mobile_list = p_mobile_list;
 	lag -> p_fixed_list  = p_fixed_list;
 
@@ -236,8 +309,6 @@ void Lagrangian_advect_particles(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 }
 
 
-
-
 /******************************************************************************/
 /*
  * Collects and evaluates all forces acting on particle due to the IBM and
@@ -321,12 +392,19 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 	// Collect hydrodynamic forces
 	//--------------------------------------------------------------------------
 
+		#if defined(LAG_PARTICLE_RESOLVED)
+			Particle_reduce_oversized_forces_to_owner(p_mobile_list, data_bag);
+		#endif
 
 	//#ifndef ONE_WAY
 		p_list_foreign = Particle_list_foreign_create(p_mobile_list, data_bag, DTRACE("Particle_list_foreign_create"));
 		Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
 		Lagrangian_collect_forces(p_mobile_list, p_list_foreign, LAG_COLLECT_HYDRO, params, DTRACE("Lagrangian_collect_forces"));
 		Particle_list_destroy(p_list_foreign);
+
+		#if defined(LAG_PARTICLE_RESOLVED)
+		Particle_reduce_oversized_forces_to_owner(p_fixed_list, data_bag);
+		#endif
 
 		// Remove foreign particles from p_fixed for advecting particles
 		p_list_foreign = Particle_list_foreign_create(p_fixed_list, data_bag, DTRACE("Particle_list_foreign_create"));
@@ -897,6 +975,10 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 
 		Rotate_particle(p, params);
 
+		#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+		Lagrangian_apply_twod_particle_constraints(p, grid);
+		#endif
+
 		/* ── Symmetry-plane constraint: pin sphere to x = 0 ── */
 		#ifdef LEFT_WALL_VELOCITY_FREESLIP
 		X[0]     = 0.0;
@@ -1198,6 +1280,10 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		X[2] = X_old[2] + dt * bet * ( U[2] + U_old[2] );
 
 		Rotate_particle(p, params);
+
+		#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+		Lagrangian_apply_twod_particle_constraints(p, grid);
+		#endif
 
 		/* ── Symmetry-plane constraint: pin sphere to x = 0 ── */
 		#ifdef LEFT_WALL_VELOCITY_FREESLIP
@@ -1921,11 +2007,21 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		//    points are those located on this processor.  This prevents double
 		//    counting when we communicate and add these forces later.
 		//----------------------------------------------------------------------
+		#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+		if (Lagrangian_local_point_2d(X_L[mv], Y_L[mv], grid)) {
+			double M_L_marker = Lagrangian_marker_volume(p, mv);
+			F[0] -= rho_L * M_L_marker * F_L;
+			#ifdef TWOD_CARTESIAN
+			T[2] += rho_L * M_L_marker * r[1] * F_L;
+			#endif
+		}
+		#else
 		if (LOCAL_POINT(X_L[mv], Y_L[mv], Z_L[mv])) {
 			F[0] -= rho_L * M_L * F_L;  // Density-weighted reaction force
 			T[1] -= rho_L * M_L * r[2] * F_L;
 			T[2] += rho_L * M_L * r[1] * F_L;
 		}
+		#endif
 
 		// Store pure velocity forcing
 		Temp_F_L[mv] = F_L;
@@ -2072,11 +2168,21 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		//    points are those located on this processor.  This prevents double
 		//    counting when we communicate and add these forces later.
 		//----------------------------------------------------------------------
+		#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+		if (Lagrangian_local_point_2d(X_L[mv], Y_L[mv], grid)) {
+			double M_L_marker = Lagrangian_marker_volume(p, mv);
+			F[1] -= rho_L * M_L_marker * F_L;
+			#ifdef TWOD_CARTESIAN
+			T[2] -= rho_L * M_L_marker * r[0] * F_L;
+			#endif
+		}
+		#else
 		if (LOCAL_POINT(X_L[mv], Y_L[mv], Z_L[mv])) {
 			F[1] -= rho_L * M_L * F_L;  // Density-weighted reaction force
 			T[0] += rho_L * M_L * r[2] * F_L;
 			T[2] -= rho_L * M_L * r[0] * F_L;
 		}
+		#endif
 
 		// Store pure velocity forcing
 		Temp_F_L[mv] = F_L;
@@ -2411,7 +2517,12 @@ void Lagrangian_flag_points_individual(Particle *p, Particle *p2, MAC_grid *grid
 	r[1] = X2[1] - X[1];
 	r[2] = X2[2] - X[2];
 
-	if (DOT(r,r) < dist_p_p2) {
+	double dist2 = DOT(r,r);
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+	dist2 = r[0] * r[0] + r[1] * r[1];
+#endif
+
+	if (dist2 < dist_p_p2) {
 
 		for (mv = 0; mv < N_L_local; mv++) {
 
@@ -2420,7 +2531,11 @@ void Lagrangian_flag_points_individual(Particle *p, Particle *p2, MAC_grid *grid
 			r[1] = X2[1] - Y_L[mv];
 			r[2] = X2[2] - Z_L[mv];
 
-			if (flag_L[mv] == 1 && DOT(r,r) < dist_L_p2) {
+			dist2 = DOT(r,r);
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+			dist2 = r[0] * r[0] + r[1] * r[1];
+#endif
+			if (flag_L[mv] == 1 && dist2 < dist_L_p2) {
 				flag_L[mv] = 0;
 			}
 		}
@@ -2460,6 +2575,7 @@ void Lagrangian_flag_points_wall(Particle *p, MAC_grid *grid) {
 	//--------------------------------------------------------------------------
 	// Lower x wall
 	//--------------------------------------------------------------------------
+#ifndef AXISYM_RZ
 	double xmin = grid -> xu[0];
 	if (fabs(X[0] - xmin) < dist_p_wall) {
 
@@ -2470,6 +2586,7 @@ void Lagrangian_flag_points_wall(Particle *p, MAC_grid *grid) {
 			}
 		}
 	}
+#endif
 
 	//--------------------------------------------------------------------------
 	// Upper x wall
@@ -2634,6 +2751,88 @@ double *mat_mat(int m, int n, int p, int q, double **A, double **B) { //double A
 
 
 
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+static void Lagrangian_generate_points_2d(Particle *p, MAC_grid *grid)
+{
+	int mv;
+	const double hgrid = grid->dx_u[1];
+	const double range = DELTA_FUNC_RADIUS * hgrid;
+	const double R = p->R;
+	const double *X = p->X;
+	double *X_L = p->X_L;
+	double *Y_L = p->Y_L;
+	double *Z_L = p->Z_L;
+	double *Vol_L_marker = p->Vol_L_marker;
+#ifdef IBM_SCALAR
+	double *X_H = p->X_H;
+	double *Y_H = p->Y_H;
+	double *Z_H = p->Z_H;
+#endif
+	const double z_dummy = grid->zc[grid->G_Ks];
+	int N_L_local = 0;
+
+#ifdef TWOD_CARTESIAN
+	/*
+	 * Planar 2D particles are cylinders extruded through the dummy slab.  The
+	 * marker control volume is line segment length times slab thickness times
+	 * the regularization width h.
+	 */
+	const double dtheta = 2.0 * PI / p->N_L;
+	const double ds = R * dtheta;
+	double slab = grid->dummy_z_slab_thickness;
+	if (slab <= 0.0)
+		slab = hgrid;
+	for (mv = 0; mv < p->N_L; mv++) {
+		double theta = (mv + 0.5) * dtheta;
+		double nx = cos(theta);
+		double ny = sin(theta);
+		double x = X[0] + R * nx;
+		double y = X[1] + R * ny;
+		if (Lagrangian_near_point_2d(x, y, range, grid)) {
+			X_L[N_L_local] = x;
+			Y_L[N_L_local] = y;
+			Z_L[N_L_local] = z_dummy;
+			Vol_L_marker[N_L_local] = ds * slab * hgrid;
+#ifdef IBM_SCALAR
+			X_H[N_L_local] = x + hgrid * nx;
+			Y_H[N_L_local] = y + hgrid * ny;
+			Z_H[N_L_local] = z_dummy;
+#endif
+			N_L_local++;
+		}
+	}
+#else
+	/*
+	 * Axisymmetric particles are on-axis spheres.  Each meridional marker is a
+	 * full ring with area theta_span*r*ds; multiplying by h gives the same
+	 * regularized control-volume role as Vol_L in the legacy 3D IBM path.
+	 */
+	const double dtheta = PI / p->N_L;
+	for (mv = 0; mv < p->N_L; mv++) {
+		double theta = (mv + 0.5) * dtheta;
+		double r_ring = R * sin(theta);
+		double z_axial = X[1] + R * cos(theta);
+		double ds = R * dtheta;
+		double ring_volume = TWOD_AXISYM_THETA_SPAN_FULL * r_ring * ds * hgrid;
+		if (Lagrangian_near_point_2d(r_ring, z_axial, range, grid)) {
+			X_L[N_L_local] = r_ring;
+			Y_L[N_L_local] = z_axial;
+			Z_L[N_L_local] = z_dummy;
+			Vol_L_marker[N_L_local] = ring_volume;
+#ifdef IBM_SCALAR
+			X_H[N_L_local] = r_ring + hgrid * sin(theta);
+			Y_H[N_L_local] = z_axial + hgrid * cos(theta);
+			Z_H[N_L_local] = z_dummy;
+#endif
+			N_L_local++;
+		}
+	}
+#endif
+	p->N_L_local = N_L_local;
+}
+#endif
+
+
 /******************************************************************************/
 /*
  Generates 'N_L' points evenly distributed over the surface of a sphere of
@@ -2645,6 +2844,10 @@ double *mat_mat(int m, int n, int p, int q, double **A, double **B) { //double A
 /******************************************************************************/
 void Lagrangian_generate_points_Leopardi(Particle *p, MAC_grid *grid) {
 
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+	Lagrangian_generate_points_2d(p, grid);
+	return;
+#endif
 	int i, j;
 	double A_r, A, AC, A_F, A_F_last;
 	double delta_I, delta_F;

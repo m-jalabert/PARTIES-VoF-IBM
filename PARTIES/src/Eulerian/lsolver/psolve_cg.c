@@ -75,34 +75,26 @@ void Pressure_compute_preconditioner(Cart3d_bag *data_bag)
 	int Je = min( g->G_Je, g->NY-1);
 	int Ke = min( g->G_Ke, g->NZ-1);
 
-    /* Uniform-grid 1/Δx², 1/Δy², 1/Δz² (adapt if grid is non-uniform). */
-    const double idx2 = g->idx_c[1] * g->idx_c[1];
-    const double idy2 = g->idy_c[1] * g->idy_c[1];
-    const double idz2 = g->idz_c[1] * g->idz_c[1];
-
     const double eps = 1e-12;            /* numerical safeguard */
 
     for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
             for (int i = Is; i < Ie; i++) {
 
-                /* Harmonic-average coefficients on the six faces */
-                double cxp = 2.0 / (rho[k][j][i] + rho[k][j][i+1]); /* east  */
-                double cxm = 2.0 / (rho[k][j][i] + rho[k][j][i-1]); /* west  */
-
-                double cyp = 2.0 / (rho[k][j][i] + rho[k][j+1][i]); /* north */
-                double cym = 2.0 / (rho[k][j][i] + rho[k][j-1][i]); /* south */
-
-                double czp = 2.0 / (rho[k][j][i] + rho[k+1][j][i]); /* top   */
-                double czm = 2.0 / (rho[k][j][i] + rho[k-1][j][i]); /* bottom*/
-
-                /* Diagonal of A (7-point stencil) */
-                double aii = (cxp + cxm) * idx2 +
-                             (cyp + cym) * idy2 +
-                             (czp + czm) * idz2;
+                double beta_xp = 2.0 / (rho[k][j][i] + rho[k][j][i+1]);
+                double beta_xm = 2.0 / (rho[k][j][i] + rho[k][j][i-1]);
+                double beta_yp = 2.0 / (rho[k][j][i] + rho[k][j+1][i]);
+                double beta_ym = 2.0 / (rho[k][j][i] + rho[k][j-1][i]);
+                double beta_zp = 2.0 / (rho[k][j][i] + rho[k+1][j][i]);
+                double beta_zm = 2.0 / (rho[k][j][i] + rho[k-1][j][i]);
+                double row_w = TwodOps_pressure_row_weight(
+                    g, data_bag->params, i);
+                double aii = TwodOps_scalar_diag_from_face_betas(
+                    g, data_bag->params, i, j, k,
+                    beta_xm, beta_xp, beta_ym, beta_yp, beta_zm, beta_zp);
 
                 /* Store inverse diagonal (Jacobi preconditioner) */
-                p->M_inv[k][j][i] = 1.0 / (aii + eps);
+                p->M_inv[k][j][i] = 1.0 / (row_w * aii + eps);
             }
         }
     }
@@ -331,40 +323,20 @@ void Pressure_operator_variableCoeff(
     int Je = min(grid->G_Je, NY-1);
     int Ke = min(grid->G_Ke, NZ-1);
 
-    // Grid spacing squared (cell-centered)
-    double idx2 = grid->idx_c[1] * grid->idx_c[1];
-    double idy2 = grid->idy_c[1] * grid->idy_c[1];
-    double idz2 = grid->idz_c[1] * grid->idz_c[1];
-
-    //    Loop over interior cells and compute the 3D divergence of (invRho * grad(phi)).
-    //    Face-based approach. Cell-centered version with face averaging.
- 
     for (k = Ks; k < Ke; k++) {
         for (j = Js; j < Je; j++) {
             for (i = Is; i < Ie; i++) {
+                double beta_xp = 2.0 / (rho[k][j][i] + rho[k][j][i+1]);
+                double beta_xm = 2.0 / (rho[k][j][i] + rho[k][j][i-1]);
+                double beta_yp = 2.0 / (rho[k][j][i] + rho[k][j+1][i]);
+                double beta_ym = 2.0 / (rho[k][j][i] + rho[k][j-1][i]);
+                double beta_zp = 2.0 / (rho[k][j][i] + rho[k+1][j][i]);
+                double beta_zm = 2.0 / (rho[k][j][i] + rho[k-1][j][i]);
 
-                //----- X direction -----
-                // East face (i+1/2)
-                double axp = 2.0 / (rho[k][j][i] + rho[k][j][i+1]) * (phi[k][j][i+1] - phi[k][j][i]);
-                // West face (i-1/2)
-                double axm = 2.0 / (rho[k][j][i-1] + rho[k][j][i]) * (phi[k][j][i]   - phi[k][j][i-1]);
-                double Ax  = (axp - axm) * idx2;
-
-                //----- Y direction -----
-                // North face (j+1/2)
-                double ayp = 2.0 / (rho[k][j][i] + rho[k][j+1][i]) * (phi[k][j+1][i] - phi[k][j][i]);
-                // South face (j-1/2)
-                double aym = 2.0 / (rho[k][j-1][i] + rho[k][j][i]) * (phi[k][j][i]   - phi[k][j-1][i]);
-                double Ay  = (ayp - aym) * idy2;
-
-                //----- Z direction -----
-                // Front face (k+1/2)
-                double azp = 2.0 / (rho[k][j][i] + rho[k+1][j][i]) * (phi[k+1][j][i] - phi[k][j][i]);
-                // Back face (k-1/2)
-                double azm = 2.0 / (rho[k-1][j][i] + rho[k][j][i]) * (phi[k][j][i]   - phi[k-1][j][i]);
-                double Az  = (azp - azm) * idz2;
-
-                Aphi[k][j][i] = Ax + Ay + Az;
+                Aphi[k][j][i] = TwodOps_pressure_row_weight(grid, params, i) *
+                    TwodOps_apply_scalar_operator(
+                    grid, params, phi, i, j, k,
+                    beta_xm, beta_xp, beta_ym, beta_yp, beta_zm, beta_zp);
             }
         }
     }

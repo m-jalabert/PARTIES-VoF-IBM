@@ -90,6 +90,9 @@ double innerProd(double ***vec1, double ***vec2, char component,
  *        + (μ_yp + μ_ym)/(dy²·Re)
  *        + (μ_zp + μ_zm)/(dz²·Re)
  *
+ * In 2D mode the stored z slab is non-physical, so the z contribution is
+ * dropped from both the diagonal and the matrix-vector product.
+ *
  * For constant-coefficient case:
  *
  *   diag = 1/(α·dt) + 2/Re·(1/dx² + 1/dy² + 1/dz²)   [same for all cells]
@@ -99,10 +102,13 @@ double innerProd(double ***vec1, double ***vec2, char component,
  ******************************************************************************/
 static inline double vel_jacobi_diag(
     int i, int j, int k, char component,
+    const MAC_grid *grid,
+    const Parameters *params,
     double ***rho, double ***mu,
-    double inv_dx2, double inv_dy2, double inv_dz2,
     double Re, double alpha_k, double dt)
 {
+    const int collapsed_z = TwodOps_collapsed_component_is_inactive(params);
+    const double iRe = 1.0 / Re;
 #ifdef VOF
     int iL = (component == 'u') ? i - 1 : i;
     int jL = (component == 'v') ? j - 1 : j;
@@ -111,7 +117,12 @@ static inline double vel_jacobi_diag(
     double rho_face = 0.5 * (rho[k][j][i] + rho[kL][jL][iL]);
     double d_time   = rho_face / (alpha_k * dt);
 
-    double mu_xp, mu_xm, mu_yp, mu_ym, mu_zp, mu_zm;
+    double diag_x = 0.0;
+    double diag_y = 0.0;
+    double diag_z = 0.0;
+    double diag_axisym = 0.0;
+    double mu_xp, mu_xm, mu_yp, mu_ym;
+    double mu_zp = 0.0, mu_zm = 0.0;
 
     if (component == 'u') {
         mu_xp = mu[k][j][i];
@@ -122,10 +133,26 @@ static inline double vel_jacobi_diag(
         mu_ym = HARMONIC(AVG2(mu[k][j  ][i-1], mu[k][j  ][i]),
                          AVG2(mu[k][j-1][i-1], mu[k][j-1][i]));
 
-        mu_zp = HARMONIC(AVG2(mu[k+1][j][i-1], mu[k+1][j][i]),
-                         AVG2(mu[k  ][j][i-1], mu[k  ][j][i]));
-        mu_zm = HARMONIC(AVG2(mu[k  ][j][i-1], mu[k  ][j][i]),
-                         AVG2(mu[k-1][j][i-1], mu[k-1][j][i]));
+        if (!collapsed_z) {
+            mu_zp = HARMONIC(AVG2(mu[k+1][j][i-1], mu[k+1][j][i]),
+                             AVG2(mu[k  ][j][i-1], mu[k  ][j][i]));
+            mu_zm = HARMONIC(AVG2(mu[k  ][j][i-1], mu[k  ][j][i]),
+                             AVG2(mu[k-1][j][i-1], mu[k-1][j][i]));
+        }
+
+        diag_x = iRe * TwodOps_u_cv_x_diag_coeff(
+            grid, params, i,
+            mu_xp * grid->idx_u[i],
+            mu_xm * grid->idx_u[i-1]);
+        diag_y = iRe * (mu_yp * grid->idy_c[j] +
+                        mu_ym * grid->idy_c[j-1]) * grid->idy_v[j];
+        if (!collapsed_z) {
+            diag_z = iRe * (mu_zp * grid->idz_c[k] +
+                            mu_zm * grid->idz_c[k-1]) * grid->idz_w[k];
+        }
+        diag_axisym = TwodOps_axisym_u_radial_linear_coeff(
+            grid, params, i,
+            iRe * 0.5 * (mu_xp + mu_xm));
 
     } else if (component == 'v') {
         mu_yp = mu[k][j  ][i];
@@ -136,14 +163,29 @@ static inline double vel_jacobi_diag(
         mu_xm = HARMONIC(AVG2(mu[k][j-1][i  ], mu[k][j  ][i  ]),
                          AVG2(mu[k][j-1][i-1], mu[k][j  ][i-1]));
 
-        mu_zp = HARMONIC(AVG2(mu[k+1][j-1][i], mu[k+1][j  ][i]),
-                         AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]));
-        mu_zm = HARMONIC(AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]),
-                         AVG2(mu[k-1][j-1][i], mu[k-1][j  ][i]));
+        if (!collapsed_z) {
+            mu_zp = HARMONIC(AVG2(mu[k+1][j-1][i], mu[k+1][j  ][i]),
+                             AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]));
+            mu_zm = HARMONIC(AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]),
+                             AVG2(mu[k-1][j-1][i], mu[k-1][j  ][i]));
+        }
+
+        diag_x = iRe * TwodOps_v_cv_x_diag_coeff(
+            grid, params, i,
+            mu_xp * grid->idx_c[i],
+            mu_xm * grid->idx_c[i-1]);
+        diag_y = iRe * (mu_yp * grid->idy_v[j] +
+                        mu_ym * grid->idy_v[j-1]) * grid->idy_c[j-1];
+        if (!collapsed_z) {
+            diag_z = iRe * (mu_zp * grid->idz_c[k] +
+                            mu_zm * grid->idz_c[k-1]) * grid->idz_w[k];
+        }
 
     } else { /* 'w' */
-        mu_zp = mu[k  ][j][i];
-        mu_zm = mu[k-1][j][i];
+        if (!collapsed_z) {
+            mu_zp = mu[k  ][j][i];
+            mu_zm = mu[k-1][j][i];
+        }
 
         mu_xp = HARMONIC(AVG2(mu[k-1][j][i+1], mu[k  ][j][i+1]),
                          AVG2(mu[k-1][j][i  ], mu[k  ][j][i  ]));
@@ -154,27 +196,66 @@ static inline double vel_jacobi_diag(
                          AVG2(mu[k-1][j  ][i], mu[k  ][j  ][i]));
         mu_ym = HARMONIC(AVG2(mu[k-1][j  ][i], mu[k  ][j  ][i]),
                          AVG2(mu[k-1][j-1][i], mu[k  ][j-1][i]));
+
+        diag_x = iRe * (mu_xp * grid->idx_c[i] +
+                        mu_xm * grid->idx_c[i-1]) * grid->idx_u[i];
+        diag_y = iRe * (mu_yp * grid->idy_c[j] +
+                        mu_ym * grid->idy_c[j-1]) * grid->idy_v[j];
+        if (!collapsed_z) {
+            diag_z = iRe * (mu_zp * grid->idz_w[k] +
+                            mu_zm * grid->idz_w[k-1]) * grid->idz_c[k-1];
+        }
     }
 
-    return d_time
-         + (mu_xp + mu_xm) * inv_dx2 / Re
-         + (mu_yp + mu_ym) * inv_dy2 / Re
-         + (mu_zp + mu_zm) * inv_dz2 / Re;
+    return d_time + diag_x + diag_y + diag_z + diag_axisym;
 
 #else
-    /* Constant-coefficient: diagonal is uniform, Jacobi = scalar shift */
-    (void)i; (void)j; (void)k; (void)component; (void)rho; (void)mu;
-    return 1.0 / (alpha_k * dt) + 2.0 / Re * (inv_dx2 + inv_dy2 + inv_dz2);
+    double d_time = 1.0 / (alpha_k * dt);
+    double diag_x = 0.0;
+    double diag_y = 0.0;
+    double diag_z = 0.0;
+    double diag_axisym = 0.0;
+
+    (void)rho;
+    (void)mu;
+
+    if (component == 'u') {
+        diag_x = iRe * TwodOps_u_cv_x_diag_coeff(
+            grid, params, i,
+            grid->idx_u[i],
+            grid->idx_u[i-1]);
+        diag_y = iRe * (grid->idy_c[j] + grid->idy_c[j-1]) * grid->idy_v[j];
+        if (!collapsed_z)
+            diag_z = iRe * (grid->idz_c[k] + grid->idz_c[k-1]) * grid->idz_w[k];
+        diag_axisym = TwodOps_axisym_u_radial_linear_coeff(
+            grid, params, i, iRe);
+    } else if (component == 'v') {
+        diag_x = iRe * TwodOps_v_cv_x_diag_coeff(
+            grid, params, i,
+            grid->idx_c[i],
+            grid->idx_c[i-1]);
+        diag_y = iRe * (grid->idy_v[j] + grid->idy_v[j-1]) * grid->idy_c[j-1];
+        if (!collapsed_z)
+            diag_z = iRe * (grid->idz_c[k] + grid->idz_c[k-1]) * grid->idz_w[k];
+    } else {
+        diag_x = iRe * (grid->idx_c[i] + grid->idx_c[i-1]) * grid->idx_u[i];
+        diag_y = iRe * (grid->idy_c[j] + grid->idy_c[j-1]) * grid->idy_v[j];
+        if (!collapsed_z)
+            diag_z = iRe * (grid->idz_w[k] + grid->idz_w[k-1]) * grid->idz_c[k-1];
+    }
+
+    return d_time + diag_x + diag_y + diag_z + diag_axisym;
 #endif
 }
 
 
 /******************************************************************************/
-/*  matVec — unchanged from original                                          */
+/*  matVec — 2D-aware implicit velocity operator                              */
 /******************************************************************************/
 void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
 {
     int i, j, k;
+    const int collapsed_z = TwodOps_collapsed_component_is_inactive(data_bag->params);
 
     MAC_grid   *grid   = data_bag->grid;
     Parameters *params = data_bag->params;
@@ -201,15 +282,19 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
 #endif
     }
 
-    double dx = 1.0 / grid->idx_c[1];
-    double dy = 1.0 / grid->idy_c[1];
-    double dz = 1.0 / grid->idz_c[1];
-
     double Re = params->Re;
+    double iRe = 1.0 / Re;
     const double BET[] = { BETA };
     int stage     = params->which_stage;
     double alpha_k = BET[stage];
     double dt      = params->dt;
+
+    double *idx_u = grid->idx_u;
+    double *idy_v = grid->idy_v;
+    double *idz_w = grid->idz_w;
+    double *idx_c = grid->idx_c;
+    double *idy_c = grid->idy_c;
+    double *idz_c = grid->idz_c;
 
 #ifdef VOF
     double ***rho = data_bag->vof->rho;
@@ -226,8 +311,10 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
                 double rho_face    = 0.5*(rho[k][j][i] + rho[kL][jL][iL]);
                 double factor_time = rho_face / (alpha_k * dt);
                 double Ax_val      = factor_time * x[k][j][i];
+                double op_val      = 0.0;
 
-                double mu_xp, mu_xm, mu_yp, mu_ym, mu_zp, mu_zm;
+                double mu_xp, mu_xm, mu_yp, mu_ym;
+                double mu_zp = 0.0, mu_zm = 0.0;
 
                 if (component == 'u') {
                     mu_xp = mu[k][j][i];
@@ -238,10 +325,34 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
                     mu_ym = HARMONIC(AVG2(mu[k][j  ][i-1], mu[k][j  ][i  ]),
                                      AVG2(mu[k][j-1][i-1], mu[k][j-1][i  ]));
 
-                    mu_zp = HARMONIC(AVG2(mu[k+1][j][i-1], mu[k+1][j][i  ]),
-                                     AVG2(mu[k  ][j][i-1], mu[k  ][j][i  ]));
-                    mu_zm = HARMONIC(AVG2(mu[k  ][j][i-1], mu[k  ][j][i  ]),
-                                     AVG2(mu[k-1][j][i-1], mu[k-1][j][i  ]));
+                    if (!collapsed_z) {
+                        mu_zp = HARMONIC(AVG2(mu[k+1][j][i-1], mu[k+1][j][i  ]),
+                                         AVG2(mu[k  ][j][i-1], mu[k  ][j][i  ]));
+                        mu_zm = HARMONIC(AVG2(mu[k  ][j][i-1], mu[k  ][j][i  ]),
+                                         AVG2(mu[k-1][j][i-1], mu[k-1][j][i  ]));
+                    }
+
+                    {
+                        double flux_xp = mu_xp * (x[k][j][i+1] - x[k][j][i]) * idx_u[i];
+                        double flux_xm = mu_xm * (x[k][j][i]   - x[k][j][i-1]) * idx_u[i-1];
+                        double flux_yp = mu_yp * (x[k][j+1][i] - x[k][j][i]) * idy_c[j];
+                        double flux_ym = mu_ym * (x[k][j][i]   - x[k][j-1][i]) * idy_c[j-1];
+
+                        op_val += iRe * TwodOps_u_cv_x_flux_divergence(
+                            grid, params, i, flux_xp, flux_xm);
+                        op_val += iRe * (flux_yp - flux_ym) * idy_v[j];
+
+                        if (!collapsed_z) {
+                            double flux_zp = mu_zp * (x[k+1][j][i] - x[k][j][i]) * idz_c[k];
+                            double flux_zm = mu_zm * (x[k][j][i]   - x[k-1][j][i]) * idz_c[k-1];
+                            op_val += iRe * (flux_zp - flux_zm) * idz_w[k];
+                        }
+
+                        op_val += TwodOps_axisym_u_radial_linear_term(
+                            grid, params, i,
+                            iRe * 0.5 * (mu_xp + mu_xm),
+                            x[k][j][i]);
+                    }
 
                 } else if (component == 'v') {
                     mu_yp = mu[k][j  ][i];
@@ -252,14 +363,35 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
                     mu_xm = HARMONIC(AVG2(mu[k][j-1][i  ], mu[k][j  ][i  ]),
                                      AVG2(mu[k][j-1][i-1], mu[k][j  ][i-1]));
 
-                    mu_zp = HARMONIC(AVG2(mu[k+1][j-1][i], mu[k+1][j  ][i]),
-                                     AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]));
-                    mu_zm = HARMONIC(AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]),
-                                     AVG2(mu[k-1][j-1][i], mu[k-1][j  ][i]));
+                    if (!collapsed_z) {
+                        mu_zp = HARMONIC(AVG2(mu[k+1][j-1][i], mu[k+1][j  ][i]),
+                                         AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]));
+                        mu_zm = HARMONIC(AVG2(mu[k  ][j-1][i], mu[k  ][j  ][i]),
+                                         AVG2(mu[k-1][j-1][i], mu[k-1][j  ][i]));
+                    }
+
+                    {
+                        double flux_xp = mu_xp * (x[k][j][i+1] - x[k][j][i]) * idx_c[i];
+                        double flux_xm = mu_xm * (x[k][j][i]   - x[k][j][i-1]) * idx_c[i-1];
+                        double flux_yp = mu_yp * (x[k][j+1][i] - x[k][j][i]) * idy_v[j];
+                        double flux_ym = mu_ym * (x[k][j][i]   - x[k][j-1][i]) * idy_v[j-1];
+
+                        op_val += iRe * TwodOps_v_cv_x_flux_divergence(
+                            grid, params, i, flux_xp, flux_xm);
+                        op_val += iRe * (flux_yp - flux_ym) * idy_c[j-1];
+
+                        if (!collapsed_z) {
+                            double flux_zp = mu_zp * (x[k+1][j][i] - x[k][j][i]) * idz_c[k];
+                            double flux_zm = mu_zm * (x[k][j][i]   - x[k-1][j][i]) * idz_c[k-1];
+                            op_val += iRe * (flux_zp - flux_zm) * idz_w[k];
+                        }
+                    }
 
                 } else {
-                    mu_zp = mu[k  ][j][i];
-                    mu_zm = mu[k-1][j][i];
+                    if (!collapsed_z) {
+                        mu_zp = mu[k  ][j][i];
+                        mu_zm = mu[k-1][j][i];
+                    }
 
                     mu_xp = HARMONIC(AVG2(mu[k-1][j][i+1], mu[k  ][j][i+1]),
                                      AVG2(mu[k-1][j][i  ], mu[k  ][j][i  ]));
@@ -270,43 +402,93 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
                                      AVG2(mu[k-1][j  ][i], mu[k  ][j  ][i]));
                     mu_ym = HARMONIC(AVG2(mu[k-1][j  ][i], mu[k  ][j  ][i]),
                                      AVG2(mu[k-1][j-1][i], mu[k  ][j-1][i]));
+
+                    {
+                        double flux_xp = mu_xp * (x[k][j][i+1] - x[k][j][i]) * idx_c[i];
+                        double flux_xm = mu_xm * (x[k][j][i]   - x[k][j][i-1]) * idx_c[i-1];
+                        double flux_yp = mu_yp * (x[k][j+1][i] - x[k][j][i]) * idy_c[j];
+                        double flux_ym = mu_ym * (x[k][j][i]   - x[k][j-1][i]) * idy_c[j-1];
+
+                        op_val += iRe * (flux_xp - flux_xm) * idx_u[i];
+                        op_val += iRe * (flux_yp - flux_ym) * idy_v[j];
+
+                        if (!collapsed_z) {
+                            double flux_zp = mu_zp * (x[k+1][j][i] - x[k][j][i]) * idz_w[k];
+                            double flux_zm = mu_zm * (x[k][j][i]   - x[k-1][j][i]) * idz_w[k-1];
+                            op_val += iRe * (flux_zp - flux_zm) * idz_c[k-1];
+                        }
+                    }
                 }
 
-                double flux_xp = mu_xp * (x[k][j][i+1] - x[k][j][i  ]);
-                double flux_xm = mu_xm * (x[k][j][i  ] - x[k][j][i-1]);
-                double flux_yp = mu_yp * (x[k][j+1][i] - x[k][j  ][i]);
-                double flux_ym = mu_ym * (x[k][j  ][i] - x[k][j-1][i]);
-                double flux_zp = mu_zp * (x[k+1][j][i] - x[k  ][j][i]);
-                double flux_zm = mu_zm * (x[k  ][j][i] - x[k-1][j][i]);
-
-                double dFlux_dx = (flux_xp - flux_xm) / (dx * dx);
-                double dFlux_dy = (flux_yp - flux_ym) / (dy * dy);
-                double dFlux_dz = (flux_zp - flux_zm) / (dz * dz);
-
-                Ax[k][j][i] = Ax_val - (dFlux_dx + dFlux_dy + dFlux_dz) / Re;
+                Ax[k][j][i] = Ax_val - op_val;
             }
         }
     }
 
 #else
-    double iddx    = grid->idx_c[1] * grid->idx_c[1];
-    double iddy    = grid->idy_c[1] * grid->idy_c[1];
-    double iddz    = grid->idz_c[1] * grid->idz_c[1];
-    double iRe     = 1.0 / params->Re;
     double idtimeb = 1.0 / (BET[params->which_stage] * dt);
 
-    double ac = idtimeb + 2.0*iRe*(iddx + iddy + iddz);
-    double ax = -iRe * iddx;
-    double ay = -iRe * iddy;
-    double az = -iRe * iddz;
+    for (k = Ks; k < Ke; k++) {
+        for (j = Js; j < Je; j++) {
+            for (i = Is; i < Ie; i++) {
+                double Ax_val = idtimeb * x[k][j][i];
+                double op_val = 0.0;
 
-    for (k = Ks; k < Ke; k++)
-        for (j = Js; j < Je; j++)
-            for (i = Is; i < Ie; i++)
-                Ax[k][j][i] = ac * x[k][j][i]
-                            + ax * (x[k][j][i-1] + x[k][j][i+1])
-                            + ay * (x[k][j-1][i] + x[k][j+1][i])
-                            + az * (x[k-1][j][i] + x[k+1][j][i]);
+                if (component == 'u') {
+                    double flux_xp = (x[k][j][i+1] - x[k][j][i]) * idx_u[i];
+                    double flux_xm = (x[k][j][i]   - x[k][j][i-1]) * idx_u[i-1];
+                    double flux_yp = (x[k][j+1][i] - x[k][j][i]) * idy_c[j];
+                    double flux_ym = (x[k][j][i]   - x[k][j-1][i]) * idy_c[j-1];
+
+                    op_val += iRe * TwodOps_u_cv_x_flux_divergence(
+                        grid, params, i, flux_xp, flux_xm);
+                    op_val += iRe * (flux_yp - flux_ym) * idy_v[j];
+
+                    if (!collapsed_z) {
+                        double flux_zp = (x[k+1][j][i] - x[k][j][i]) * idz_c[k];
+                        double flux_zm = (x[k][j][i]   - x[k-1][j][i]) * idz_c[k-1];
+                        op_val += iRe * (flux_zp - flux_zm) * idz_w[k];
+                    }
+
+                    op_val += TwodOps_axisym_u_radial_linear_term(
+                        grid, params, i, iRe, x[k][j][i]);
+
+                } else if (component == 'v') {
+                    double flux_xp = (x[k][j][i+1] - x[k][j][i]) * idx_c[i];
+                    double flux_xm = (x[k][j][i]   - x[k][j][i-1]) * idx_c[i-1];
+                    double flux_yp = (x[k][j+1][i] - x[k][j][i]) * idy_v[j];
+                    double flux_ym = (x[k][j][i]   - x[k][j-1][i]) * idy_v[j-1];
+
+                    op_val += iRe * TwodOps_v_cv_x_flux_divergence(
+                        grid, params, i, flux_xp, flux_xm);
+                    op_val += iRe * (flux_yp - flux_ym) * idy_c[j-1];
+
+                    if (!collapsed_z) {
+                        double flux_zp = (x[k+1][j][i] - x[k][j][i]) * idz_c[k];
+                        double flux_zm = (x[k][j][i]   - x[k-1][j][i]) * idz_c[k-1];
+                        op_val += iRe * (flux_zp - flux_zm) * idz_w[k];
+                    }
+
+                } else {
+                    double flux_xp = (x[k][j][i+1] - x[k][j][i]) * idx_c[i];
+                    double flux_xm = (x[k][j][i]   - x[k][j][i-1]) * idx_c[i-1];
+                    double flux_yp = (x[k][j+1][i] - x[k][j][i]) * idy_c[j];
+                    double flux_ym = (x[k][j][i]   - x[k][j-1][i]) * idy_c[j-1];
+
+                    op_val += iRe * (flux_xp - flux_xm) * idx_u[i];
+                    op_val += iRe * (flux_yp - flux_ym) * idy_v[j];
+
+                    if (!collapsed_z) {
+                        double flux_zp = (x[k+1][j][i] - x[k][j][i]) * idz_w[k];
+                        double flux_zm = (x[k][j][i]   - x[k-1][j][i]) * idz_w[k-1];
+                        op_val += iRe * (flux_zp - flux_zm) * idz_c[k-1];
+                    }
+                }
+
+                Ax[k][j][i] = Ax_val - op_val;
+            }
+        }
+    }
 #endif
 }
 
@@ -356,6 +538,21 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
 
     const double EPS = 1e-14;
 
+    if (TwodOps_collapsed_component_is_inactive(params) && component == 'w') {
+        Memory_reset_flow_variable(grid, params, data);
+        Memory_reset_noghost_variable(grid, params, rhs);
+        Memory_reset_flow_variable(grid, params, vel->d);
+        Memory_reset_noghost_variable(grid, params, vel->ng_r);
+        Memory_reset_noghost_variable(grid, params, vel->ng_Ad);
+#ifdef VOF
+        Memory_reset_flow_variable(grid, params, vel->M_inv);
+#endif
+        Velocity_update_boundaries(data, component, VEL_TYPE_NORMAL, data_bag);
+        sprintf(statement, "w-component of velocity converged to 0 after 0 iterations\n");
+        Display_progress(params, statement);
+        return 0;
+    }
+
     /* ------------------------------------------------------------------ *
      * Index ranges (identical to original)
      * ------------------------------------------------------------------ */
@@ -379,16 +576,6 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
         Ke = grid->G_Ke;
 #endif
     }
-
-    /* ------------------------------------------------------------------ *
-     * Grid spacings and solver parameters (needed for Jacobi diagonal)
-     * ------------------------------------------------------------------ */
-    const double dx = 1.0 / grid->idx_c[1];
-    const double dy = 1.0 / grid->idy_c[1];
-    const double dz = 1.0 / grid->idz_c[1];
-    const double inv_dx2 = 1.0 / (dx * dx);
-    const double inv_dy2 = 1.0 / (dy * dy);
-    const double inv_dz2 = 1.0 / (dz * dz);
 
     const double Re = params->Re;
     const double BET[] = { BETA };
@@ -445,9 +632,8 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
                 r[k][j][i] = rhs[k][j][i] - Ad[k][j][i];
 
                 /* d = M^{-1} r: divide initial residual by diagonal */
-                double diag = vel_jacobi_diag(i, j, k, component,
+                double diag = vel_jacobi_diag(i, j, k, component, grid, params,
                                               rho, mu,
-                                              inv_dx2, inv_dy2, inv_dz2,
                                               Re, alpha_k, dt);
                 d[k][j][i] = r[k][j][i] / (diag + EPS);
             }
@@ -491,9 +677,8 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
                     r[k][j][i]    -= alpha * Ad[k][j][i];
 
                     double ri   = r[k][j][i];
-                    double diag = vel_jacobi_diag(i, j, k, component,
+                    double diag = vel_jacobi_diag(i, j, k, component, grid, params,
                                                   rho, mu,
-                                                  inv_dx2, inv_dy2, inv_dz2,
                                                   Re, alpha_k, dt);
                     local_vals[0] += ri * ri / (diag + EPS);  /* rz_new */
                     local_vals[1] += ri * ri;                  /* rr     */
@@ -519,9 +704,8 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
         for (k = Ks; k < Ke; k++) {
             for (j = Js; j < Je; j++) {
                 for (i = Is; i < Ie; i++) {
-                    double diag = vel_jacobi_diag(i, j, k, component,
+                    double diag = vel_jacobi_diag(i, j, k, component, grid, params,
                                                   rho, mu,
-                                                  inv_dx2, inv_dy2, inv_dz2,
                                                   Re, alpha_k, dt);
                     d[k][j][i] = r[k][j][i] / (diag + EPS) + beta * d[k][j][i];
                 }

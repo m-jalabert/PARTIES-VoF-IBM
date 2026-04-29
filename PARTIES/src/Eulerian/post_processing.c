@@ -15,6 +15,7 @@
 #include "Array.h"
 #include "Cart3d.h"
 #include "post_processing.h"
+#include "TwodOps.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -67,7 +68,7 @@ void Post_processing_conc(Cart3d_bag *data_bag){
 
 
 	if (params->susp_mass_output)
-		Conc_compute_total_suspended_mass(c[0], grid);
+		Conc_compute_total_suspended_mass(c[0], grid, params);
 
 	if (params->ave_height_output)
 		Conc_compute_ave_height_x(c, grid, params);
@@ -101,7 +102,7 @@ void Post_processing_conc(Cart3d_bag *data_bag){
  This function computes total suspended mass within the fluid region
  */
 /******************************************************************************/
-void Conc_compute_total_suspended_mass(Concentration *c, MAC_grid *grid) {
+void Conc_compute_total_suspended_mass(Concentration *c, MAC_grid *grid, Parameters *params) {
 
 	int NX, NY, NZ;
 
@@ -122,17 +123,12 @@ void Conc_compute_total_suspended_mass(Concentration *c, MAC_grid *grid) {
 	Je = min(NY-1, grid->G_Je);
 	Ke = min(NZ-1, grid->G_Ke);
 
-	double *dx = grid->dx_u;
-	double *dy = grid->dy_v;
-	double *dz = grid->dz_w;
-	double cellVolume;
-
 	c_data = c->data;
 	sum = 0.0;
 	for(k = Ks; k < Ke; k++) {
 		for(j = Js; j < Je; j++) {
 			for(i = Is; i < Ie; i++) {
-				cellVolume = dx[i] * dy[j] * dz[k];
+				double cellVolume = TwodOps_cell_measure_c(grid, params, i, j, k);
 				sum += c_data[k][j][i]*cellVolume;
 			}
 		}
@@ -644,25 +640,12 @@ void Conc_compute_stokes_dissipation_rate( int iconc, Concentration **c, MAC_gri
 int i, j, k;
 int Is, Js, Ks;
 int Ie, Je, Ke;
-double dx, dy, dz;
 double dV;
-double *xu, *yv, *zw;
-double *dx_u, *dy_v, *dz_w;
 double ***conc;
 double G_stokes_dissipation_rate;
 
 // Get concentration data
 conc = c[iconc]->data;
-
-// Grid coordinates
-xu = grid->xu;
-yv = grid->yv;
-zw = grid->zw;
-
-// Grid dimensions
-dx_u = grid->dx_u;
-dy_v = grid->dy_v;
-dz_w = grid->dz_w;
 
 // Start index of bottom-left-back corner on current processor
 Is = grid->G_Is;
@@ -678,20 +661,13 @@ G_stokes_dissipation_rate = 0.0;
 
 if ( params->conc_output_stokes_diss_rate[iconc]){
 	for (k=Ks; k<Ke; k++) {
-
-		dz = dz_w[k];
 		for (j=Js; j<Je; j++) {
-
-			dy = dy_v[j];
 			for (i=Is; i<Ie; i++) {
 
 				// only include if point is fluid
 				if (grid->c_status[k][j][i] == FLUID) {
-
-					dx = dx_u[i];
-
-					// differntial volume of the current grid
-					dV   = dx * dy * dz;
+					/* Physical cell measure in the active 2D/3D geometry. */
+					dV = TwodOps_cell_measure_c(grid, params, i, j, k);
 
 					G_stokes_dissipation_rate += conc[k][j][i] * dV;
 				} // if
@@ -762,26 +738,15 @@ void Conc_compute_active_potential_energy(Concentration *c, MAC_grid *grid,
 int i, j, k;
 int Is, Js, Ks;
 int Ie, Je, Ke;
-double dx, dy, dz;
 double dV;
-double *xu, *yv, *zw, *yc;
-double *dx_u, *dy_v, *dz_w;
+double *yc;
 double ***conc;
 double G_Ep_active;
 
 // Get concentration data
 conc = c->data;
 
-// Grid coordinates
-xu = grid->xu;
-yv = grid->yv;
-zw = grid->zw;
 yc = grid->yc;
-
-// Grid dimensions
-dx_u = grid->dx_u;
-dy_v = grid->dy_v;
-dz_w = grid->dz_w;
 
 // Start index of bottom-left-back corner on current processor
 Is = grid->G_Is;
@@ -796,21 +761,12 @@ Ke = grid->G_Ke;
 G_Ep_active = 0.0;
 
 for (k=Ks; k<Ke; k++) {
-
-	// to save computational time, compute 1/dz
-	dz = dz_w[k];
 	for (j=Js; j<Je; j++) {
-
-		dy = dy_v[j];
 		for (i=Is; i<Ie; i++) {
 
 			// only include if point is fluid
 			if (grid->c_status[k][j][i] == FLUID) {
-
-				dx = dx_u[i];
-
-				// differntial volume of the current grid
-				dV   = dx * dy * dz;
+				dV = TwodOps_cell_measure_c(grid, params, i, j, k);
 
 				G_Ep_active += conc[k][j][i] * dV * yc[j];
 			} // if
@@ -958,7 +914,6 @@ free(send_buffer);
 free(recv_buffer);
 
 }
-
 
 
 

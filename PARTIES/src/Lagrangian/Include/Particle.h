@@ -33,6 +33,18 @@ void Particle_collision_list_clean(Particle *p_start);
 void Particle_create_internal_arrays(Particle *p);
 void Particle_destroy_internal_arrays(Particle *p);
 
+#if defined(LAG_PARTICLE_RESOLVED)
+int Particle_center_is_owned_by_rank(const Particle *p, MAC_grid *grid,
+		Parameters *params, int rank);
+int Particle_center_owner_rank(const Particle *p, MAC_grid *grid,
+		Parameters *params);
+Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
+		Cart3d_bag *data_bag, double extra_range, double min_radius,
+		int include_self, int *n_recv);
+void Particle_reduce_oversized_forces_to_owner(Particle_list *p_list,
+		Cart3d_bag *data_bag);
+#endif
+
 void Particle_MPI_update(Particle_list *p_list, Cart3d_bag *data_bag,
 		Debug_trace *dtrace);
 

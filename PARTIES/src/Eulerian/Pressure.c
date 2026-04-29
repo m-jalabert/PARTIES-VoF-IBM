@@ -6,6 +6,7 @@
 #include "Pressure.h"
 #include "Communication.h"
 #include "Cart3d.h"
+#include "TwodOps.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -179,23 +180,14 @@ void Pressure_set_RHS(Cart3d_bag *data_bag) {
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
-
-				// Div_V_star at cell center p(i,j,k)
-				// Regular node
-				// Use central differences
-
-
 #ifdef GRID_UNIFORM
-				dudx = ( u_data[k][j][i+1] - u_data[k][j][i] ) * ihdt;
-				dvdy = ( v_data[k][j+1][i] - v_data[k][j][i] ) * ihdt;
-				dwdz = ( w_data[k+1][j][i] - w_data[k][j][i] ) * ihdt;
-
+				rhs_vec[k][j][i] = TwodOps_cell_center_divergence(
+					grid, params, u_data, v_data, w_data, i, j, k, ihdt, ihdt, ihdt);
 #else
-				dudx = ( u_data[k][j][i+1] - u_data[k][j][i] ) * idxdt[i];
-				dvdy = ( v_data[k][j+1][i] - v_data[k][j][i] ) * idydt[j];
-				dwdz = ( w_data[k+1][j][i] - w_data[k][j][i] ) * idzdt[k];
+				rhs_vec[k][j][i] = TwodOps_cell_center_divergence(
+					grid, params, u_data, v_data, w_data, i, j, k,
+					idxdt[i], idydt[j], idzdt[k]);
 #endif
-				rhs_vec[k][j][i] = dudx + dvdy + dwdz; //cos(2*PI*xc[i]/Lx) *  cos(2*PI*yc[j]/Ly) *  cos(2*PI*zc[k]/Lz);//
 
 			} /* for i*/
 		} /* for j*/
@@ -430,37 +422,42 @@ if (j_end == NY-1)
 	p->project_v_cpu_time += T2-T1;
 
 
-	//--------------------------------------------------------------------------
-	// Update w_star to w_new (divergence free velocity field)
-	//--------------------------------------------------------------------------
-	i_start = Is;
-	j_start = Js;
-	k_start = max(1, Ks); // k=0 not included
+	T1 = MPI_Wtime();
+	if (TwodOps_collapsed_component_is_inactive(params)) {
+		Memory_reset_flow_variable(grid, params, w_data);
+	}
+	else {
+		//--------------------------------------------------------------------------
+		// Update w_star to w_new (divergence free velocity field)
+		//--------------------------------------------------------------------------
+		i_start = Is;
+		j_start = Js;
+		k_start = max(1, Ks); // k=0 not included
 
-	i_end = min(NX-1, Ie);
-	j_end = min(NY-1, Je);
-	k_end = min(NZ-1, Ke);
+		i_end = min(NX-1, Ie);
+		j_end = min(NY-1, Je);
+		k_end = min(NZ-1, Ke);
 #ifdef ZPERIODIC
-	if (k_end == NZ-1)
-		k_end = NZ;
+		if (k_end == NZ-1)
+			k_end = NZ;
 #endif
 
-	T1 = MPI_Wtime();
-	for (k = k_start; k < k_end; k++) {
-		for (j = j_start; j < j_end; j++) {
-			for (i = i_start; i < i_end; i++) {
+		for (k = k_start; k < k_end; k++) {
+			for (j = j_start; j < j_end; j++) {
+				for (i = i_start; i < i_end; i++) {
 
 #ifdef VOF
-				double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k-1][j][i]);
-                w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
-                                   * ( idzdt[k-1] * inv_rho_face );
+					double inv_rho_face = 2.0 / (rho[k][j][i] + rho[k-1][j][i]);
+	                w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
+	                                   * ( idzdt[k-1] * inv_rho_face );
 #else
-                w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
-                                   * idzdt[k-1];
+	                w_data[k][j][i] -= ( deltap[k][j][i] - deltap[k-1][j][i] )
+	                                   * idzdt[k-1];
 #endif
-			} // for i
-		} // for j
-	} // for k
+				} // for i
+			} // for j
+		} // for k
+	}
 	T2 = MPI_Wtime();
 	p->project_w_cpu_time += T2-T1;
 
@@ -543,12 +540,9 @@ double Pressure_compute_velocity_divergence(Cart3d_bag *data_bag) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
 
-				// Use central differences
-				dudx = (u_data[k][j][i+1] - u_data[k][j][i]) * idx_u[i];
-				dvdy = (v_data[k][j+1][i] - v_data[k][j][i]) * idy_v[j];
-				dwdz = (w_data[k+1][j][i] - w_data[k][j][i]) * idz_w[k];
-
-				div_cell = fabs(dudx + dvdy + dwdz);
+				div_cell = fabs(TwodOps_cell_center_divergence(
+					grid, params, u_data, v_data, w_data, i, j, k,
+					idx_u[i], idy_v[j], idz_w[k]));
 				l1_div = l1_div + div_cell;
 				l2_div = l2_div + div_cell*div_cell;
 
@@ -680,23 +674,14 @@ void Pressure_set_RHS_vof(Cart3d_bag *data_bag) {
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
-
-				// Div_V_star at cell center p(i,j,k)
-				// Regular node
-				// Use central differences
-
 #ifdef GRID_UNIFORM
-				dudx = ( u_data[k][j][i+1] - u_data[k][j][i] ) * ihdt;
-				dvdy = ( v_data[k][j+1][i] - v_data[k][j][i] ) * ihdt;
-				dwdz = ( w_data[k+1][j][i] - w_data[k][j][i] ) * ihdt;
-
+				rhs_vec[k][j][i] = TwodOps_cell_center_divergence(
+					grid, params, u_data, v_data, w_data, i, j, k, ihdt, ihdt, ihdt);
 #else
-				dudx = ( u_data[k][j][i+1] - u_data[k][j][i] ) * idxdt[i];
-				dvdy = ( v_data[k][j+1][i] - v_data[k][j][i] ) * idydt[j];
-				dwdz = ( w_data[k+1][j][i] - w_data[k][j][i] ) * idzdt[k];
+				rhs_vec[k][j][i] = TwodOps_cell_center_divergence(
+					grid, params, u_data, v_data, w_data, i, j, k,
+					idxdt[i], idydt[j], idzdt[k]);
 #endif
-				rhs_vec[k][j][i] = dudx + dvdy + dwdz;
-
 			} /* for i*/
 		} /* for j*/
 	} /* for k*/
@@ -866,17 +851,22 @@ void Pressure_project_velocity_vof(Cart3d_bag *data_bag) {
 #endif
 
 	T1 = MPI_Wtime();
-	for (k = k_start; k < k_end; k++) {
-		for (j = j_start; j < j_end; j++) {
-			for (i = i_start; i < i_end; i++) {
+	if (TwodOps_collapsed_component_is_inactive(params)) {
+		Memory_reset_flow_variable(grid, params, w_data);
+	}
+	else {
+		for (k = k_start; k < k_end; k++) {
+			for (j = j_start; j < j_end; j++) {
+				for (i = i_start; i < i_end; i++) {
 #ifdef GRID_UNIFORM
-				w_data[k][j][i] -= (deltap[k][j][i] - deltap[k-1][j][i]) * ihdt;
+					w_data[k][j][i] -= (deltap[k][j][i] - deltap[k-1][j][i]) * ihdt;
 #else
-				w_data[k][j][i] -= (deltap[k][j][i] - deltap[k-1][j][i]) * idzdt[k-1];
+					w_data[k][j][i] -= (deltap[k][j][i] - deltap[k-1][j][i]) * idzdt[k-1];
 #endif
-			} // for i
-		} // for j
-	} // for k
+				} // for i
+			} // for j
+		} // for k
+	}
 	T2 = MPI_Wtime();
 	p->project_w_cpu_time += T2-T1;
 

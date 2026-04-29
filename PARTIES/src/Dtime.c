@@ -12,6 +12,7 @@
 #include "MyMath.h"
 #include "Cart3d.h"
 #include "Dtime.h"
+#include "TwodOps.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -113,7 +114,9 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 				v_particle = fabs(v_data_bc[k][j][i] - settling_speed_max);
 				v_cfl = max(v_cell, v_particle);
 
-				convective = u_cfl * idx_u[i] + v_cfl * idy_v[j] + w_cfl * idz_w[k];
+				convective = u_cfl * idx_u[i] + v_cfl * idy_v[j];
+				if (!TwodOps_collapsed_component_is_inactive(params))
+					convective += w_cfl * idz_w[k];
 
 #ifdef VOF
                 nu_cell = vof->mu[k][j][i] / vof->rho[k][j][i];
@@ -128,11 +131,13 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 #ifdef FULLY_EXPLICIT
 
 				viscous = 2.0 * nu_cell * ( idx_u[i] * idx_u[i] +
-				                            idy_v[j] * idy_v[j] +
-				                            idz_w[k] * idz_w[k] );
+				                            idy_v[j] * idy_v[j] );
+				if (!TwodOps_collapsed_component_is_inactive(params))
+					viscous += 2.0 * nu_cell * idz_w[k] * idz_w[k];
 #elif !defined FULLY_IMPLICIT
-				viscous = 2.0 * nu_cell * ( idx_u[i] * idx_u[i] +
-				                            idz_w[k] * idz_w[k] );
+				viscous = 2.0 * nu_cell * idx_u[i] * idx_u[i];
+				if (!TwodOps_collapsed_component_is_inactive(params))
+					viscous += 2.0 * nu_cell * idz_w[k] * idz_w[k];
 #endif
 
 				max_idt = max(max_idt, convective + viscous); // sum because of von Neumann stability condition advection-diffusion equation
@@ -152,7 +157,9 @@ double Dtime_cfl(Cart3d_bag *data_bag) {
 
 #ifdef SURFACE_TENSION
     // Surface tension stability condition
-    double dx_min = min(min(1.0/grid->idx_u[0], 1.0/grid->idy_v[0]), 1.0/grid->idz_w[0]);
+    double dx_min = min(1.0/grid->idx_u[0], 1.0/grid->idy_v[0]);
+    if (!TwodOps_collapsed_component_is_inactive(params))
+        dx_min = min(dx_min, 1.0/grid->idz_w[0]);
     double rho1 = params->rho1;
     double rho2 = params->rho2;
     double sigma = params->sigma;

@@ -153,6 +153,13 @@ int Velocity_solve_explicit(Velocity *vel, Cart3d_bag *data_bag) {
 	MAC_grid *grid = data_bag -> grid;
 	Parameters *params = data_bag -> params;
 
+	if (TwodOps_collapsed_component_is_inactive(params) && vel->component == 'w') {
+		Memory_reset_flow_variable(grid, params, vel->data);
+		Memory_reset_noghost_variable(grid, params, vel->ng_rhs);
+		Velocity_update_boundaries(vel->data, vel->component, VEL_TYPE_NORMAL, data_bag);
+		return 0;
+	}
+
 	int NX = grid -> NX;
 	int NY = grid -> NY;
 	int NZ = grid -> NZ;

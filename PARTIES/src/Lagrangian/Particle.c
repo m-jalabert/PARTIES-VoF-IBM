@@ -106,6 +106,7 @@ MPI_Datatype MPI_COLLISION;
 		particle.X_L = NULL; \
 		particle.Y_L = NULL; \
 		particle.Z_L = NULL; \
+		particle.Vol_L_marker = NULL; \
 		particle.flag_L = NULL; \
 		particle.particle_collision = NULL; \
 		particle.wall_collision = NULL; \
@@ -330,6 +331,10 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 	Particle_list_remove(p_fixed_list, FOREIGN, grid, params, DTRACE("Particle_list_remove"));
 
+	#if defined(LAG_PARTICLE_RESOLVED)
+	Particle_reduce_oversized_forces_to_owner(p_mobile_list, data_bag);
+	#endif
+
 	// Create linked list of foreign particles
 	p_list_foreign = Particle_list_foreign_create(p_mobile_list, data_bag, DTRACE("Particle_list_foreign_create"));
 
@@ -538,6 +543,31 @@ void Particle_calc_derived_data(Particle *p, MAC_grid *grid, Parameters *params)
 
 	// Volume controlled by each Lagrangian marker point
 	double Vol_L = PI * h / (3.0 * N_L) * (12.0 * R2 + h * h);
+
+#if defined(TWOD_CARTESIAN) && defined(LAG_PARTICLE_RESOLVED)
+	/*
+	 * Phase-3 planar IBM treats each particle as a cylinder extruded through
+	 * the storage slab.  Mass and inertia are therefore per slab thickness,
+	 * while Vol_L is the regularized line-marker control volume ds*H*h.
+	 */
+	double slab = (grid->dummy_z_slab_thickness > 0.0) ?
+	              grid->dummy_z_slab_thickness : params->twod_slab_thickness;
+	if (slab <= 0.0)
+		slab = h;
+	N_L = max(8, (int)ceil(2.0 * PI * R / h));
+	M   = rho_s    * PI * R2 * slab;
+	M1  = rho_prImp * PI * R2 * slab;
+	I_p = rho_s    * 0.5 * PI * R2 * R2 * slab;
+	Vol_L = (2.0 * PI * R / N_L) * slab * h;
+#elif defined(AXISYM_RZ) && defined(LAG_PARTICLE_RESOLVED)
+	/*
+	 * Axisymmetric IBM still represents a physical sphere, but the markers are
+	 * meridional rings.  The per-ring control volume varies with radius and is
+	 * filled during marker generation; Vol_L remains a safe average fallback.
+	 */
+	N_L = max(4, (int)ceil(PI * R / h));
+	Vol_L = 4.0 * PI * R2 * h / N_L;
+#endif
 
 	p -> rho_s = rho_s;
 	p -> rho_prImp = rho_prImp;
@@ -885,6 +915,15 @@ void Particle_list_remove(Particle_list *p_list, int rm_type, MAC_grid *grid,
 
 		outside = (X[0] < G_xmin || X[0] >= G_xmax || X[1] < G_ymin || X[1] >= G_ymax ||
 				   X[2] < G_zmin || X[2] >= G_zmax);
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+		/*
+		 * In 2D IBM the third coordinate is a storage slab, not an ownership
+		 * direction.  Keeping removal in-plane makes the particle exchange
+		 * rank-independent when NPZ is forced to one.
+		 */
+		outside = (X[0] < G_xmin || X[0] >= G_xmax ||
+		           X[1] < G_ymin || X[1] >= G_ymax);
+#endif
 		if (outside && rm_foreign || !outside && !rm_foreign) {
 
 			if (p_last != NULL)
@@ -1234,6 +1273,10 @@ void Particle_create_internal_arrays(Particle *p) {
 	p -> X_L = (double *)malloc(3 * N_L * sizeof(double));
 	p -> Y_L = &(p->X_L[N_L]);
 	p -> Z_L = &(p->X_L[2 * N_L]);
+	p -> Vol_L_marker = (double *)malloc(N_L * sizeof(double));
+	Memory_check_allocation(p->Vol_L_marker);
+	for (int i = 0; i < N_L; i++)
+		p->Vol_L_marker[i] = p->Vol_L;
 #ifdef IBM_SCALAR
 	p -> X_H = (double *)malloc(3 * N_L * sizeof(double));
 	p -> Y_H = &(p->X_H[N_L]);
@@ -1276,6 +1319,7 @@ void Particle_create_internal_arrays(Particle *p) {
 void Particle_destroy_internal_arrays(Particle *p) {
 
 	free(p -> X_L);
+	free(p -> Vol_L_marker);
 #ifdef IBM_SCLAR
 	free(p -> X_H);
 #endif
@@ -1300,7 +1344,534 @@ void Particle_destroy_internal_arrays(Particle *p) {
 }
 
 
+#if defined(LAG_PARTICLE_RESOLVED)
+#ifdef VOF_IBM
+#define PARTICLE_FORCE_RECORD_N 28
+#else
+#define PARTICLE_FORCE_RECORD_N 12
+#endif
 
+typedef struct {
+	int ID;
+	double value[PARTICLE_FORCE_RECORD_N];
+} Particle_force_record;
+
+static void Particle_rank_bounds(MAC_grid *grid, Parameters *params,
+                                 int rank, double lower[3], double upper[3],
+                                 int coords[3])
+{
+	MPI_Cart_coords(PCW, rank, 3, coords);
+
+	const int Is = (float)(coords[0]    ) / (float)params->NPX * grid->NX;
+	const int Ie = (float)(coords[0] + 1) / (float)params->NPX * grid->NX;
+	const int Js = (float)(coords[1]    ) / (float)params->NPY * grid->NY;
+	const int Je = (float)(coords[1] + 1) / (float)params->NPY * grid->NY;
+	const int Ks = (float)(coords[2]    ) / (float)params->NPZ * grid->NZ;
+	const int Ke = (float)(coords[2] + 1) / (float)params->NPZ * grid->NZ;
+
+	lower[0] = grid->xu[Is];
+	upper[0] = grid->xu[min(Ie, grid->NX - 1)];
+	lower[1] = grid->yv[Js];
+	upper[1] = grid->yv[min(Je, grid->NY - 1)];
+	lower[2] = grid->zw[Ks];
+	upper[2] = grid->zw[min(Ke, grid->NZ - 1)];
+}
+
+static int Particle_coordinate_is_owned(double x, double lower, double upper,
+                                        int is_last_rank)
+{
+	return (x >= lower && (x < upper || (is_last_rank && x <= upper)));
+}
+
+int Particle_center_is_owned_by_rank(const Particle *p, MAC_grid *grid,
+                                     Parameters *params, int rank)
+{
+	double lower[3], upper[3];
+	int coords[3];
+	Particle_rank_bounds(grid, params, rank, lower, upper, coords);
+
+	if (!Particle_coordinate_is_owned(p->X[0], lower[0], upper[0],
+	                                  coords[0] == params->NPX - 1))
+		return 0;
+	if (!Particle_coordinate_is_owned(p->X[1], lower[1], upper[1],
+	                                  coords[1] == params->NPY - 1))
+		return 0;
+#if defined(TWOD_MODE)
+	return 1;
+#else
+	return Particle_coordinate_is_owned(p->X[2], lower[2], upper[2],
+	                                    coords[2] == params->NPZ - 1);
+#endif
+}
+
+static int Particle_clamped_proc_coord(double x, double xmin, double xmax, int np)
+{
+	double xi = 0.0;
+	if (xmax > xmin)
+		xi = (x - xmin) / (xmax - xmin);
+
+	int coord = (int)floor(xi * (double)np);
+	if (coord < 0) coord = 0;
+	if (coord >= np) coord = np - 1;
+	return coord;
+}
+
+static double Particle_wrap_periodic_coordinate(double x, double xmin,
+                                                double xmax)
+{
+	const double length = xmax - xmin;
+	if (length <= 0.0)
+		return x;
+
+	while (x < xmin) x += length;
+	while (x >= xmax) x -= length;
+	return x;
+}
+
+int Particle_center_owner_rank(const Particle *p, MAC_grid *grid,
+                               Parameters *params)
+{
+	int nproc;
+	MPI_Comm_size(PCW, &nproc);
+
+	Particle q = *p;
+#ifdef XPERIODIC
+	q.X[0] = Particle_wrap_periodic_coordinate(q.X[0], params->xmin,
+	                                           params->xmax);
+#endif
+#ifdef YPERIODIC
+	q.X[1] = Particle_wrap_periodic_coordinate(q.X[1], params->ymin,
+	                                           params->ymax);
+#endif
+#if !defined(TWOD_MODE)
+#ifdef ZPERIODIC
+	q.X[2] = Particle_wrap_periodic_coordinate(q.X[2], params->zmin,
+	                                           params->zmax);
+#endif
+#endif
+
+	for (int rank = 0; rank < nproc; rank++)
+		if (Particle_center_is_owned_by_rank(&q, grid, params, rank))
+			return rank;
+
+	int coords[3];
+	coords[0] = Particle_clamped_proc_coord(q.X[0], params->xmin,
+	                                        params->xmax, params->NPX);
+	coords[1] = Particle_clamped_proc_coord(q.X[1], params->ymin,
+	                                        params->ymax, params->NPY);
+#if defined(TWOD_MODE)
+	coords[2] = 0;
+#else
+	coords[2] = Particle_clamped_proc_coord(q.X[2], params->zmin,
+	                                        params->zmax, params->NPZ);
+#endif
+
+	int rank = -1;
+	MPI_Cart_rank(PCW, coords, &rank);
+	return rank;
+}
+
+static int Particle_interval_overlap_shift(double center, double radius,
+                                           double lower, double upper,
+                                           double period, int periodic,
+                                           double *offset_out)
+{
+	if (offset_out != NULL)
+		*offset_out = 0.0;
+
+	if (!periodic || period <= 0.0)
+		return (center + radius >= lower && center - radius < upper);
+
+	const int shifts[3] = {0, -1, 1};
+	for (int s = 0; s < 3; s++) {
+		const double offset = (double)shifts[s] * period;
+		const double c = center + offset;
+		if (c + radius >= lower && c - radius < upper)
+		{
+			if (offset_out != NULL)
+				*offset_out = offset;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+static int Particle_overlaps_rank_shift(const Particle *p, MAC_grid *grid,
+                                        Parameters *params, int rank,
+                                        double extra_range, double shift[3])
+{
+	double lower[3], upper[3];
+	int coords[3];
+	Particle_rank_bounds(grid, params, rank, lower, upper, coords);
+
+	const double radius = p->R + extra_range;
+	double local_shift[3] = {0.0, 0.0, 0.0};
+
+#ifdef XPERIODIC
+	const int xperiodic = 1;
+#else
+	const int xperiodic = 0;
+#endif
+#ifdef YPERIODIC
+	const int yperiodic = 1;
+#else
+	const int yperiodic = 0;
+#endif
+#ifdef ZPERIODIC
+	const int zperiodic = 1;
+#else
+	const int zperiodic = 0;
+#endif
+
+	if (!Particle_interval_overlap_shift(p->X[0], radius, lower[0], upper[0],
+	                                     params->xmax - params->xmin,
+	                                     xperiodic, &local_shift[0]))
+		return 0;
+	if (!Particle_interval_overlap_shift(p->X[1], radius, lower[1], upper[1],
+	                                     params->ymax - params->ymin,
+	                                     yperiodic, &local_shift[1]))
+		return 0;
+#if defined(TWOD_MODE)
+	if (shift != NULL)
+		memcpy(shift, local_shift, 3 * sizeof(double));
+	return 1;
+#else
+	if (!Particle_interval_overlap_shift(p->X[2], radius, lower[2], upper[2],
+	                                     params->zmax - params->zmin,
+	                                     zperiodic, &local_shift[2]))
+		return 0;
+	if (shift != NULL)
+		memcpy(shift, local_shift, 3 * sizeof(double));
+	return 1;
+#endif
+}
+
+static int Particle_overlaps_rank(const Particle *p, MAC_grid *grid,
+                                  Parameters *params, int rank,
+                                  double extra_range)
+{
+	return Particle_overlaps_rank_shift(p, grid, params, rank, extra_range,
+	                                    NULL);
+}
+
+Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
+                                          Cart3d_bag *data_bag,
+                                          double extra_range,
+                                          double min_radius,
+                                          int include_self,
+                                          int *n_recv)
+{
+	MAC_grid *grid = data_bag->grid;
+	Parameters *params = data_bag->params;
+	int nproc;
+	MPI_Comm_size(PCW, &nproc);
+
+	int *send_counts = (int *)calloc(nproc, sizeof(int));
+	int *recv_counts = (int *)calloc(nproc, sizeof(int));
+	int *send_displs = (int *)calloc(nproc, sizeof(int));
+	int *recv_displs = (int *)calloc(nproc, sizeof(int));
+	Memory_check_allocation(send_counts);
+	Memory_check_allocation(recv_counts);
+	Memory_check_allocation(send_displs);
+	Memory_check_allocation(recv_displs);
+
+	for (Particle *p = p_list->start; p != NULL; p = p->next)
+		if (p->R > min_radius &&
+		    Particle_center_is_owned_by_rank(p, grid, params, params->rank))
+			for (int rank = 0; rank < nproc; rank++)
+				if ((include_self || rank != params->rank) &&
+				    Particle_overlaps_rank(p, grid, params, rank, extra_range))
+					send_counts[rank]++;
+
+	MPI_Alltoall(send_counts, 1, MPI_INT, recv_counts, 1, MPI_INT, PCW);
+
+	int total_send = 0;
+	int total_recv = 0;
+	for (int rank = 0; rank < nproc; rank++) {
+		send_displs[rank] = total_send;
+		recv_displs[rank] = total_recv;
+		total_send += send_counts[rank];
+		total_recv += recv_counts[rank];
+	}
+
+	Particle *send_buf =
+	    (Particle *)malloc((total_send > 0 ? total_send : 1) * sizeof(Particle));
+	Particle *recv_buf =
+	    (Particle *)malloc((total_recv > 0 ? total_recv : 1) * sizeof(Particle));
+	Memory_check_allocation(send_buf);
+	Memory_check_allocation(recv_buf);
+
+	int *offset = (int *)malloc(nproc * sizeof(int));
+	Memory_check_allocation(offset);
+	memcpy(offset, send_displs, nproc * sizeof(int));
+
+	for (Particle *p = p_list->start; p != NULL; p = p->next) {
+		if (p->R <= min_radius ||
+		    !Particle_center_is_owned_by_rank(p, grid, params, params->rank))
+			continue;
+
+		for (int rank = 0; rank < nproc; rank++) {
+			double shift[3] = {0.0, 0.0, 0.0};
+			if ((!include_self && rank == params->rank) ||
+			    !Particle_overlaps_rank_shift(p, grid, params, rank,
+			                                  extra_range, shift))
+				continue;
+
+			send_buf[offset[rank]] = *p;
+			for (int d = 0; d < 3; d++) {
+				send_buf[offset[rank]].X[d] += shift[d];
+				send_buf[offset[rank]].X_old[d] += shift[d];
+			}
+			NULLIFY_PARTICLE_PTRS(send_buf[offset[rank]]);
+			offset[rank]++;
+		}
+	}
+
+	MPI_Alltoallv(send_buf, send_counts, send_displs, MPI_PARTICLE,
+	              recv_buf, recv_counts, recv_displs, MPI_PARTICLE, PCW);
+
+	free(send_buf);
+	free(send_counts);
+	free(recv_counts);
+	free(send_displs);
+	free(recv_displs);
+	free(offset);
+
+	*n_recv = total_recv;
+	if (total_recv == 0) {
+		free(recv_buf);
+		return NULL;
+	}
+	return recv_buf;
+}
+
+static double Particle_min_width_for_rank(MAC_grid *grid, Parameters *params,
+                                          int rank)
+{
+	double lower[3], upper[3];
+	int coords[3];
+	Particle_rank_bounds(grid, params, rank, lower, upper, coords);
+
+	double width = upper[0] - lower[0];
+	width = fmin(width, upper[1] - lower[1]);
+#if !defined(TWOD_MODE)
+	if (upper[2] > lower[2])
+		width = fmin(width, upper[2] - lower[2]);
+#endif
+	return width;
+}
+
+static int Particle_is_oversized_for_owner(const Particle *p, MAC_grid *grid,
+                                           Parameters *params, int owner_rank,
+                                           double range)
+{
+	double threshold = Particle_min_width_for_rank(grid, params, owner_rank) - range;
+	if (threshold < 0.0) threshold = 0.0;
+	return (p->R > threshold);
+}
+
+static int Particle_list_has_id(Particle_list *p_list, int id)
+{
+	for (Particle *p = p_list->start; p != NULL; p = p->next)
+		if (p->ID == id)
+			return 1;
+	return 0;
+}
+
+static void Particle_add_flat_copy(Particle_list *p_list, const Particle *src)
+{
+	Particle *pnew = (Particle *)malloc(sizeof(Particle));
+	Memory_check_allocation(pnew);
+	*pnew = *src;
+	Particle_create_internal_arrays(pnew);
+	pnew->particle_collision = NULL;
+	pnew->wall_collision = NULL;
+	pnew->next = p_list->start;
+	p_list->start = pnew;
+}
+
+static void Particle_exchange_oversized_overlaps(Particle_list *p_list,
+                                                Cart3d_bag *data_bag,
+                                                double sub_min,
+                                                double range)
+{
+	double threshold = sub_min - range;
+	if (threshold < 0.0) threshold = 0.0;
+
+	int nrecv = 0;
+	Particle *recv =
+	    Particle_collect_owned_overlaps(p_list, data_bag, 0.0, threshold,
+	                                    0, &nrecv);
+
+	for (int n = 0; n < nrecv; n++) {
+		if (!Particle_list_has_id(p_list, recv[n].ID))
+			Particle_add_flat_copy(p_list, &recv[n]);
+	}
+	free(recv);
+}
+
+static void Particle_pack_force_record(const Particle *p,
+                                       Particle_force_record *record)
+{
+	int k = 0;
+	record->ID = p->ID;
+	for (int i = 0; i < 3; i++) record->value[k++] = p->F[i];
+	for (int i = 0; i < 3; i++) record->value[k++] = p->T[i];
+	for (int i = 0; i < 3; i++) record->value[k++] = p->Int_U[i];
+	for (int i = 0; i < 3; i++) record->value[k++] = p->Int_Omega[i];
+#ifdef VOF_IBM
+	for (int i = 0; i < 3; i++) record->value[k++] = p->F_CCF[i];
+	for (int i = 0; i < 3; i++) record->value[k++] = p->T_CCF[i];
+	for (int i = 0; i < 3; i++) record->value[k++] = p->Int_rho[i];
+	record->value[k++] = p->Int_rho_scalar;
+	for (int i = 0; i < 3; i++) record->value[k++] = p->F_CSF_solid[i];
+	for (int i = 0; i < 3; i++) record->value[k++] = p->T_CSF_solid[i];
+#endif
+}
+
+static void Particle_zero_hydro_force_fields(Particle *p)
+{
+	DSET_ZERO(p->F, 3);
+	DSET_ZERO(p->T, 3);
+	DSET_ZERO(p->Int_U, 3);
+	DSET_ZERO(p->Int_Omega, 3);
+#ifdef VOF_IBM
+	DSET_ZERO(p->F_CCF, 3);
+	DSET_ZERO(p->T_CCF, 3);
+	DSET_ZERO(p->Int_rho, 3);
+	p->Int_rho_scalar = 0.0;
+	DSET_ZERO(p->F_CSF_solid, 3);
+	DSET_ZERO(p->T_CSF_solid, 3);
+#endif
+}
+
+static void Particle_add_force_record(Particle *p,
+                                      const Particle_force_record *record)
+{
+	int k = 0;
+	for (int i = 0; i < 3; i++) p->F[i] += record->value[k++];
+	for (int i = 0; i < 3; i++) p->T[i] += record->value[k++];
+	for (int i = 0; i < 3; i++) p->Int_U[i] += record->value[k++];
+	for (int i = 0; i < 3; i++) p->Int_Omega[i] += record->value[k++];
+#ifdef VOF_IBM
+	for (int i = 0; i < 3; i++) p->F_CCF[i] += record->value[k++];
+	for (int i = 0; i < 3; i++) p->T_CCF[i] += record->value[k++];
+	for (int i = 0; i < 3; i++) p->Int_rho[i] += record->value[k++];
+	p->Int_rho_scalar += record->value[k++];
+	for (int i = 0; i < 3; i++) p->F_CSF_solid[i] += record->value[k++];
+	for (int i = 0; i < 3; i++) p->T_CSF_solid[i] += record->value[k++];
+#endif
+}
+
+void Particle_reduce_oversized_forces_to_owner(Particle_list *p_list,
+                                               Cart3d_bag *data_bag)
+{
+	MAC_grid *grid = data_bag->grid;
+	Parameters *params = data_bag->params;
+	const double range = DELTA_FUNC_RADIUS * grid->dx_u[1];
+
+	int nproc;
+	MPI_Comm_size(PCW, &nproc);
+
+	int *send_counts = (int *)calloc(nproc, sizeof(int));
+	int *recv_counts = (int *)calloc(nproc, sizeof(int));
+	int *send_displs = (int *)calloc(nproc, sizeof(int));
+	int *recv_displs = (int *)calloc(nproc, sizeof(int));
+	Memory_check_allocation(send_counts);
+	Memory_check_allocation(recv_counts);
+	Memory_check_allocation(send_displs);
+	Memory_check_allocation(recv_displs);
+
+	for (Particle *p = p_list->start; p != NULL; p = p->next) {
+		const int owner = Particle_center_owner_rank(p, grid, params);
+		if (owner >= 0 && Particle_is_oversized_for_owner(p, grid, params,
+		                                                  owner, range))
+			send_counts[owner]++;
+	}
+
+	MPI_Alltoall(send_counts, 1, MPI_INT, recv_counts, 1, MPI_INT, PCW);
+
+	int total_send = 0;
+	int total_recv = 0;
+	for (int rank = 0; rank < nproc; rank++) {
+		send_displs[rank] = total_send;
+		recv_displs[rank] = total_recv;
+		total_send += send_counts[rank];
+		total_recv += recv_counts[rank];
+	}
+
+	Particle_force_record *send_buf =
+	    (Particle_force_record *)malloc((total_send > 0 ? total_send : 1) *
+	                                    sizeof(Particle_force_record));
+	Particle_force_record *recv_buf =
+	    (Particle_force_record *)malloc((total_recv > 0 ? total_recv : 1) *
+	                                    sizeof(Particle_force_record));
+	Memory_check_allocation(send_buf);
+	Memory_check_allocation(recv_buf);
+
+	int *offset = (int *)malloc(nproc * sizeof(int));
+	Memory_check_allocation(offset);
+	memcpy(offset, send_displs, nproc * sizeof(int));
+
+	for (Particle *p = p_list->start; p != NULL; p = p->next) {
+		const int owner = Particle_center_owner_rank(p, grid, params);
+		if (owner < 0 || !Particle_is_oversized_for_owner(p, grid, params,
+		                                                  owner, range))
+			continue;
+
+		Particle_pack_force_record(p, &send_buf[offset[owner]]);
+		offset[owner]++;
+	}
+
+	int *send_bytes = (int *)malloc(nproc * sizeof(int));
+	int *recv_bytes = (int *)malloc(nproc * sizeof(int));
+	int *sdispl_bytes = (int *)malloc(nproc * sizeof(int));
+	int *rdispl_bytes = (int *)malloc(nproc * sizeof(int));
+	Memory_check_allocation(send_bytes);
+	Memory_check_allocation(recv_bytes);
+	Memory_check_allocation(sdispl_bytes);
+	Memory_check_allocation(rdispl_bytes);
+	for (int rank = 0; rank < nproc; rank++) {
+		send_bytes[rank] = send_counts[rank] * (int)sizeof(Particle_force_record);
+		recv_bytes[rank] = recv_counts[rank] * (int)sizeof(Particle_force_record);
+		sdispl_bytes[rank] = send_displs[rank] * (int)sizeof(Particle_force_record);
+		rdispl_bytes[rank] = recv_displs[rank] * (int)sizeof(Particle_force_record);
+	}
+
+	MPI_Alltoallv(send_buf, send_bytes, sdispl_bytes, MPI_BYTE,
+	              recv_buf, recv_bytes, rdispl_bytes, MPI_BYTE, PCW);
+
+	for (Particle *p = p_list->start; p != NULL; p = p->next) {
+		const int owner = Particle_center_owner_rank(p, grid, params);
+		if (owner >= 0 && Particle_is_oversized_for_owner(p, grid, params,
+		                                                  owner, range))
+			Particle_zero_hydro_force_fields(p);
+	}
+
+	for (int n = 0; n < total_recv; n++) {
+		for (Particle *p = p_list->start; p != NULL; p = p->next) {
+			if (p->ID == recv_buf[n].ID &&
+			    Particle_center_is_owned_by_rank(p, grid, params, params->rank)) {
+				Particle_add_force_record(p, &recv_buf[n]);
+				break;
+			}
+		}
+	}
+
+	free(send_buf);
+	free(recv_buf);
+	free(send_counts);
+	free(recv_counts);
+	free(send_displs);
+	free(recv_displs);
+	free(send_bytes);
+	free(recv_bytes);
+	free(sdispl_bytes);
+	free(rdispl_bytes);
+	free(offset);
+}
+#endif /* LAG_PARTICLE_RESOLVED */
 
 /******************************************************************************/
 /*
@@ -1739,6 +2310,13 @@ if (params -> NPY != 1 || p_list->state != LIST_STATE_EDGE) {
 	 Lower z communication
 	 */
 	/*------------------------------------------------------------------------*/
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+	/*
+	 * Phase-3 2D IBM: particles never migrate in the collapsed storage
+	 * direction.  X/Y exchanges above still provide all marker support needed
+	 * for multi-rank in-plane runs.
+	 */
+#else
 #ifdef ZPERIODIC
 	//--------------------------------------------------------------------------
 	// Ensure we don't communicate foreign particles to ourself, which would
@@ -1837,6 +2415,21 @@ if (params -> NPY != 1 || p_list->state != LIST_STATE_EDGE) {
 
 #ifdef ZPERIODIC
 	} // if not communicating foreign particles to self
+#endif
+#endif
+
+#if defined(LAG_PARTICLE_RESOLVED)
+	/* Exchange only the oversized particles that geometrically overlap this rank. */
+	if (p_list->state == LIST_STATE_BOTH) {
+		double _sub_x = grid->xu[min(grid->G_Ie, grid->NX-1)] - grid->xu[grid->G_Is];
+		double _sub_y = grid->yv[min(grid->G_Je, grid->NY-1)] - grid->yv[grid->G_Js];
+		double _sub_min = fmin(_sub_x, _sub_y);
+#if !defined(TWOD_MODE)
+		double _sub_z = grid->zw[min(grid->G_Ke, grid->NZ-1)] - grid->zw[grid->G_Ks];
+		if (_sub_z > 1.0e-30) _sub_min = fmin(_sub_min, _sub_z);
+#endif
+		Particle_exchange_oversized_overlaps(p_list, data_bag, _sub_min, range);
+	}
 #endif
 
 	T2 = MPI_Wtime();

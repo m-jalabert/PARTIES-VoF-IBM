@@ -378,6 +378,14 @@ struct parameters {
 	// run
 	int resume;
 
+	/*
+	 * Diagnostic / smoke-test flag: when nonzero, skip the momentum and
+	 * pressure solvers each substep and force u/v/w to zero.  The VOF
+	 * advection and CH solver still run, so this isolates the MCL extension
+	 * + Cahn-Hilliard relaxation from the coupled fluid solver.
+	 */
+	int freeze_velocity;
+
 
 	/*-------------------------------- LSOLVE --------------------------------*/
 	lsolver_transpose *lsolver_remap;
@@ -1484,6 +1492,7 @@ struct particle {
 	// Pointers
 	//--------------------------------------------------------------------------
 	double *X_L, *Y_L, *Z_L;
+	double *Vol_L_marker; // Optional per-marker control volume for 2D IBM ring/line markers.
 #ifdef IBM_SCALAR
 	double *X_H, *Y_H, *Z_H;
 #endif
