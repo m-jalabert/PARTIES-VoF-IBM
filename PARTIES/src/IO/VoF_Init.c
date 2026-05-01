@@ -949,6 +949,172 @@ void VoF_init_planar_rising_bubble_2d(Cart3d_bag *data_bag)
 
 
 /*******************************************************************************
+ * VoF_init_liu17_sinking_cylinder_2d
+ *
+ * Liu et al. (2017), section 6.3: horizontal cylinder sinking from a water
+ * surface in a planar 2D half-domain. The cylinder is centered on the left
+ * symmetry boundary at y = 3.8, and the initial liquid-gas interface is 0.0165D
+ * above the cylinder center. Since D = 1, the water surface is y = 3.8165.
+ ******************************************************************************/
+void VoF_init_liu17_sinking_cylinder_2d(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+    double       ***F      = vof->F;
+
+    
+    const double y_interface = 3.8;
+
+    const double dx = grid->dx_c[0];
+    const double dy = grid->dy_c[0];
+
+#ifdef VOF_DIFFUSE
+    double Cn = params->Cn;
+    if (Cn <= 0.0) {
+        const double href = (dx < dy) ? dx : dy;
+        Cn = 0.75 * href;
+    }
+    const double bw = 2.0 * sqrt(2.0) * Cn;
+#endif
+
+    const int S = 8;
+    const double inv_S = 1.0 / (double)S;
+
+    const int Is = grid->G_Is, Ie = grid->G_Ie;
+    const int Js = grid->G_Js, Je = grid->G_Je;
+    const int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    for (int k = Ks; k < Ke; ++k) {
+        for (int j = Js; j < Je; ++j) {
+            const double y_min = grid->yc[j] - 0.5 * dy;
+
+            for (int i = Is; i < Ie; ++i) {
+                double cl = 0.0;
+
+                for (int sj = 0; sj < S; ++sj) {
+                    const double y = y_min + (sj + 0.5) * dy * inv_S;
+#ifdef VOF_DIFFUSE
+                    const double s = y_interface - y;
+                    cl += inv_S * 0.5 * (1.0 + tanh(s / (bw + 1.0e-30)));
+#else
+                    if (y <= y_interface) {
+                        cl += inv_S;
+                    }
+#endif
+                }
+
+                if (cl < 0.0) {
+                    cl = 0.0;
+                } else if (cl > 1.0) {
+                    cl = 1.0;
+                }
+
+                F[k][j][i] = cl;
+#ifdef VOF_DIFFUSE
+                vof->C_L[k][j][i] = cl;
+#endif
+            }
+        }
+    }
+
+    vof->initial_volume = -1.0;
+
+    {
+        char msg[180];
+        snprintf(msg, sizeof(msg),
+                 "Liu17 section 6.3 IC: water surface y=%.6f, Cn=%.6g\n",
+                 y_interface, params->Cn);
+        Display_progress(params, msg);
+    }
+}
+
+
+/*******************************************************************************
+ * VoF_init_liu17_axisymmetric_sphere_impact
+ *
+ * Liu et al. (2017), section 6.4: axisymmetric superhydrophobic sphere impact
+ * onto a water pool.  Coordinates are r = x and z = y.  The sphere is supplied
+ * by p_mobile.inp; this initializer only builds the initially flat water pool:
+ *
+ *   domain        0 <= r <= 4, 0 <= z <= 6
+ *   water surface z = 4
+ *   sphere center z = 4.5, radius R = 0.5, initially tangent to the surface
+ ******************************************************************************/
+void VoF_init_liu17_axisymmetric_sphere_impact(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+    double       ***F      = vof->F;
+
+    const double z_interface = 4.0;
+
+    const double dz = grid->dy_c[0];
+
+#ifdef VOF_DIFFUSE
+    double Cn = params->Cn;
+    if (Cn <= 0.0) {
+        const double dr = grid->dx_c[0];
+        const double href = (dr < dz) ? dr : dz;
+        Cn = 0.75 * href;
+    }
+    const double bw = 2.0 * sqrt(2.0) * Cn;
+#endif
+
+    const int S = 8;
+    const double inv_S = 1.0 / (double)S;
+
+    const int Is = grid->G_Is, Ie = grid->G_Ie;
+    const int Js = grid->G_Js, Je = grid->G_Je;
+    const int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    for (int k = Ks; k < Ke; ++k) {
+        for (int j = Js; j < Je; ++j) {
+            const double z_min = grid->yc[j] - 0.5 * dz;
+
+            for (int i = Is; i < Ie; ++i) {
+                double cl = 0.0;
+
+                for (int sj = 0; sj < S; ++sj) {
+                    const double z = z_min + (sj + 0.5) * dz * inv_S;
+#ifdef VOF_DIFFUSE
+                    const double s = z_interface - z;
+                    cl += inv_S * 0.5 * (1.0 + tanh(s / (bw + 1.0e-30)));
+#else
+                    if (z <= z_interface)
+                        cl += inv_S;
+#endif
+                }
+
+                if (cl < 0.0) {
+                    cl = 0.0;
+                } else if (cl > 1.0) {
+                    cl = 1.0;
+                }
+
+                F[k][j][i] = cl;
+#ifdef VOF_DIFFUSE
+                vof->C_L[k][j][i] = cl;
+#endif
+            }
+        }
+    }
+
+    vof->initial_volume = -1.0;
+
+    {
+        char msg[180];
+        snprintf(msg, sizeof(msg),
+                 "Liu17 section 6.4 IC: axisymmetric water surface z=%.6f, "
+                 "sphere center z=4.500000, R=0.500000, Cn=%.6g\n",
+                 z_interface, params->Cn);
+        Display_progress(params, msg);
+    }
+}
+
+
+/*******************************************************************************
  * VoF_droplet_flat_plate_175deg
  *
  * Initialise a spherical-cap droplet (contact angle θ = 175°) resting on the
@@ -1974,48 +2140,11 @@ void VoF_init_meniscus_154deg(Cart3d_bag *data_bag)
 
 
 /*******************************************************************************
- * Lens area between two intersecting disks of radii R, r at center distance d.
- * Returns 0 if they do not overlap and pi*min(R,r)^2 if one contains the other.
- ******************************************************************************/
-static double mcl_disk_lens_area(double R, double r, double d)
-{
-    if (d >= R + r) return 0.0;
-    if (d <= fabs(R - r)) {
-        double rmin = (R < r) ? R : r;
-        return M_PI * rmin * rmin;
-    }
-    double cosA = (d * d + R * R - r * r) / (2.0 * d * R);
-    double cosB = (d * d + r * r - R * R) / (2.0 * d * r);
-    if (cosA >  1.0) cosA =  1.0; if (cosA < -1.0) cosA = -1.0;
-    if (cosB >  1.0) cosB =  1.0; if (cosB < -1.0) cosB = -1.0;
-    double term = (-d + R + r) * (d + R - r) * (d - R + r) * (d + R + r);
-    if (term < 0.0) term = 0.0;
-    return R * R * acos(cosA) + r * r * acos(cosB) - 0.5 * sqrt(term);
-}
-
-
-/*******************************************************************************
  * VoF_init_planar_droplet_on_static_cylinder_theta
  *
  * Initial condition for the Liu and Ding (2015) section 4.1 half-cylinder
  * wetting test in TWOD_CARTESIAN.  Domain x in [0, 1], y in [0, 2.5];
  * cylinder R_s = 0.5 sitting on the left symmetry plane at (0, 0.8).
- *
- * Liu15 starts the dynamic relaxation from the *equilibrium* shape at a fixed
- * geometric contact angle theta_IC = 60 deg with a clipped-circle volume that
- * matches a free droplet of radius R_0 = 0.5 (D = 1).  The two-circle
- * geometry is:
- *   l(R_f) = sqrt(R_s^2 + R_f^2 + 2 R_s R_f cos(theta_IC))
- *   A_liquid(R_f) = pi R_f^2 - A_lens(R_s, R_f, l(R_f))
- *   Find R_f s.t. A_liquid = pi R_0^2.
- *
- * The interface is rendered as a diffuse tanh profile around the L-G circle
- * (radius R_f, center on the y-axis), then clipped inside the diffuse solid
- * via C_L = min(C_L, 1 - C_S) by the MCL post-init pass.
- *
- * Reproduces Liu15 §4.1 IC; theta_IC is intentionally fixed at 60 deg
- * regardless of params->contact_angle_deg, so the *prescribed* contact angle
- * can differ from the IC and we observe relaxation toward equilibrium.
  ******************************************************************************/
 void VoF_init_planar_droplet_on_static_cylinder_theta(Cart3d_bag *data_bag)
 {
@@ -2028,37 +2157,11 @@ void VoF_init_planar_droplet_on_static_cylinder_theta(Cart3d_bag *data_bag)
     const double xs = 0.0;
     const double ys = 0.8;
     const double R0 = 0.5;
-    const double V_target = M_PI * R0 * R0;
 
-    /* Liu15 IC: geometric contact angle 60 deg.
-    Note that parties.inp needs to take 180 - contact angle since the convention differs.
-     */
-    const double theta_IC = 60.0 * M_PI / 180.0; 
-    const double cosTH = cos(theta_IC);
 
-    /* Newton iteration on R_f.  Free-droplet R_0 is a good seed because the
-     * IC volume equals the free-droplet volume exactly. */
     double R_f = R0;
-    for (int it = 0; it < 200; ++it) {
-        double l  = sqrt(Rs * Rs + R_f * R_f + 2.0 * Rs * R_f * cosTH);
-        double A  = M_PI * R_f * R_f - mcl_disk_lens_area(Rs, R_f, l);
-        double res = A - V_target;
-        if (fabs(res) < 1.0e-12) break;
 
-        double h    = 1.0e-6 * fmax(R_f, 0.1);
-        double R2   = R_f + h;
-        double l2   = sqrt(Rs * Rs + R2 * R2 + 2.0 * Rs * R2 * cosTH);
-        double A2   = M_PI * R2 * R2 - mcl_disk_lens_area(Rs, R2, l2);
-        double dA   = (A2 - A) / h;
-        if (fabs(dA) < 1.0e-12) break;
-        double step = res / dA;
-        if (step >  0.5 * R_f) step =  0.5 * R_f;
-        if (step < -0.5 * R_f) step = -0.5 * R_f;
-        R_f -= step;
-        if (R_f < 0.05) R_f = 0.05;
-    }
-
-    const double l_c = sqrt(Rs * Rs + R_f * R_f + 2.0 * Rs * R_f * cosTH);
+    const double l_c = 0.75;
     const double xd  = xs;
     const double yd  = ys + l_c;
 
@@ -2073,14 +2176,6 @@ void VoF_init_planar_droplet_on_static_cylinder_theta(Cart3d_bag *data_bag)
         Cn = 0.75 * href;
     }
     const double bw = 2.0 * sqrt(2.0) * Cn;
-
-    {
-        char msg[200];
-        snprintf(msg, sizeof(msg),
-                 "Liu15 IC: theta_IC=%.1fdeg R_f=%.6f l_c=%.6f V_target=%.6f Cn=%.4g\n",
-                 theta_IC * 180.0 / M_PI, R_f, l_c, V_target, Cn);
-        Display_progress(params, msg);
-    }
 
     const int    S  = 5;
     const double inv_S = 1.0 / (double)S;
@@ -2243,7 +2338,7 @@ void VoF_init_axisymmetric_droplet_on_static_sphere_theta(Cart3d_bag *data_bag)
      * For theta_liquid = 120 deg, the droplet center is above the solid sphere
      * and the liquid-gas sphere intersects the solid sphere.
      */
-    const double theta_liquid_deg = 120.0;
+    const double theta_liquid_deg = params->contact_angle_deg;
     const double theta_liquid     = theta_liquid_deg * M_PI / 180.0;
     const double theta_geom       = M_PI - theta_liquid;
     const double cosTG            = cos(theta_geom);
