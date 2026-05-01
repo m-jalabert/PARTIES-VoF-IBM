@@ -58,17 +58,182 @@
 
 #if defined(VOF_DIFFUSE) && defined(VOF_IBM)
 
+//------------------------------------------------------------------------------
+// VOF_accumulate_solid_capillary_force
+//------------------------------------------------------------------------------
 void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag)
 {
-    /*
-     * Solid capillary / contact-line reaction force is intentionally disabled
-     * for the first MCL milestone.  Liu17 sections 6.3-6.4 will need this term
-     * before a quantitative trajectory comparison can be claimed; until then
-     * keep the accumulators zero so the resolved-particle path links cleanly.
-     */
-    (void)data_bag;
-    DSET_ZERO(p->F_CCF, 3);
-    DSET_ZERO(p->T_CCF, 3);
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+
+    double ***f_ccf_x = vof->f_ccf_x;
+    double ***f_ccf_y = vof->f_ccf_y;
+    double ***f_ccf_z = vof->f_ccf_z;
+
+    double ***C_L = vof->C_L;
+    double ***C_S = vof->C_S;
+
+    const double *xc = grid->xc;
+    const double *yc = grid->yc;
+    const double *zc = grid->zc;
+    const double *X_p = p->X;
+    const double sigma = 1.0 / params->We;
+    const double theta = params->contact_angle_deg * M_PI / 180.0;
+    const double cos_theta = cos(theta);
+    const double sin_theta = sin(theta);
+    const double epsN = 1.0e-14;
+    const int twod = params->twod_mode_enabled;
+    const double h_ref = (grid->dy_min > epsN) ? grid->dy_min : epsN;
+    const double cn = (params->Cn > 0.0) ? params->Cn : 0.0;
+    const double support_width = 8.0 * ((cn > h_ref) ? cn : h_ref);
+    const double support_radius = p->R + support_width;
+    const double support_radius2 = support_radius * support_radius;
+
+    const int Is = grid->G_Is;
+    const int Js = grid->G_Js;
+    const int Ks = grid->G_Ks;
+    const int Ie = grid->G_Ie;
+    const int Je = grid->G_Je;
+    const int Ke = grid->G_Ke;
+
+    Memory_reset_flow_variable(grid, params, f_ccf_x);
+    Memory_reset_flow_variable(grid, params, f_ccf_y);
+    Memory_reset_flow_variable(grid, params, f_ccf_z);
+
+    for (int k = Ks; k < Ke; k++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
+                double r_vec[3] = {
+                    xc[i] - X_p[0],
+                    yc[j] - X_p[1],
+                    twod ? 0.0 : zc[k] - X_p[2]
+                };
+                double dist2 = r_vec[0] * r_vec[0] +
+                               r_vec[1] * r_vec[1] +
+                               r_vec[2] * r_vec[2];
+                if (dist2 > support_radius2)
+                    continue;
+
+                /*
+                 * Washino12 Eq. (26), with gradients restricted to the
+                 * physical plane in TWOD_* modes:
+                 *   f_ccf = sigma t_c (grad C_L . t_s) (grad C_S . n_s).
+                 */
+                double grad_l[3] = {
+                    (C_L[k][j][i+1] - C_L[k][j][i-1]) * grid->i2dx_c[i],
+                    (C_L[k][j+1][i] - C_L[k][j-1][i]) * grid->i2dy_c[j],
+                    0.0
+                };
+                double grad_s[3] = {
+                    (C_S[k][j][i+1] - C_S[k][j][i-1]) * grid->i2dx_c[i],
+                    (C_S[k][j+1][i] - C_S[k][j-1][i]) * grid->i2dy_c[j],
+                    0.0
+                };
+
+                if (!twod) {
+                    grad_l[2] = (C_L[k+1][j][i] - C_L[k-1][j][i]) *
+                                grid->i2dz_c[k];
+                    grad_s[2] = (C_S[k+1][j][i] - C_S[k-1][j][i]) *
+                                grid->i2dz_c[k];
+                }
+
+                double mag_grad_l = sqrt(grad_l[0] * grad_l[0] +
+                                         grad_l[1] * grad_l[1] +
+                                         grad_l[2] * grad_l[2]);
+                double mag_grad_s = sqrt(grad_s[0] * grad_s[0] +
+                                         grad_s[1] * grad_s[1] +
+                                         grad_s[2] * grad_s[2]);
+
+                if (mag_grad_l < epsN || mag_grad_s < epsN)
+                    continue;
+
+                double n_s[3] = {
+                    grad_s[0] / mag_grad_s,
+                    grad_s[1] / mag_grad_s,
+                    grad_s[2] / mag_grad_s
+                };
+
+                double grad_l_dot_ns = grad_l[0] * n_s[0] +
+                                       grad_l[1] * n_s[1] +
+                                       grad_l[2] * n_s[2];
+                double t_s[3] = {
+                    grad_l[0] - grad_l_dot_ns * n_s[0],
+                    grad_l[1] - grad_l_dot_ns * n_s[1],
+                    grad_l[2] - grad_l_dot_ns * n_s[2]
+                };
+                double t_s_len = sqrt(t_s[0] * t_s[0] +
+                                      t_s[1] * t_s[1] +
+                                      t_s[2] * t_s[2]);
+                if (t_s_len < epsN)
+                    continue;
+
+                t_s[0] /= t_s_len;
+                t_s[1] /= t_s_len;
+                t_s[2] /= t_s_len;
+
+                /*
+                 * The scalar kernel above already provides the contact-line
+                 * delta.  Do not use grad(C_L) again for the capillary-force
+                 * direction: near the diffuse solid, C_L is clipped by
+                 * C_L + C_S <= 1, which biases n_c without changing the
+                 * visible droplet contour.  The MCL model has already imposed
+                 * theta, so construct the liquid-gas tangent direction from
+                 * that contact angle and the solid basis.
+                 */
+                double t_c[3] = {
+                    cos_theta * t_s[0] - sin_theta * n_s[0],
+                    cos_theta * t_s[1] - sin_theta * n_s[1],
+                    cos_theta * t_s[2] - sin_theta * n_s[2]
+                };
+                double t_c_len = sqrt(t_c[0] * t_c[0] +
+                                      t_c[1] * t_c[1] +
+                                      t_c[2] * t_c[2]);
+                if (t_c_len < epsN)
+                    continue;
+
+                t_c[0] /= t_c_len;
+                t_c[1] /= t_c_len;
+                t_c[2] /= t_c_len;
+
+                double term_l = grad_l[0] * t_s[0] +
+                                grad_l[1] * t_s[1] +
+                                grad_l[2] * t_s[2];
+                double term_s = grad_s[0] * n_s[0] +
+                                grad_s[1] * n_s[1] +
+                                grad_s[2] * n_s[2];
+                double force_density[3] = {
+                    sigma * term_l * term_s * t_c[0],
+                    sigma * term_l * term_s * t_c[1],
+                    sigma * term_l * term_s * t_c[2]
+                };
+
+                if (twod)
+                    force_density[2] = 0.0;
+
+                double dV = TwodOps_cell_measure_c(grid, params, i, j, k);
+                double dF[3] = {
+                    force_density[0] * dV,
+                    force_density[1] * dV,
+                    force_density[2] * dV
+                };
+
+                f_ccf_x[k][j][i] = force_density[0];
+                f_ccf_y[k][j][i] = force_density[1];
+                f_ccf_z[k][j][i] = force_density[2];
+
+                p->F_CCF[0] += dF[0];
+                p->F_CCF[1] += dF[1];
+                p->F_CCF[2] += dF[2];
+
+                p->T_CCF[0] += (dF[1] * r_vec[2] - dF[2] * r_vec[1]);
+                p->T_CCF[1] += (dF[2] * r_vec[0] - dF[0] * r_vec[2]);
+                p->T_CCF[2] += (dF[0] * r_vec[1] - dF[1] * r_vec[0]);
+            }
+        }
+    }
+
+
 }
 
 #if defined(TWOD_CARTESIAN) || defined(AXISYM_RZ)
