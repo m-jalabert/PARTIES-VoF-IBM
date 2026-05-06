@@ -1750,164 +1750,8 @@ void Vfc_smoothing(Cart3d_bag *data_bag)
 }
 
 
-/******************************************************************************
- * Continuum Capillary Force (CCF) model for contact-line forces
- * Based on Konstantidinis et al. PF'24
- ******************************************************************************/
 
 
-
-#define SEPS 1e-30
-
-
-//------------------------------------------------------------------------------
-// VOF_accumulate_solid_capillary_force
-//------------------------------------------------------------------------------
-void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag) 
-{
-    MAC_grid       *grid   = data_bag->grid;
-    Parameters     *params = data_bag->params;
-    VolumeFraction *vof    = data_bag->vof;
-
-    // Solid IBM normals pointing into solid
-    double ***nx_s = vof->nx_IBM; 
-    double ***ny_s = vof->ny_IBM;
-    double ***nz_s = vof->nz_IBM;
-
-    // CCF force density fields (cell-centered)
-    double ***f_ccf_x = vof->f_ccf_x;
-    double ***f_ccf_y = vof->f_ccf_y;
-    double ***f_ccf_z = vof->f_ccf_z;
-    
-    // Fields
-    double ***vfc  = vof->vfc;  // Smoothed solid volume fraction
-    double ***F    = vof->F_smooth;      // Smoothed fluid color function
-
-    // Geometry
-    double *xc = grid->xc;
-    double *yc = grid->yc;
-    double *zc = grid->zc;
-    
-    double dx = grid->dx_c[0];
-    double dy = grid->dy_c[0];
-    double dz = grid->dz_c[0];
-    double dV = dx * dy * dz;
-
-    // Physics
-    double sigma = 1.0 / params->We;
-    
-    // Contact angle parameters
-    const double theta = params->contact_angle_deg * PI / 180.0;
-    const double sin_t = sin(theta), cos_t = cos(theta);
-
-    double X_p[3] = {p->X[0], p->X[1], p->X[2]};
-    
-    // Use GLOBAL interior extents
-    const int Is = grid->G_Is;
-    const int Js = grid->G_Js;
-    const int Ks = grid->G_Ks;
-    const int Ie = grid->G_Ie;
-    const int Je = grid->G_Je;
-    const int Ke = grid->G_Ke;
-    const double epsN = 1e-14;
-
-    Memory_reset_flow_variable(grid, params, f_ccf_x);
-    Memory_reset_flow_variable(grid, params, f_ccf_y);
-    Memory_reset_flow_variable(grid, params, f_ccf_z);
-
-    for (int k = Ks; k < Ke; k++) {
-        for (int j = Js; j < Je; j++) {
-            for (int i = Is; i < Ie; i++) {
-
-
-                // 1. Calculate Gradient of Fluid Color Function (phi)
-                double gphi[3];
-                gphi[0] = (F[k][j][i+1] - F[k][j][i-1]) / (2.0*dx);
-                gphi[1] = (F[k][j+1][i] - F[k][j-1][i]) / (2.0*dy);
-                gphi[2] = (F[k+1][j][i] - F[k-1][j][i]) / (2.0*dz);
-
-
-                double mag_gphi = sqrt(gphi[0]*gphi[0] + gphi[1]*gphi[1] + gphi[2]*gphi[2]);
-
-                // 2. Calculate Gradient of Solid Volume Fraction (phi_s)
-                double gphis[3];
-                gphis[0] = (vfc[k][j][i+1] - vfc[k][j][i-1]) / (2.0*dx);
-                gphis[1] = (vfc[k][j+1][i] - vfc[k][j-1][i]) / (2.0*dy);
-                gphis[2] = (vfc[k+1][j][i] - vfc[k-1][j][i]) / (2.0*dz);
-                double mag_gphis = sqrt(gphis[0]*gphis[0] + gphis[1]*gphis[1] + gphis[2]*gphis[2]);
-
-                if (mag_gphi < epsN || mag_gphis < epsN) continue;
-
-                // 3. Define Unit Normals
-                double ns[3] = {nx_s[k][j][i], ny_s[k][j][i], nz_s[k][j][i]};
-                double ns_len = sqrt(ns[0]*ns[0] + ns[1]*ns[1] + ns[2]*ns[2]);
-                if (ns_len < epsN) continue;
-                ns[0] /= ns_len; ns[1] /= ns_len; ns[2] /= ns_len;
-
-                // Fluid normal
-                double nf[3] = {gphi[0]/mag_gphi, gphi[1]/mag_gphi, gphi[2]/mag_gphi};
-
-                // 4. Fluid normal projection onto wall tangent plane
-                double t_wall[3];
-                double nf_dot_ns = nf[0]*ns[0] + nf[1]*ns[1] + nf[2]*ns[2];
-                t_wall[0] = nf[0] - (nf_dot_ns)*ns[0];
-                t_wall[1] = nf[1] - (nf_dot_ns)*ns[1];
-                t_wall[2] = nf[2] - (nf_dot_ns)*ns[2];
-                double t_len = sqrt(t_wall[0]*t_wall[0] + t_wall[1]*t_wall[1] + t_wall[2]*t_wall[2]);
-
-                double tc[3];
-                // Handle singularity
-                if ( t_len < 1e-10) {
-                    // For physics safety
-                    tc[0] = ns[0]; tc[1] = ns[1]; tc[2] = ns[2];
-                } else {
-                    
-                    t_wall[0]/=t_len; t_wall[1]/=t_len; t_wall[2]/=t_len;
-
-                    tc[0] = - (ns[0] - (nf_dot_ns)*nf[0]);
-                    tc[1] = - (ns[1] - (nf_dot_ns)*nf[1]);
-                    tc[2] = - (ns[2] - (nf_dot_ns)*nf[2]);
-                    double tc_len = sqrt(tc[0]*tc[0] + tc[1]*tc[1] + tc[2]*tc[2]);
-                    if (tc_len < epsN) continue;
-                    tc[0] /= tc_len; tc[1] /= tc_len; tc[2] /= tc_len;
-
-                }
-
-                
-                // 7. Calculate Magnitude Term
-                
-                double term_phi  = gphi[0]*t_wall[0] + gphi[1]*t_wall[1] + gphi[2]*t_wall[2];
-                double term_phis = gphis[0]*ns[0] + gphis[1]*ns[1] + gphis[2]*ns[2];
-
-                // 8. Force Calculation
-                double factor = sigma * term_phi * term_phis * dV;
-                double dF[3] = { factor * tc[0], factor * tc[1], factor * tc[2] };
-
-                // For output
-                f_ccf_x[k][j][i] = dF[0] / dV;
-                f_ccf_y[k][j][i] = dF[1] / dV;
-                f_ccf_z[k][j][i] = dF[2] / dV;
-
-                // 9. Accumulate Force on Particle
-                p->F_CCF[0] += dF[0];
-                p->F_CCF[1] += dF[1];
-                p->F_CCF[2] += dF[2];
-
-                // 10. Accumulate Torque
-                double r_vec[3];
-                r_vec[0] = xc[i] - X_p[0]; 
-                r_vec[1] = yc[j] - X_p[1];
-                r_vec[2] = zc[k] - X_p[2];
-
-                p->T_CCF[0] += (dF[1] * r_vec[2] - dF[2] * r_vec[1]);
-                p->T_CCF[1] += (dF[2] * r_vec[0] - dF[0] * r_vec[2]);
-                p->T_CCF[2] += (dF[0] * r_vec[1] - dF[1] * r_vec[0]);
-            }
-        }
-    }
-
-
-}
 
 
 
@@ -2239,15 +2083,20 @@ void Velocity_add_gravity_2_RHS(Cart3d_bag *data_bag) {
     double         ***rho  = vof->rho;
     double         *grav   = params->grav;        // gravity vector
     double         *rich   = params->richardson;  // Richardson number(s)
-    double          Ri     = rich[0];             // single Richardson
-    double          gm     = sqrt(grav[0]*grav[0]
-                               + grav[1]*grav[1]
-                               + grav[2]*grav[2]);
+    double          Ri     = (rich != NULL) ? rich[0] : 1.0;
+    double          gm;
     double          gx=0, gy=0, gz=0;
+
+    if (params->twod_mode_enabled)
+        gm = sqrt(grav[0]*grav[0] + grav[1]*grav[1]);
+    else
+        gm = sqrt(grav[0]*grav[0] + grav[1]*grav[1] + grav[2]*grav[2]);
+
     if (gm > 0.0) {
         gx = grav[0]/gm;
         gy = grav[1]/gm;
-        gz = grav[2]/gm;
+        if (!params->twod_mode_enabled)
+            gz = grav[2]/gm;
     }
 
     int NX = grid->NX, NY = grid->NY, NZ = grid->NZ;
@@ -2293,12 +2142,14 @@ void Velocity_add_gravity_2_RHS(Cart3d_bag *data_bag) {
         rhsv[k][j][i] += 2.0 * rho_f * Ri * gy;
     }
 
-    /* w-momentum: add ρ·Ri·g_z at each z-face */
-    for (int k = k_s_w; k < k_e_w; ++k)
-    for (int j = j_s_w; j < j_e_w; ++j)
-    for (int i = i_s_w; i < i_e_w; ++i) {
-        double rho_f = 0.5*(rho[k][j][i] + rho[k-1][j][i]);
-        rhsw[k][j][i] += 2.0 * rho_f * Ri * gz;
+    if (!params->twod_mode_enabled) {
+        /* w-momentum: add ρ·Ri·g_z at each z-face */
+        for (int k = k_s_w; k < k_e_w; ++k)
+        for (int j = j_s_w; j < j_e_w; ++j)
+        for (int i = i_s_w; i < i_e_w; ++i) {
+            double rho_f = 0.5*(rho[k][j][i] + rho[k-1][j][i]);
+            rhsw[k][j][i] += 2.0 * rho_f * Ri * gz;
+        }
     }
 }
 #endif
