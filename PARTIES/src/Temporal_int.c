@@ -45,72 +45,7 @@
 
 #define TIMEFILE "timesteps.dat"
 
-#ifdef VOF_DIFFUSE
-static double Temporal_diffuse_ch_dt_cap(Cart3d_bag *data_bag)
-{
-    MAC_grid   *grid   = data_bag->grid;
-    Parameters *params = data_bag->params;
 
-    if (!(params->Pe_CH > 0.0))
-        return 1.0e300;
-
-    const int use_z =
-        !(params->twod_cartesian_enabled || params->axisym_rz_enabled);
-
-    double hmin_local = DBL_MAX;
-
-    for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-        if (grid->idx_c[i] > 0.0) {
-            double h = 1.0 / grid->idx_c[i];
-            if (h < hmin_local) hmin_local = h;
-        }
-    }
-
-    for (int j = grid->G_Js; j < grid->G_Je; ++j) {
-        if (grid->idy_c[j] > 0.0) {
-            double h = 1.0 / grid->idy_c[j];
-            if (h < hmin_local) hmin_local = h;
-        }
-    }
-
-    if (use_z) {
-        for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
-            if (grid->idz_c[k] > 0.0) {
-                double h = 1.0 / grid->idz_c[k];
-                if (h < hmin_local) hmin_local = h;
-            }
-        }
-    }
-
-    double hmin_global = DBL_MAX;
-    MPI_Allreduce(&hmin_local, &hmin_global, 1, MPI_DOUBLE, MPI_MIN, PCW);
-
-    if (!(hmin_global > 0.0) || hmin_global == DBL_MAX)
-        return 1.0e300;
-
-    /*
-     * Liu15: explicit Laplacian of S(C) gives dt = O(h^2).
-     * 0.10 is intentionally conservative for the first clean validation pass.
-     */
-    return 0.10 * params->Pe_CH * hmin_global * hmin_global;
-}
-
-static void Temporal_apply_diffuse_ch_dt_cap(Cart3d_bag *data_bag, double *dt)
-{
-    double dt_ch = Temporal_diffuse_ch_dt_cap(data_bag);
-
-    if (*dt > dt_ch) {
-        *dt = dt_ch;
-        data_bag->params->dt = *dt;
-    }
-}
-#else
-static void Temporal_apply_diffuse_ch_dt_cap(Cart3d_bag *data_bag, double *dt)
-{
-    (void)data_bag;
-    (void)dt;
-}
-#endif
 
 
 /******************************************************************************/
@@ -338,7 +273,6 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		params -> dt    = dt;
 		params -> ntime = ntime;
 		params -> time  = time;
-		Temporal_apply_diffuse_ch_dt_cap(data_bag, &dt);
 		params->dt = dt;
 
 
@@ -493,7 +427,6 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 					//----------------------------------------------------------
 					params -> dt_old = dt;
 					dt = Dtime_cfl(data_bag);
-					Temporal_apply_diffuse_ch_dt_cap(data_bag, &dt);
 					params->dt = dt;
 				}
 			} // if (time != 0)

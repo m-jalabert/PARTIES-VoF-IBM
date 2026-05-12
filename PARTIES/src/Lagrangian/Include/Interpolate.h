@@ -7,6 +7,8 @@ void Interpolate_Eul_to_Lag(double ***a, double *A, char which, Particle *p,
 		MAC_grid *grid);
 void Interpolate_integrate_momentum(Velocity *vel, Particle_list *p_list,
 		Cart3d_bag *data_bag, Debug_trace *dtrace);
+void Interpolate_paint_rigid_body_velocity(Velocity *vel, Particle_list *p_list,
+		Cart3d_bag *data_bag, Debug_trace *dtrace);
 void Interpolate_add_to_volume_fraction(char component, Particle_list *p_list,
 		Cart3d_bag *data_bag, Debug_trace *dtrace);
 void Interpolate_add_to_volume_fraction_vof(char component, Particle_list *p_list,

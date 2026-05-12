@@ -1416,13 +1416,14 @@ struct particle {
 
 	#ifdef VOF_IBM
 		/*–– Continuum Capillary Force method (CCF) variables ––*/
-	double F_CCF[3];
-	double T_CCF[3];
-	double F_CCF_cum[3];
-	double T_CCF_cum[3];
+		double F_CCF[3];
+		double T_CCF[3];
+		double F_CCF_cum[3];
+		double T_CCF_cum[3];
+		double F_body_solid_cum[3];
 
-	double Int_rho[3]; // Volume integral of density
-	double Int_rho_scalar; // Volume integral of scalar
+		double Int_rho[3]; // Volume integral of density
+		double Int_rho_scalar; // Volume integral of scalar
 
 	double F_CSF_solid[3];      // CSF force integrated over solid (to subtract)
     double T_CSF_solid[3];      // CSF torque integrated over solid (to subtract)

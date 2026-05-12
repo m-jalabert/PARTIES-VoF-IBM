@@ -17,6 +17,8 @@
 #include "Rotate.h"
 #include "VolumeFraction.h"
 #include "VOF_DIFFUSE.h"
+#include "TwodOps.h"
+#include "Pressure.h"
 
 #include "qr_solve.h"
 #include "r8lib.h"
@@ -342,6 +344,30 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 	double dt  = params -> dt;
 	double idt2beta = 1.0 / ( 2.0 * bet * dt );
 
+#ifdef VOF_IBM
+	double solid_body_accel[3] = {0.0, 0.0, 0.0};
+#ifdef VOF_GRAVITY
+	{
+		double *grav = params->grav;
+		double gm;
+		if (params->twod_mode_enabled)
+			gm = sqrt(grav[0] * grav[0] + grav[1] * grav[1]);
+		else
+			gm = sqrt(grav[0] * grav[0] + grav[1] * grav[1] +
+			          grav[2] * grav[2]);
+
+		if (gm > 0.0) {
+			double ri = (params->richardson != NULL) ?
+			            params->richardson[0] : 1.0;
+			solid_body_accel[0] = ri * grav[0] / gm;
+			solid_body_accel[1] = ri * grav[1] / gm;
+			if (!params->twod_mode_enabled)
+				solid_body_accel[2] = ri * grav[2] / gm;
+		}
+	}
+#endif
+#endif
+
 	Particle_list *p_mobile_list = data_bag -> lag -> p_mobile_list;
 	Particle_list *p_fixed_list  = data_bag -> lag -> p_fixed_list;
 
@@ -462,17 +488,48 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			Int_Omega[2] = 0.0;  
 
 			#ifdef VOF_IBM
-			// 3. Capillary Forces & Torques (from VOF_accumulate_solid_capillary_force)
-			p->F_CCF[0] = 0.0;  
-			p->F_CCF[1] *= 2.0; 
-			p->F_CCF[2] *= 2.0; 
+				// 3. Capillary Forces & Torques (from VOF_accumulate_solid_capillary_force)
+				p->F_CCF[0] = 0.0;  
+				p->F_CCF[1] *= 2.0; 
+				p->F_CCF[2] *= 2.0; 
 
-			p->T_CCF[0] *= 2.0; 
-			p->T_CCF[1] = 0.0;  
-			p->T_CCF[2] = 0.0;  
+				p->T_CCF[0] *= 2.0; 
+				p->T_CCF[1] = 0.0;  
+				p->T_CCF[2] = 0.0;  
+
+				/*
+				 * The half-domain particle represents the full mirrored cylinder.
+				 * Int_rho_scalar is used below in the reduced-gravity correction
+				 * (M - displaced_fictitious_fluid_mass) g, so it must be mirrored
+				 * just like the vertical IBM/CCF forces and internal momentum.
+				 */
+				p->Int_rho_scalar *= 2.0;
+				FORI3 p->Int_rho[i] *= 2.0;
 			#endif
 		#endif
 		/* ====================================================================== */
+
+		#ifdef AXISYM_RZ
+			/*
+			 * The meridional particle markers represent full azimuthal rings.
+			 * For an on-axis sphere, radial force components and torques cancel
+			 * around the ring; only the axial force is a translational degree of
+			 * freedom.
+			 */
+			F[0] = 0.0;
+			F[2] = 0.0;
+			DSET_ZERO(T, 3);
+
+			Int_U[0] = 0.0;
+			Int_U[2] = 0.0;
+			DSET_ZERO(Int_Omega, 3);
+
+			#ifdef VOF_IBM
+				p->F_CCF[0] = 0.0;
+				p->F_CCF[2] = 0.0;
+				DSET_ZERO(p->T_CCF, 3);
+			#endif
+		#endif
 
 		#ifdef FORCES_DAT_OLD
 			// Output fluid forces
@@ -505,6 +562,7 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			#ifdef VOF_IBM
 				DSET_ZERO(p->F_CCF_cum, 3); // Reset CCF accumulator
 				DSET_ZERO(p->T_CCF_cum, 3);
+				DSET_ZERO(p->F_body_solid_cum, 3);
 			#endif
 			#ifdef POST_PROCESS
 				DSET_ZERO(p->Fc_norm_cum, 3);
@@ -524,6 +582,8 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				// CCF force acting on particle over entire timestep
 				FORI3 p->F_CCF_cum[i] += 2.0 * bet * p->F_CCF[i];
 				FORI3 p->T_CCF_cum[i] += 2.0 * bet * p->T_CCF[i];
+				FORI3 p->F_body_solid_cum[i] +=
+					2.0 * bet * p->Int_rho_scalar * solid_body_accel[i];
 			    
 				// Add instantaneous CCF force to total fluid force
 				F[0] += p->F_CCF[0];
@@ -710,6 +770,7 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			#ifdef VOF_IBM
 				DSET_ZERO(p->F_CCF_cum, 3); // Reset CCF accumulator
 				DSET_ZERO(p->T_CCF_cum, 3);
+				DSET_ZERO(p->F_body_solid_cum, 3);
 			#endif
 			#ifdef POST_PROCESS
 				DSET_ZERO(p->Fc_norm_cum, 3);
@@ -728,6 +789,8 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				// CCF force acting on particle over entire timestep
 				FORI3 p->F_CCF_cum[i] += 2.0 * bet * p->F_CCF[i];
 				FORI3 p->T_CCF_cum[i] += 2.0 * bet * p->T_CCF[i];
+				FORI3 p->F_body_solid_cum[i] +=
+					2.0 * bet * p->Int_rho_scalar * solid_body_accel[i];
 			    
 				// Add instantaneous CCF force to total fluid force
 				F[0] += p->F_CCF[0];

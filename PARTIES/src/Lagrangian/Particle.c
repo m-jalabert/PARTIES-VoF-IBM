@@ -8,12 +8,14 @@
 #include "definitions.h"
 #include "DataTypes.h"
 
+#include "Communication.h"
 #include "Display.h"
 #include "Interpolate.h"
 #include "Lagrangian.h"
 #include "Memory.h"
 #include "Particle.h"
 #include "ParticleInput.h"
+#include "Velocity.h"
 
 MPI_Datatype MPI_PARTICLE;
 MPI_Datatype MPI_COLLISION;
@@ -380,7 +382,7 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		// ---------------------------------------------------------------------
 
 		// Now set U_old. Since p->U is now correctly -1.0 (if startup is on),
-		// U_old will also be -1.0. 
+		// U_old will also be -1.0.
 		// Acceleration = (U - U_old)/dt = 0. No unphysical shock.
 		FORI3 p->U_old[i]     = p->U[i];
 		FORI3 p->Omega_old[i] = p->Omega[i];
@@ -393,10 +395,117 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		FORI3 p->Omega_old[i] = 0.0;
 #endif
 
-		FORI3 p->Int_U_old[i]     = p->Int_U[i];
-		FORI3 p->Int_Omega_old[i] = p->Int_Omega[i];
+		/* Int_U_old / Int_Omega_old are deferred until after the rigid-body
+		 * paint + re-integration below, so they are stored in the same
+		 * post-paint reference frame the first time step will see. */
 
 		p = p -> next;
+	}
+
+	/* ====================================================================
+	 * Cold-start fix: paint rigid-body translation+rotation onto the
+	 * fictitious fluid inside each mobile particle, then re-integrate.
+	 *
+	 * Without this, an imposed-velocity startup leaves the Eulerian fluid
+	 * inside the body at its initial state (typically quiescent) while
+	 * p->U has just jumped to startup_velocity.  On the first time step
+	 * the IBM forcing must drag M_f * U_p of fictitious-fluid momentum
+	 * over a single dt, producing an artificial F_rigid impulse of order
+	 * (M_f * U_p) / dt that drives sphere over-penetration.
+	 *
+	 * Painting the interior to U_p + Omega x r and snapshotting Int_U_old
+	 * from a fresh integration of that field puts every particle in a
+	 * self-consistent state: the first-step IBM correction is an O(dt)
+	 * adjustment, not an O(1/dt) shock.  The whole sequence is
+	 * multi-rank-safe — each rank paints only the cells it owns, and the
+	 * usual foreign-particle exchange handles particles straddling
+	 * sub-domain boundaries.
+	 * ==================================================================== */
+
+	/* Re-broadcast the updated p->U to ranks that hold neighbouring slices
+	 * of each particle (Lagrangian_collect_forces left p_mobile_list in
+	 * the LOCAL-only state). */
+	Particle_MPI_update(p_mobile_list, data_bag, DTRACE("Particle_MPI_update"));
+
+	Interpolate_paint_rigid_body_velocity(data_bag->u, p_mobile_list, data_bag,
+			DTRACE("Interpolate_paint_rigid_body_velocity"));
+	Interpolate_paint_rigid_body_velocity(data_bag->v, p_mobile_list, data_bag,
+			DTRACE("Interpolate_paint_rigid_body_velocity"));
+	Interpolate_paint_rigid_body_velocity(data_bag->w, p_mobile_list, data_bag,
+			DTRACE("Interpolate_paint_rigid_body_velocity"));
+
+	/* Synchronise halos and re-impose physical wall BCs after painting. */
+	Communication_update_ghost_nodes_flow_variable(data_bag->u->data, 'u',
+			params->ghost_nodes, data_bag);
+	Communication_update_ghost_nodes_flow_variable(data_bag->v->data, 'v',
+			params->ghost_nodes, data_bag);
+	Communication_update_ghost_nodes_flow_variable(data_bag->w->data, 'w',
+			params->ghost_nodes, data_bag);
+	Velocity_update_boundaries(data_bag->u->data, 'u', VEL_TYPE_NORMAL, data_bag);
+	Velocity_update_boundaries(data_bag->v->data, 'v', VEL_TYPE_NORMAL, data_bag);
+	Velocity_update_boundaries(data_bag->w->data, 'w', VEL_TYPE_NORMAL, data_bag);
+
+	/* Reset per-particle integrators on every copy (owner + foreign) so the
+	 * upcoming integration starts clean. */
+	{
+		Particle *q = p_mobile_list->start;
+		while (q != NULL) {
+			DSET_ZERO(q->Int_U, 3);
+			DSET_ZERO(q->Int_Omega, 3);
+#ifdef VOF_IBM
+			DSET_ZERO(q->Int_rho, 3);
+			q->Int_rho_scalar = 0.0;
+#endif
+			q = q->next;
+		}
+	}
+
+	/* Reset staggered-face volume fractions (mobile + fixed contributions
+	 * will be re-added below).  ng_vfc is left intact: it is filled only by
+	 * fixed particles and is consumed read-only by Int_rho_scalar. */
+	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfu);
+	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfv);
+	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfw);
+
+	Interpolate_integrate_momentum(data_bag->u, p_mobile_list, data_bag,
+			DTRACE("Interpolate_integrate_momentum"));
+	Interpolate_integrate_momentum(data_bag->v, p_mobile_list, data_bag,
+			DTRACE("Interpolate_integrate_momentum"));
+	Interpolate_integrate_momentum(data_bag->w, p_mobile_list, data_bag,
+			DTRACE("Interpolate_integrate_momentum"));
+
+	/* Re-add fixed-particle staggered VF (we cleared ng_vfu/v/w above). */
+	Particle_MPI_update(p_fixed_list, data_bag, DTRACE("Particle_MPI_update"));
+	Interpolate_add_to_volume_fraction('u', p_fixed_list, data_bag,
+			DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('v', p_fixed_list, data_bag,
+			DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('w', p_fixed_list, data_bag,
+			DTRACE("Interpolate_add_to_volume_fraction"));
+	Particle_list_remove(p_fixed_list, FOREIGN, grid, params,
+			DTRACE("Particle_list_remove"));
+
+	#if defined(LAG_PARTICLE_RESOLVED)
+	Particle_reduce_oversized_forces_to_owner(p_mobile_list, data_bag);
+	#endif
+
+	/* Gather post-paint integrals onto owner copies. */
+	p_list_foreign = Particle_list_foreign_create(p_mobile_list, data_bag,
+			DTRACE("Particle_list_foreign_create"));
+	Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
+	Lagrangian_collect_forces(p_mobile_list, p_list_foreign, LAG_COLLECT_HYDRO,
+			params, DTRACE("Lagrangian_collect_forces"));
+	Particle_list_destroy(p_list_foreign);
+
+	/* Now snapshot Int_U_old from the self-consistent post-paint integrals.
+	 * The first time step's rigid-body correction (Int_U - Int_U_old)/dt
+	 * therefore measures the *change* in fictitious-fluid momentum, not the
+	 * full impulse needed to spin it up from rest. */
+	p = p_mobile_list->start;
+	while (p != NULL) {
+		FORI3 p->Int_U_old[i]     = p->Int_U[i];
+		FORI3 p->Int_Omega_old[i] = p->Int_Omega[i];
+		p = p->next;
 	}
 #endif
 }
@@ -468,12 +577,13 @@ void Particle_initialize_nonessential_data(Particle *p) {
 	DSET_ZERO(p->F_coll, 3);
 	DSET_ZERO(p->T_coll, 3);
 
-	#ifdef VOF_IBM
-		DSET_ZERO(p->F_CCF, 3);
-		DSET_ZERO(p->T_CCF, 3);
-		DSET_ZERO(p->F_CCF_cum, 3);
-		DSET_ZERO(p->T_CCF_cum, 3);
-	#endif
+		#ifdef VOF_IBM
+			DSET_ZERO(p->F_CCF, 3);
+			DSET_ZERO(p->T_CCF, 3);
+			DSET_ZERO(p->F_CCF_cum, 3);
+			DSET_ZERO(p->T_CCF_cum, 3);
+			DSET_ZERO(p->F_body_solid_cum, 3);
+		#endif
 
 
 #ifdef POST_PROCESS
@@ -564,8 +674,10 @@ void Particle_calc_derived_data(Particle *p, MAC_grid *grid, Parameters *params)
 	 * Axisymmetric IBM still represents a physical sphere, but the markers are
 	 * meridional rings.  The per-ring control volume varies with radius and is
 	 * filled during marker generation; Vol_L remains a safe average fallback.
+	 * Marker arc spacing follows Liu et al. (2017) with ds ~ 1.2 h to keep the
+	 * IBM correction matrix well-conditioned.
 	 */
-	N_L = max(4, (int)ceil(PI * R / h));
+	N_L = max(4, (int)ceil(PI * R / (1.2 * h)));
 	Vol_L = 4.0 * PI * R2 * h / N_L;
 #endif
 

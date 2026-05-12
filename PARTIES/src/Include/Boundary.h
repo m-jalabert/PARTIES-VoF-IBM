@@ -32,9 +32,9 @@
 #undef RISING_BUBBLE
 
 
-#define TWOD_CARTESIAN
-#undef AXISYM_RZ
-#undef AXISYM_NO_SWIRL
+#undef TWOD_CARTESIAN
+#define AXISYM_RZ
+#define AXISYM_NO_SWIRL
 
 
 #ifdef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
@@ -252,7 +252,7 @@
 
 #define SURFACE_TENSION
 #undef STATIC_BUBBLE_TESTCASE
-#undef VOF_GRAVITY
+#define VOF_GRAVITY
 
 
 #define USE_HYPRE
@@ -324,7 +324,7 @@
 #undef  PARTICLE_TRN           // Save Particle_*.h5 files for every timestep in
                                //     subfolder './trn'
 #undef  SUBSTEP                // Resolve particle collisions with sub-timesteps
-#undef STARTUP                // Prescribe velocity for particle
+#define STARTUP                // Prescribe velocity for particle
 #undef  FORCES_DAT             // Print out 'forces.dat' - F acting on particle // error here
 #undef  DRY_COLLISION          // Turn off fluid forces for large St collisions
 #undef ROUGH_COLLISION        // Start collision at surface roughness

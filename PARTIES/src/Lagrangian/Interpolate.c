@@ -374,7 +374,7 @@ static int Interpolate_axis_index_for_sample(int i, char which,
 static void Interpolate_Lag_to_Eul_uniform_twod(double *A, double ***a,
         char which, Particle *p, MAC_grid *grid)
 {
-	int i, j, k, mv;
+	int i, j, mv;
 	double r[3];
 	double *x = grid->xc;
 	double *y = grid->yc;
@@ -391,9 +391,21 @@ static void Interpolate_Lag_to_Eul_uniform_twod(double *A, double ***a,
 	if (which == 'w')
 		return;
 
+	/*
+	 * TWOD_MODE:
+	 * The z direction is storage-only.  The Lagrangian marker volume already
+	 * contains the full physical slab/ring measure:
+	 *
+	 *   TWOD_CARTESIAN: dV_L = ds * h * slab_thickness
+	 *   AXISYM_RZ:     dV_L = theta_span * r * ds * h
+	 *
+	 * Therefore the marker force must be spread to one physical k-plane only.
+	 * Looping over all stored/periodic k planes duplicates the IBM force.
+	 */
+	const int k = grid->G_Ks;
+
 	const double h = grid->dx_u[1];
-	const int k_start = grid->G_Ks;
-	const int k_end = grid->G_Ke;
+
 	double *X_L = p->X_L;
 	double *Y_L = p->Y_L;
 
@@ -409,11 +421,6 @@ static void Interpolate_Lag_to_Eul_uniform_twod(double *A, double ***a,
 		else
 			i_start = max(i_start, grid->G_Is);
 #elif defined(TWOD_CARTESIAN) && defined(LEFT_WALL_VELOCITY_FREESLIP)
-		/*
-		 * Cartesian half-domain with left symmetry: keep the i < G_Is rows in
-		 * range so the parity helper can fold negative-x markers back into the
-		 * physical half-domain instead of dropping them silently.
-		 */
 		if (grid->G_Is == 0)
 			i_start = max(i_start, grid->L_Is);
 		else
@@ -421,23 +428,31 @@ static void Interpolate_Lag_to_Eul_uniform_twod(double *A, double ***a,
 #else
 		i_start = max(i_start, grid->G_Is);
 #endif
+
 		i_end = min(max(i_end, grid->G_Is), grid->G_Ie);
 		j_start = min(max(j_start, grid->G_Js), grid->G_Je);
 		j_end = min(max(j_end, grid->G_Js), grid->G_Je);
 
-		for (k = k_start; k < k_end; k++) {
-			for (j = j_start; j < j_end; j++) {
-				r[1] = Y_L[mv] - y[j];
-				for (i = i_start; i < i_end; i++) {
-					int parity, ii = Interpolate_axis_index_for_spread(i, which, grid, &parity);
-					if (ii < grid->G_Is || ii >= grid->G_Ie)
-						continue;
-					r[0] = X_L[mv] - x[i];
-					double value = (A == NULL) ? 1.0 : A[mv];
-					double dV = Interpolate_twod_marker_volume(p, mv) /
-					            Interpolate_twod_cell_volume(grid, which, x, ii, j);
-					a[k][j][ii] += parity * value * interp_kernel_2d(h, r) * dV;
-				}
+		for (j = j_start; j < j_end; j++) {
+			r[1] = Y_L[mv] - y[j];
+
+			for (i = i_start; i < i_end; i++) {
+				int parity;
+				int ii = Interpolate_axis_index_for_spread(i, which, grid, &parity);
+
+				if (ii < grid->G_Is || ii >= grid->G_Ie)
+					continue;
+
+				r[0] = X_L[mv] - x[i];
+
+				double value = (A == NULL) ? 1.0 : A[mv];
+
+				double dV =
+					Interpolate_twod_marker_volume(p, mv) /
+					Interpolate_twod_cell_volume(grid, which, x, ii, j);
+
+				a[k][j][ii] +=
+					parity * value * interp_kernel_2d(h, r) * dV;
 			}
 		}
 	}
@@ -676,15 +691,10 @@ static void Interpolate_integrate_momentum_twod(Velocity *vel,
 
 #ifdef VOF_IBM
 				VolumeFraction *vof = data_bag->vof;
-				double ***rho_cc = vof->rho;
-				double rho_loc = (component == 0) ?
-					0.5 * (rho_cc[k][j][i] + rho_cc[k][j][i - 1]) :
-					0.5 * (rho_cc[k][j][i] + rho_cc[k][j - 1][i]);
 				if (component == 0) {
 					double dV_scalar = Interpolate_twod_cell_volume(grid, 'c',
 					                                                grid->xc, i, j);
-					p->Int_rho_scalar += vof->vfc[k][j][i] *
-					                     rho_cc[k][j][i] * dV_scalar;
+					p->Int_rho_scalar += lag->ng_vfc[k][j][i] * dV_scalar;
 				}
 #else
 				const double rho_loc = 1.0;
@@ -692,10 +702,10 @@ static void Interpolate_integrate_momentum_twod(Velocity *vel,
 				double r[2] = {xc[i] - X[0], yc[j] - X[1]};
 				double dV = Interpolate_twod_cell_volume(grid, vel->component,
 				                                         xc, i, j);
-				double dP = vf_cell * rho_loc * data[k][j][i] * dV;
+				double dP = vf_cell * data[k][j][i] * dV;
 
 #ifdef VOF_IBM
-				p->Int_rho[component] += vf_cell * rho_loc * dV;
+				p->Int_rho[component] += vf_cell * dV;
 #endif
 				p->Int_U[component] += dP;
 #ifdef TWOD_CARTESIAN
@@ -705,6 +715,95 @@ static void Interpolate_integrate_momentum_twod(Velocity *vel,
 				else
 					p->Int_Omega[2] += dP * r[0];
 #endif
+			}
+		}
+		p = p->next;
+	}
+}
+
+/*
+ * Blend rigid-body translation+rotation onto the staggered velocity face
+ * inside each particle's level-set support.  Mirrors
+ * Interpolate_integrate_momentum_twod's geometry stencil so that a subsequent
+ * re-integration sees Int_U == Int_rho * U_rigid for a quiescent exterior,
+ * eliminating the cold-start IBM impulse on the first time step.
+ */
+static void Interpolate_paint_rigid_body_velocity_twod(Velocity *vel,
+                                                       Particle_list *p_list,
+                                                       Cart3d_bag *data_bag,
+                                                       Debug_trace *dtrace)
+{
+	int i, j, ii, jj;
+	int component = -1;
+	double *xc = data_bag->grid->xc;
+	double *yc = data_bag->grid->yc;
+	double *xe = data_bag->grid->xu;
+	double *ye = data_bag->grid->yv;
+
+	Parameters *params = data_bag->params;
+	MAC_grid *grid = data_bag->grid;
+	double ***data = vel->data;
+
+	if (vel->component == 'u') {
+		xc = grid->xu;
+		xe = &(grid->xc[-1]);
+		component = 0;
+	} else if (vel->component == 'v') {
+		yc = grid->yv;
+		ye = &(grid->yc[-1]);
+		component = 1;
+	} else if (vel->component == 'w') {
+		/* Storage-only direction in TWOD_MODE; integrator skips it as well. */
+		return;
+	}
+
+	Display_assert_list_state(p_list, LIST_STATE_BOTH,
+	                          params, DTRACE("Display_assert_list_state"));
+
+	const double h = grid->dx_u[1];
+	const int k = grid->G_Ks;
+	Particle *p = p_list->start;
+	while (p != NULL) {
+		const double R = p->R;
+		const double *X = p->X;
+		const double *Up = p->U;
+		const double Omega_z = p->Omega[2]; /* in-plane rotation only */
+
+		int i_start = (int)floor((X[0] - R - xe[0]) / h);
+		int j_start = (int)floor((X[1] - R - ye[0]) / h);
+		int i_end = (int)ceil((X[0] + R - xe[0]) / h);
+		int j_end = (int)ceil((X[1] + R - ye[0]) / h);
+
+		i_start = max(i_start, grid->G_Is);
+		j_start = max(j_start, grid->G_Js);
+		i_end = min(min(i_end, grid->G_Ie), grid->NX - 1);
+		j_end = min(min(j_end, grid->G_Je), grid->NY - 1);
+
+		for (j = j_start; j < j_end; j++) {
+			for (i = i_start; i < i_end; i++) {
+				double phi[2][2];
+				for (jj = 0; jj < 2; jj++)
+					for (ii = 0; ii < 2; ii++)
+						phi[jj][ii] = Interpolate_twod_level_set(xe[i + ii],
+						                                          ye[j + jj], p);
+
+				double vf_cell = Interpolate_twod_volume_fraction_from_phi(
+					phi[0][0], phi[0][1], phi[1][0], phi[1][1]);
+				if (vf_cell <= 0.0)
+					continue;
+
+				/* Rigid-body face velocity: u = U + Omega x r.  In TWOD_MODE
+				 * only Omega_z (out-of-plane) is meaningful; AXISYM_RZ
+				 * additionally forces Omega = 0, so the rotation term is a
+				 * no-op there. */
+				double u_rigid;
+				if (component == 0)
+					u_rigid = Up[0] - Omega_z * (yc[j] - X[1]);
+				else
+					u_rigid = Up[1] + Omega_z * (xc[i] - X[0]);
+
+				data[k][j][i] = vf_cell * u_rigid +
+				                (1.0 - vf_cell) * data[k][j][i];
 			}
 		}
 		p = p->next;
@@ -1503,6 +1602,150 @@ void Interpolate_integrate_momentum(Velocity      *vel,
 
 /******************************************************************************/
 /*
+ * Interpolate_paint_rigid_body_velocity
+ *
+ * Blend rigid-body translation+rotation onto the staggered velocity face
+ * (vel->data) inside each particle's level-set support, using the same
+ * geometry stencil as Interpolate_integrate_momentum.  After painting and a
+ * fresh integration, Int_U[i] == Int_rho[i] * U[i] for a quiescent exterior,
+ * which removes the cold-start IBM impulse felt by an imposed-velocity
+ * particle on the first time step (see Particle_initialize_velocities).
+ *
+ * Each rank paints only the cells it owns; callers are responsible for
+ * synchronising halos and reapplying physical wall BCs afterwards.
+ *
+ * NOTE: assumes a uniform Cartesian grid of spacing h (LAG_PARTICLE_RESOLVED
+ * already requires GRID_UNIFORM).
+ */
+/******************************************************************************/
+void Interpolate_paint_rigid_body_velocity(Velocity      *vel,
+                                           Particle_list *p_list,
+                                           Cart3d_bag    *data_bag,
+                                           Debug_trace   *dtrace)
+{
+#if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
+    Interpolate_paint_rigid_body_velocity_twod(vel, p_list, data_bag, dtrace);
+    return;
+#endif
+    int i, j, k, ii, jj, kk;
+    int i_start, j_start, k_start;
+    int i_end,   j_end,   k_end;
+    int component, comp_pos, comp_neg;
+
+    char message[100];
+
+    Parameters *params = data_bag->params;
+    MAC_grid   *grid   = data_bag->grid;
+    Lagrangian *lag    = data_bag->lag;
+
+    double *xc = grid->xc, *yc = grid->yc, *zc = grid->zc;
+    double *xe = grid->xu, *ye = grid->yv, *ze = grid->zw;
+
+    if (vel->component == 'u') {
+        xc        = grid->xu;
+        xe        = &(grid->xc[-1]);
+        component = 0;
+        comp_pos  = 1;
+        comp_neg  = 2;
+    } else if (vel->component == 'v') {
+        yc        = grid->yv;
+        ye        = &(grid->yc[-1]);
+        component = 1;
+        comp_pos  = 2;
+        comp_neg  = 0;
+    } else if (vel->component == 'w') {
+        zc        = grid->zw;
+        ze        = &(grid->zc[-1]);
+        component = 2;
+        comp_pos  = 0;
+        comp_neg  = 1;
+    } else {
+        sprintf(message, "Incorrect vel->component = '%c'", vel->component);
+        Display_throw_error(message, params, DTRACE("Display_throw_error"));
+        return;
+    }
+
+    Display_assert_list_state(p_list, LIST_STATE_BOTH,
+                              params, DTRACE("Display_assert_list_state"));
+
+    double ***phi  = lag->temp;
+    double ***data = vel->data;
+    const double h = grid->dx_u[1];
+
+    Particle *p = p_list->start;
+    while (p != NULL) {
+        const double  R     = p->R;
+        const double *X     = p->X;
+        const double *Up    = p->U;
+        const double *Omega = p->Omega;
+
+        i_start = (int)floor((X[0]-R-xe[0])/h);
+        j_start = (int)floor((X[1]-R-ye[0])/h);
+        k_start = (int)floor((X[2]-R-ze[0])/h);
+
+        i_end   = (int)ceil ((X[0]+R-xe[0])/h);
+        j_end   = (int)ceil ((X[1]+R-ye[0])/h);
+        k_end   = (int)ceil ((X[2]+R-ze[0])/h);
+
+        i_start = max(i_start, grid->G_Is);
+        j_start = max(j_start, grid->G_Js);
+        k_start = max(k_start, grid->G_Ks);
+
+        i_end   = min(i_end  , grid->G_Ie);
+        j_end   = min(j_end  , grid->G_Je);
+        k_end   = min(k_end  , grid->G_Ke);
+
+        i_end   = min(i_end  , grid->NX-1);
+        j_end   = min(j_end  , grid->NY-1);
+        k_end   = min(k_end  , grid->NZ-1);
+
+        for (k = k_start; k <= k_end; k++)
+            for (j = j_start; j <= j_end; j++)
+                for (i = i_start; i <= i_end; i++)
+                    phi[k][j][i] = lvl_set(xe[i], ye[j], ze[k]);
+
+        for (k = k_start; k < k_end; k++) {
+            double r[3];
+            r[2] = zc[k] - X[2];
+            for (j = j_start; j < j_end; j++) {
+                r[1] = yc[j] - X[1];
+                for (i = i_start; i < i_end; i++) {
+                    r[0] = xc[i] - X[0];
+
+                    double vf_cell = 0.0;
+                    double sum_phi = 0.0;
+                    for (ii = 0; ii < 2; ii++)
+                        for (jj = 0; jj < 2; jj++)
+                            for (kk = 0; kk < 2; kk++) {
+                                double tmp = phi[k+kk][j+jj][i+ii];
+                                if (tmp < 0.0) vf_cell -= tmp;
+                                sum_phi += fabs(tmp);
+                            }
+                    if (sum_phi <= 0.0) continue;
+                    vf_cell = vf_cell / sum_phi;
+                    if (vf_cell <= 0.0) continue;
+
+                    /* u_rigid = U + (Omega x r) on this staggered face.
+                     * comp_pos/comp_neg follow the same convention as the
+                     * angular-momentum accumulation in the integrator. */
+                    const double u_rigid = Up[component]
+                        + Omega[comp_pos] * r[comp_neg]
+                        - Omega[comp_neg] * r[comp_pos];
+
+                    data[k][j][i] = vf_cell * u_rigid +
+                                    (1.0 - vf_cell) * data[k][j][i];
+                }
+            }
+        }
+
+        p = p->next;
+    }
+}
+
+
+
+/******************************************************************************/
+/*
  * Add contribution of particles from 'p_list' to the volume fraction specified
  * by 'component' (either 'u', 'v', or 'w').  Volume fraction should be reset to
  * zero before calling this function for various particle lists.
@@ -2111,248 +2354,6 @@ return;
 #endif
 
 
-
-#ifdef VOF_IBM
-/******************************************************************************/
-/*
- * Interpolate_CCF_to_particle
- * 
- * Interpolates the CCF force density field (f_ccf_x, f_ccf_y, f_ccf_z) from
- * the Eulerian grid to Lagrangian marker points and accumulates on particle.
- * 
- * This follows the same technique as Interpolate_Eul_to_Lag, using delta
- * function interpolation with a 4x4x4 stencil around each marker point.
- * 
- * The CCF force density is cell-centered, so we use 'c' component logic.
- */
-/******************************************************************************/
-void Interpolate_CCF_to_particle(Particle *p, Cart3d_bag *data_bag) {
-#ifndef GRID_UNIFORM
-    printf("Stop __func__ is only working for uniform grids");
-#endif
-    
-    int i, j, k;
-    int mv, N_L_local;
-    double r[3], h;
-    double *X_L, *Y_L, *Z_L;
-    int *flag_L;
-    
-    int i_start, j_start, k_start;
-    int i_end, j_end, k_end;
-    
-    MAC_grid *grid = data_bag->grid;
-    VolumeFraction *vof = data_bag->vof;
-    
-    // CCF force density fields (cell-centered)
-    double ***f_ccf_x = vof->f_ccf_x;
-    double ***f_ccf_y = vof->f_ccf_y;
-    double ***f_ccf_z = vof->f_ccf_z;
-    
-    // Cell-centered coordinates
-    double *x = grid->xc;
-    double *y = grid->yc;
-    double *z = grid->zc;
-    
-    // Particle properties
-    double *X = p->X;           // Particle center
-    double *F_CCF = p->F_CCF;   // CCF force accumulator
-    double *T_CCF = p->T_CCF;   // CCF torque accumulator
-    double Vol_L = p->Vol_L;    // Marker volume
-    
-    N_L_local = p->N_L_local;
-    h = grid->dx_u[1];
-    
-    X_L = p->X_L;
-    Y_L = p->Y_L;
-    Z_L = p->Z_L;
-    flag_L = p->flag_L;
-    
-    // Reset CCF forces
-    DSET_ZERO(F_CCF, 3);
-    DSET_ZERO(T_CCF, 3);
-    
-    // Loop over all Lagrangian markers on this particle
-    for (mv = 0; mv < N_L_local; mv++) {
-        
-        // Skip flagged markers
-        if (flag_L[mv] == 0) continue;
-        
-        // Calculate index bounds using same technique as Interpolate_Eul_to_Lag
-        i_start = (int) round((X_L[mv] - x[0]) / h) - 1;
-        j_start = (int) round((Y_L[mv] - y[0]) / h) - 1;
-        k_start = (int) round((Z_L[mv] - z[0]) / h) - 1;
-        i_end = i_start + 3;
-        j_end = j_start + 3;
-        k_end = k_start + 3;
-        
-        // Make sure processor bounds are not exceeded
-        // Using cell-centered bounds (like 'c' component in Interpolate_Eul_to_Lag)
-        i_start = max(i_start, grid->G_Is);
-        j_start = max(j_start, grid->G_Js);
-        k_start = max(k_start, grid->G_Ks);
-        i_end = min(i_end, grid->G_Ie);
-        j_end = min(j_end, grid->G_Je);
-        k_end = min(k_end, grid->G_Ke);
-        
-        // Temporary accumulators for this marker
-        double f_x_marker = 0.0;
-        double f_y_marker = 0.0;
-        double f_z_marker = 0.0;
-        
-        //----------------------------------------------------------------------
-        // Interpolate using delta function kernel
-        //----------------------------------------------------------------------
-        for (k = k_start; k < k_end; k++) {
-            r[2] = Z_L[mv] - z[k];
-            
-            for (j = j_start; j < j_end; j++) {
-                r[1] = Y_L[mv] - y[j];
-                
-                for (i = i_start; i < i_end; i++) {
-                    r[0] = X_L[mv] - x[i];
-                    
-#ifdef GRID_UNIFORM
-                    double weight = interp_kernel(h, r);
-                    
-                    // Interpolate force density to marker location
-                    f_x_marker += f_ccf_x[k][j][i] * weight;
-                    f_y_marker += f_ccf_y[k][j][i] * weight;
-                    f_z_marker += f_ccf_z[k][j][i] * weight;
-#else
-                    double weight = interp_kernel_nonuniform(grid->dx_u[i], r[0], 
-                                                             grid->dy_v[j], r[1], 
-                                                             grid->dz_w[k], r[2]);
-                    
-                    f_x_marker += f_ccf_x[k][j][i] * weight;
-                    f_y_marker += f_ccf_y[k][j][i] * weight;
-                    f_z_marker += f_ccf_z[k][j][i] * weight;
-#endif
-                }
-            }
-        }
-        
-        //----------------------------------------------------------------------
-        // Convert force density to force on this marker
-        // f_CCF [N/m³] × Vol_L [m³] = force [N]
-        //----------------------------------------------------------------------
-        f_x_marker *= Vol_L;
-        f_y_marker *= Vol_L;
-        f_z_marker *= Vol_L;
-        
-        //----------------------------------------------------------------------
-        // Accumulate on particle (force)
-        //----------------------------------------------------------------------
-        F_CCF[0] += f_x_marker;
-        F_CCF[1] += f_y_marker;
-        F_CCF[2] += f_z_marker;
-        
-        //----------------------------------------------------------------------
-        // Accumulate torque = r × f
-        //----------------------------------------------------------------------
-        r[0] = X_L[mv] - X[0];
-        r[1] = Y_L[mv] - X[1];
-        r[2] = Z_L[mv] - X[2];
-        
-        T_CCF[0] += r[1] * f_z_marker - r[2] * f_y_marker;
-        T_CCF[1] += r[2] * f_x_marker - r[0] * f_z_marker;
-        T_CCF[2] += r[0] * f_y_marker - r[1] * f_x_marker;
-    }
-}
-#endif // VOF_IBM
-
-
-
-#ifdef VOF_IBM
-void Integrate_CCF_to_particle_Eulerian(Particle *p, Cart3d_bag *data_bag) {
-    
-    int i, j, k;
-    int i_start, j_start, k_start;
-    int i_end, j_end, k_end;
-    
-    MAC_grid *grid = data_bag->grid;
-    VolumeFraction *vof = data_bag->vof;
-    
-    // CCF force density fields (cell-centered)
-    double ***f_ccf_x = vof->f_ccf_x;
-    double ***f_ccf_y = vof->f_ccf_y;
-    double ***f_ccf_z = vof->f_ccf_z;
-    
-    // Cell-centered coordinates
-    double *xc = grid->xc;
-    double *yc = grid->yc;
-    double *zc = grid->zc;
-    
-    // Particle properties
-    double *X_p = p->X;
-    double R = p->R;
-    double *F_CCF = p->F_CCF;
-    double *T_CCF = p->T_CCF;
-    
-    // Grid spacing and cell volume
-    double h = grid->dx_c[0];
-    double dV = h * h * h;
-    
-    // Reset CCF forces
-     DSET_ZERO(F_CCF, 3);
-     DSET_ZERO(T_CCF, 3);
-    
-    // Search radius (cells within 2R of particle center)
-    double R_search = 2.0 * R;
-    
-    //--------------------------------------------------------------------------
-    // Compute tight loop bounds based on particle geometry
-    //--------------------------------------------------------------------------
-    i_start = (int) floor((X_p[0] - R_search - xc[0]) / h);
-    j_start = (int) floor((X_p[1] - R_search - yc[0]) / h);
-    k_start = (int) floor((X_p[2] - R_search - zc[0]) / h);
-    
-    i_end = (int) ceil((X_p[0] + R_search - xc[0]) / h);
-    j_end = (int) ceil((X_p[1] + R_search - yc[0]) / h);
-    k_end = (int) ceil((X_p[2] + R_search - zc[0]) / h);
-    
-    // Clamp to processor bounds
-    i_start = max(i_start, grid->G_Is);
-    j_start = max(j_start, grid->G_Js);
-    k_start = max(k_start, grid->G_Ks);
-    
-    i_end = min(i_end, grid->G_Ie);
-    j_end = min(j_end, grid->G_Je);
-    k_end = min(k_end, grid->G_Ke);
-    
-    //--------------------------------------------------------------------------
-    // Loop over only cells near the particle
-    //--------------------------------------------------------------------------
-    for (k = k_start; k < k_end; k++) {
-        double dz = zc[k] - X_p[2];
-        
-        for (j = j_start; j < j_end; j++) {
-            double dy = yc[j] - X_p[1];
-            
-            for (i = i_start; i < i_end; i++) {
-                double dx = xc[i] - X_p[0];
-                
-                // Get CCF force density in this cell
-                double fx = f_ccf_x[k][j][i];
-                double fy = f_ccf_y[k][j][i];
-                double fz = f_ccf_z[k][j][i];
-                
-                // Skip if no CCF force in this cell
-                if (fx == 0.0 && fy == 0.0 && fz == 0.0) continue;
-                
-                // Eq. (15): F_CCF = Σ f_CCF × ΔV
-                F_CCF[0] += fx * dV;
-                F_CCF[1] += fy * dV;
-                F_CCF[2] += fz * dV;
-                
-                // Eq. (16): T_CCF = Σ r × (f_CCF × ΔV)
-                T_CCF[0] += (dy * fz - dz * fy) * dV;
-                T_CCF[1] += (dz * fx - dx * fz) * dV;
-                T_CCF[2] += (dx * fy - dy * fx) * dV;
-            }
-        }
-    }
-}
-#endif
 
 /*
 for (k = k_start; k < k_end; k++) {
