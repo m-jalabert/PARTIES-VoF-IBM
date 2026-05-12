@@ -1032,8 +1032,24 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			VoF_init_axisymmetric_droplet_on_static_sphere_theta(data_bag);
 			break;
 
+			case 20: // Liu17 section 6.3 planar 2D sinking cylinder from water surface
+				if (!params->twod_cartesian_enabled)
+					CART3D_TWOD_ABORT(params,
+						"init_type = 20 requires TWOD_CARTESIAN.");
+				VoF_init_liu17_sinking_cylinder_2d(data_bag);
+				init_hydrostatic_pressure = 1;
+				break;
 
-	    }
+			case 21: // Liu17 section 6.4 axisymmetric sphere impact onto water
+				if (!params->axisym_rz_enabled)
+					CART3D_TWOD_ABORT(params,
+						"init_type = 21 requires AXISYM_RZ.");
+				VoF_init_liu17_axisymmetric_sphere_impact(data_bag);
+				init_hydrostatic_pressure = 1;
+				break;
+
+
+		    }
         // update ghost nodes / initialize the active interface representation
 		#ifdef VOF_DIFFUSE
 		VOF_DIFFUSE_set_boundary_values(data_bag->vof->F, data_bag);

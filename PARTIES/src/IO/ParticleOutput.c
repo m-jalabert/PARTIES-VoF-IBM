@@ -371,6 +371,7 @@ void ParticleOutput_h5_data(Particle_list *p_list, hid_t file_id,
 	#ifdef VOF_IBM
     OUTPUT_ELEMENT("F_CCF_cum", 3);
     OUTPUT_ELEMENT("T_CCF_cum", 3);
+    OUTPUT_ELEMENT("F_body_solid_cum", 3);
 	#endif
 
 #ifdef POST_PROCESS
@@ -605,7 +606,13 @@ void ParticleOutput_h5_data_element(Particle_list *p_list, int Np_local,
             p = p -> next;
         }
     }
-#endif
+    else if (strcmp(element, "F_body_solid_cum") == 0) {
+        for (j = 0; j < Np_local; j++) {
+            FORI3 data[j][i] = p -> F_body_solid_cum[i];
+            p = p -> next;
+        }
+    }
+	#endif
 
 
 #ifdef POST_PROCESS
