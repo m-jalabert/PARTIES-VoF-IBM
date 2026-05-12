@@ -245,6 +245,9 @@ void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag)
 static const double MCL_CS_SOLID  = 0.05;   /* C_S threshold for the solid    */
 static const double MCL_IFACE_MIN = 0.005;  /* minimum interface-band C_L/C_G */
 static const double MCL_IFACE_MAX = 0.995;  /* maximum interface-band C_L/C_G */
+static const double MCL_ACUTE_BAND_THETA_DEG = 45.0;
+static const double MCL_ACUTE_IFACE_MIN = 0.05;
+static const double MCL_ACUTE_IFACE_MAX = 0.95;
 static const int    MCL_REQUIRED_GHOST_NODES = 3;
 static const int    MCL_CONTACT_DEPTH_CELLS  = 1;
 static const int    MCL_MAX_ITERS            = 1;
@@ -722,10 +725,30 @@ static inline int mcl_is_fluid_cell(Cart3d_bag *db, int i, int j, int k)
     return mcl_read_C_S(db, i, j, k, &cs) && cs < MCL_CS_SOLID;
 }
 
-static inline int mcl_is_lg_band(double cl, double cg)
+static inline void mcl_lg_band_limits(const Parameters *params,
+                                      double *cmin,
+                                      double *cmax)
 {
-    return (cl > MCL_IFACE_MIN) && (cl < MCL_IFACE_MAX) &&
-           (cg > MCL_IFACE_MIN) && (cg < MCL_IFACE_MAX);
+    *cmin = MCL_IFACE_MIN;
+    *cmax = MCL_IFACE_MAX;
+
+    if (params == NULL)
+        return;
+
+    if (params->contact_angle_deg > 0.0 &&
+        params->contact_angle_deg < MCL_ACUTE_BAND_THETA_DEG) {
+        *cmin = MCL_ACUTE_IFACE_MIN;
+        *cmax = MCL_ACUTE_IFACE_MAX;
+    }
+}
+
+static inline int mcl_is_lg_band(Cart3d_bag *db, double cl, double cg)
+{
+    double cmin, cmax;
+    mcl_lg_band_limits((db != NULL) ? db->params : NULL, &cmin, &cmax);
+
+    return (cl > cmin) && (cl < cmax) &&
+           (cg > cmin) && (cg < cmax);
 }
 
 static int mcl_is_left_symmetry(const MAC_grid *grid, const Parameters *params)
@@ -1355,7 +1378,7 @@ static int mcl_is_ghost_contact_cell(Cart3d_bag *db, int i, int j, int k)
     double cl = 0.0, cg = 0.0;
     if (mcl_read_C_L(db, i, j, k, &cl) &&
         mcl_read_C_G(db, i, j, k, &cg) &&
-        mcl_is_lg_band(cl, cg))
+        mcl_is_lg_band(db, cl, cg))
         return 1;
 
     static const int dij[4][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
@@ -1369,7 +1392,7 @@ static int mcl_is_ghost_contact_cell(Cart3d_bag *db, int i, int j, int k)
             continue;
         if (mcl_read_C_L(db, ni, nj, k, &cl) &&
             mcl_read_C_G(db, ni, nj, k, &cg) &&
-            mcl_is_lg_band(cl, cg))
+            mcl_is_lg_band(db, cl, cg))
             return 1;
     }
 
@@ -1927,38 +1950,38 @@ void VOF_DIFFUSE_extend_psi_LG_contact_angle(Cart3d_bag *db)
                 if (!mcl_characteristic_dirs(nx, ny, theta, d1, d2))
                     continue;
 
-                int branch = mcl_branch_get(db, i, j, k);
-
                 /*
-                 * Preferred path: reuse the branch selected during the C_L MCL
-                 * pass.  If this function is called before the C_L pass, recover
-                 * the Liu Eq. 19 branch from C_L, but still sample psi only along
-                 * that selected branch.  There is no try-other-branch fallback.
+                 * Re-select the Liu Eq. 19 branch from the current C_L field at
+                 * every psi_LG extension.  The C_L projection only runs at the
+                 * end of a time step, while psi_LG is extended during surface
+                 * tension evaluations; for acute contact angles, reusing an old
+                 * branch can put the chemical-potential ghost value on the wrong
+                 * characteristic.
                  */
-                if (branch == 0) {
-                    MCL_branch_result c1, c2;
-                    MCL_trace_status s1, s2;
-                    int ok1 = mcl_trace_branch(db, vof->C_L, i, j, k,
-                                               d1, max_steps, &c1, &s1);
-                    int ok2 = mcl_trace_branch(db, vof->C_L, i, j, k,
-                                               d2, max_steps, &c2, &s2);
+                MCL_branch_result c1, c2;
+                MCL_trace_status s1, s2;
+                int ok1 = mcl_trace_branch(db, vof->C_L, i, j, k,
+                                           d1, max_steps, &c1, &s1);
+                int ok2 = mcl_trace_branch(db, vof->C_L, i, j, k,
+                                           d2, max_steps, &c2, &s2);
+                int branch = 0;
 
-                    if (!ok1 && !ok2) {
-                        local_missing_branch++;
-                        continue;
-                    }
-
-                    if (ok1 && ok2) {
-                        if (hydrophilic)
-                            branch = (c1.sample >= c2.sample) ? +1 : -1;
-                        else
-                            branch = (c1.sample <= c2.sample) ? +1 : -1;
-                    } else {
-                        branch = ok1 ? +1 : -1;
-                    }
-
-                    mcl_branch_set(db, i, j, k, branch);
+                if (!ok1 && !ok2) {
+                    local_missing_branch++;
+                    mcl_branch_set(db, i, j, k, 0);
+                    continue;
                 }
+
+                if (ok1 && ok2) {
+                    if (hydrophilic)
+                        branch = (c1.sample >= c2.sample) ? +1 : -1;
+                    else
+                        branch = (c1.sample <= c2.sample) ? +1 : -1;
+                } else {
+                    branch = ok1 ? +1 : -1;
+                }
+
+                mcl_branch_set(db, i, j, k, branch);
 
                 MCL_branch_result p_sample;
                 MCL_trace_status ps;

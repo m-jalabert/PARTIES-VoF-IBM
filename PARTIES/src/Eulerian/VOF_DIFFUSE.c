@@ -125,15 +125,18 @@ void VOF_DIFFUSE_update_phase_cache(Cart3d_bag *db)
     diffuse_copy_C_to_F(db);
 }
 
-static double diffuse_inner_product(double ***a, double ***b, MAC_grid *grid)
+static double diffuse_inner_product(double ***a, double ***b, Cart3d_bag *db)
 {
+    MAC_grid   *grid   = db->grid;
+    Parameters *params = db->params;
     double local_sum = 0.0;
     double global_sum = 0.0;
 
     for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
         for (int j = grid->G_Js; j < grid->G_Je; ++j) {
             for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-                local_sum += a[k][j][i] * b[k][j][i];
+                double measure = TwodOps_cell_measure_c(grid, params, i, j, k);
+                local_sum += measure * a[k][j][i] * b[k][j][i];
             }
         }
     }
@@ -142,9 +145,24 @@ static double diffuse_inner_product(double ***a, double ***b, MAC_grid *grid)
     return global_sum;
 }
 
-static double diffuse_norm(double ***a, MAC_grid *grid)
+static double diffuse_physical_cell_measure(const MAC_grid *grid,
+                                            const Parameters *params,
+                                            int i, int j, int k)
 {
-    return sqrt(diffuse_inner_product(a, a, grid));
+    double measure = TwodOps_cell_measure_c(grid, params, i, j, k);
+
+    if (params->twod_mode_enabled) {
+        const int nk = grid->G_Ke - grid->G_Ks;
+        if (nk > 1)
+            measure /= (double)nk;
+    }
+
+    return measure;
+}
+
+static double diffuse_norm(double ***a, Cart3d_bag *db)
+{
+    return sqrt(diffuse_inner_product(a, a, db));
 }
 
 static inline double diffuse_grad_x(double ***f, MAC_grid *grid, int i, int j, int k)
@@ -162,33 +180,32 @@ static inline double diffuse_grad_z(double ***f, MAC_grid *grid, int i, int j, i
     return (f[k+1][j][i] - f[k-1][j][i]) * grid->i2dz_c[k];
 }
 
-static inline double diffuse_diag_entry(MAC_grid *grid, int i, int j, int k, double lambda)
+static inline double diffuse_diag_entry(MAC_grid *grid,
+                                        Parameters *params,
+                                        int i,
+                                        int j,
+                                        int k,
+                                        double lambda)
 {
-    double idx = grid->idx_c[i];
-    double idy = grid->idy_c[j];
-    double idz = grid->idz_c[k];
+    double lap_diag = TwodOps_scalar_diag_from_face_betas(
+        grid, params, i, j, k, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
 
-    return 1.0 + 2.0 * lambda * (idx * idx + idy * idy + idz * idz);
+    return 1.0 + lambda * lap_diag;
 }
 
 static void diffuse_apply_helmholtz(double ***x, double ***Ax, double lambda,
                                     Cart3d_bag *db)
 {
-    MAC_grid *grid = db->grid;
+    MAC_grid   *grid   = db->grid;
+    Parameters *params = db->params;
 
     VOF_DIFFUSE_set_boundary_values(x, db);
 
     for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
         for (int j = grid->G_Js; j < grid->G_Je; ++j) {
             for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-                double idx = grid->idx_c[i];
-                double idy = grid->idy_c[j];
-                double idz = grid->idz_c[k];
-
                 double lap =
-                    (x[k][j][i+1] - 2.0 * x[k][j][i] + x[k][j][i-1]) * idx * idx +
-                    (x[k][j+1][i] - 2.0 * x[k][j][i] + x[k][j-1][i]) * idy * idy +
-                    (x[k+1][j][i] - 2.0 * x[k][j][i] + x[k-1][j][i]) * idz * idz;
+                    TwodOps_scalar_laplacian(grid, params, x, i, j, k);
 
                 Ax[k][j][i] = x[k][j][i] - lambda * lap;
             }
@@ -217,19 +234,21 @@ static int diffuse_solve_helmholtz_pcg(double ***x, double ***b, double lambda,
         for (int j = grid->G_Js; j < grid->G_Je; ++j) {
             for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
                 r[k][j][i] = b[k][j][i] - Ap[k][j][i];
-                z[k][j][i] = r[k][j][i] / diffuse_diag_entry(grid, i, j, k, lambda);
+                z[k][j][i] =
+                    r[k][j][i] /
+                    diffuse_diag_entry(grid, params, i, j, k, lambda);
                 p[k][j][i] = z[k][j][i];
             }
         }
     }
 
-    double rhs_norm = diffuse_norm(b, grid);
+    double rhs_norm = diffuse_norm(b, db);
     if (rhs_norm < 1e-30) {
         rhs_norm = 1.0;
     }
 
-    double rz = diffuse_inner_product(r, z, grid);
-    double rel_res = diffuse_norm(r, grid) / rhs_norm;
+    double rz = diffuse_inner_product(r, z, db);
+    double rel_res = diffuse_norm(r, db) / rhs_norm;
     int iter = 0;
 
     if (rel_res < tol) {
@@ -243,7 +262,7 @@ static int diffuse_solve_helmholtz_pcg(double ***x, double ***b, double lambda,
     while (iter < maxit) {
         diffuse_apply_helmholtz(p, Ap, lambda, db);
 
-        double pAp = diffuse_inner_product(p, Ap, grid);
+        double pAp = diffuse_inner_product(p, Ap, db);
         if (fabs(pAp) < 1e-30) {
             break;
         }
@@ -260,7 +279,7 @@ static int diffuse_solve_helmholtz_pcg(double ***x, double ***b, double lambda,
         }
 
         ++iter;
-        rel_res = diffuse_norm(r, grid) / rhs_norm;
+        rel_res = diffuse_norm(r, db) / rhs_norm;
         if (rel_res < tol) {
             break;
         }
@@ -268,12 +287,14 @@ static int diffuse_solve_helmholtz_pcg(double ***x, double ***b, double lambda,
         for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
             for (int j = grid->G_Js; j < grid->G_Je; ++j) {
                 for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-                    z[k][j][i] = r[k][j][i] / diffuse_diag_entry(grid, i, j, k, lambda);
+                    z[k][j][i] =
+                        r[k][j][i] /
+                        diffuse_diag_entry(grid, params, i, j, k, lambda);
                 }
             }
         }
 
-        double rz_new = diffuse_inner_product(r, z, grid);
+        double rz_new = diffuse_inner_product(r, z, db);
         double beta = rz_new / (rz + 1e-30);
 
         for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
@@ -343,13 +364,13 @@ static int diffuse_solve_biharmonic_pcg(double ***x, double ***b,
         }
     }
 
-    double rhs_norm = diffuse_norm(b, grid);
+    double rhs_norm = diffuse_norm(b, db);
     if (rhs_norm < 1e-30) {
         rhs_norm = 1.0;
     }
 
-    double rz = diffuse_inner_product(r, z, grid);
-    double rel_res = diffuse_norm(r, grid) / rhs_norm;
+    double rz = diffuse_inner_product(r, z, db);
+    double rel_res = diffuse_norm(r, db) / rhs_norm;
     int iter = 0;
 
     if (rel_res < tol) {
@@ -363,7 +384,7 @@ static int diffuse_solve_biharmonic_pcg(double ***x, double ***b,
     while (iter < maxit) {
         diffuse_apply_biharmonic_operator(p, Ap, a_dt, bih_coeff, db);
 
-        double pAp = diffuse_inner_product(p, Ap, grid);
+        double pAp = diffuse_inner_product(p, Ap, db);
         if (fabs(pAp) < 1e-30) {
             break;
         }
@@ -381,12 +402,12 @@ static int diffuse_solve_biharmonic_pcg(double ***x, double ***b,
         }
 
         ++iter;
-        rel_res = diffuse_norm(r, grid) / rhs_norm;
+        rel_res = diffuse_norm(r, db) / rhs_norm;
         if (rel_res < tol) {
             break;
         }
 
-        double rz_new = diffuse_inner_product(r, z, grid);
+        double rz_new = diffuse_inner_product(r, z, db);
         double beta = rz_new / (rz + 1e-30);
 
         for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
@@ -1061,7 +1082,7 @@ static double diffuse_liquid_mass_integral(Cart3d_bag *db)
         if (vof->C_S[k][j][i] >= DIFFUSE_SOLID_MASS_CUTOFF)
             continue;
         local += vof->C_L[k][j][i] *
-                 TwodOps_cell_measure_c(grid, params, i, j, k);
+                 diffuse_physical_cell_measure(grid, params, i, j, k);
     }
 
     double global = 0.0;
@@ -1095,7 +1116,7 @@ static double diffuse_bound_liquid_fraction(Cart3d_bag *db)
         vof->C_G[k][j][i] = diffuse_clamp01(1.0 - new_cl - cs);
 
         if (cs < DIFFUSE_SOLID_MASS_CUTOFF) {
-            double measure = TwodOps_cell_measure_c(grid, params, i, j, k);
+            double measure = diffuse_physical_cell_measure(grid, params, i, j, k);
             local_delta += (new_cl - old_cl) * measure;
         }
     }
@@ -1145,7 +1166,7 @@ static double diffuse_redistribute_liquid_mass_delta(Cart3d_bag *db, double delt
             if (cap <= 0.0)
                 continue;
 
-            const double measure = TwodOps_cell_measure_c(grid, params, i, j, k);
+            const double measure = diffuse_physical_cell_measure(grid, params, i, j, k);
 
             /*
              * Weight concentrated at C_L = 0.5.
@@ -1173,7 +1194,7 @@ static double diffuse_redistribute_liquid_mass_delta(Cart3d_bag *db, double delt
             if (!diffuse_mass_redist_eligible(cl, cs, pass))
                 continue;
 
-            const double measure = TwodOps_cell_measure_c(grid, params, i, j, k);
+            const double measure = diffuse_physical_cell_measure(grid, params, i, j, k);
             const double cap = (delta > 0.0) ? (1.0 - cs - cl) : cl;
 
             if (cap <= 0.0 || measure <= 0.0)

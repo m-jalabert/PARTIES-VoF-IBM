@@ -103,6 +103,8 @@ void VoF_init_meniscus_154deg(Cart3d_bag *data_bag);
 void VoF_init_rayleigh_taylor_2d(Cart3d_bag *data_bag);
 void VoF_init_axisymmetric_rising_bubble_2d(Cart3d_bag *data_bag);
 void VoF_init_planar_rising_bubble_2d(Cart3d_bag *data_bag);
+void VoF_init_liu17_sinking_cylinder_2d(Cart3d_bag *data_bag);
+void VoF_init_liu17_axisymmetric_sphere_impact(Cart3d_bag *data_bag);
 void VoF_init_planar_droplet_on_static_cylinder_theta(Cart3d_bag *data_bag);
 void VoF_init_axisymmetric_droplet_on_static_sphere_theta(Cart3d_bag *data_bag);
 //Below are all the low-level functions implemented from Basilisk's geometry.h file used to compute the interface normals and to reconstruct the interface (PLIC)
