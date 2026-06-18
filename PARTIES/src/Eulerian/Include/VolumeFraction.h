@@ -107,6 +107,11 @@ void VoF_init_liu17_sinking_cylinder_2d(Cart3d_bag *data_bag);
 void VoF_init_liu17_axisymmetric_sphere_impact(Cart3d_bag *data_bag);
 void VoF_init_planar_droplet_on_static_cylinder_theta(Cart3d_bag *data_bag);
 void VoF_init_axisymmetric_droplet_on_static_sphere_theta(Cart3d_bag *data_bag);
+void VoF_init_liu17_two_sinking_cylinders_2d(Cart3d_bag *data_bag);
+void VoF_init_liu17_three_sinking_cylinders_2d(Cart3d_bag *data_bag);
+void VoF_init_liu17_self_assembly_floating_cylinders_2d(Cart3d_bag *data_bag);
+void VoF_init_axisymmetric_capillary_bridge_two_spheres(Cart3d_bag *data_bag);
+void VoF_init_nguyen21_axisymmetric_static_bridge(Cart3d_bag *data_bag);
 //Below are all the low-level functions implemented from Basilisk's geometry.h file used to compute the interface normals and to reconstruct the interface (PLIC)
 
 
@@ -258,17 +263,18 @@ void Zero_RHS_momentum(Cart3d_bag *data_bag);
 
 void VOF_compute_CCF_tangents(Cart3d_bag *data_bag);
 void VOF_compute_CCF_force_density(Cart3d_bag *data_bag);
-void VOF_compute_contact_line_region(Particle_list *p_list,
-		Cart3d_bag *data_bag, Debug_trace *dtrace);
-void VOF_compute_solid_mask(Particle_list *p_list,
-        Cart3d_bag *data_bag, Debug_trace *dtrace);
+	void VOF_compute_contact_line_region(Particle_list *p_list,
+			Cart3d_bag *data_bag, Debug_trace *dtrace);
+	void VOF_compute_solid_mask(Particle_list *p_list,
+	        Cart3d_bag *data_bag, Debug_trace *dtrace);
 void VOF_compute_extension_source(Cart3d_bag *data_bag);
 void VOF_save_previous_iteration(Cart3d_bag *data_bag);
-void VOF_corrector_with_source(Cart3d_bag *data_bag);
-void VOF_init_contact_line_fields(Cart3d_bag *data_bag);
-void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag);
-void VOF_overwrite_solid_F(Cart3d_bag *data_bag);
-void VOF_integrate_CSF_over_solid(Particle *p, Cart3d_bag *data_bag);
+	void VOF_corrector_with_source(Cart3d_bag *data_bag);
+	void VOF_init_contact_line_fields(Cart3d_bag *data_bag);
+	void VOF_reset_solid_capillary_force_density(Cart3d_bag *data_bag);
+	void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag);
+	void VOF_overwrite_solid_F(Cart3d_bag *data_bag);
+	void VOF_integrate_CSF_over_solid(Particle *p, Cart3d_bag *data_bag);
 #endif // VOF_IBM
 
 

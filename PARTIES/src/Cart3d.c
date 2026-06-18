@@ -502,6 +502,19 @@ Display_progress(params,"Turbulent model has been created successfully...\n");
 										DTRACE("Cart3d_initialize_primitive_data"));
 		Display_progress(params, "Primitive data initialized\n");
 
+	#ifdef LAG_PARTICLE_RESOLVED
+	#if defined(VOF_DIFFUSE) && defined(VOF_IBM)
+		/*
+		 * Particle lists were read before VOF_DIFFUSE_init() so C_S could be
+		 * built from them.  Now C_S and rho are initialized, so the
+		 * density-weighted startup velocity paint can run with the correct
+		 * solid mask.
+		 */
+		Particle_initialize_velocities(data_bag,
+									DTRACE("Particle_initialize_velocities"));
+	#endif
+	#endif
+
 	#ifdef IMMERSED_BOUNDARY
 		Array_copy_withghost(u->data, u->data_old, grid, params);
 		Array_copy_withghost(v->data, v->data_old, grid, params);
@@ -970,7 +983,6 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 			break;
 		case 9:
 			VoF_init_bilayer_at_4D(data_bag);
-			//Pressure_init_hydrostatic_VOF(data_bag);
 			break;
 
 		case 10:
@@ -991,7 +1003,6 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 		case 14: // quasi-2D Rayleigh-Taylor instability in the x-y plane
 			VoF_init_rayleigh_taylor_2d(data_bag);
-			init_hydrostatic_pressure = 1;
 			break;
 
 		case 15: // roadmap Phase 1 planar 2D rising bubble
@@ -999,7 +1010,6 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				CART3D_TWOD_ABORT(params,
 					"init_type = 15 requires TWOD_CARTESIAN (planar 2D rising bubble).");
 			VoF_init_planar_rising_bubble_2d(data_bag);
-			init_hydrostatic_pressure = 1;
 			break;
 
 		case 16: // temporary legacy alias kept for existing thin-slab bubble inputs
@@ -1007,7 +1017,6 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				CART3D_TWOD_ABORT(params,
 					"init_type = 16 requires TWOD_CARTESIAN.");
 			VoF_init_planar_rising_bubble_2d(data_bag);
-			init_hydrostatic_pressure = 1;
 			break;
 
 		case 17: // roadmap Phase 1 axisymmetric rising bubble on the axis
@@ -1015,7 +1024,6 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				CART3D_TWOD_ABORT(params,
 					"init_type = 17 requires AXISYM_RZ (axisymmetric rising bubble).");
 			VoF_init_axisymmetric_rising_bubble_2d(data_bag);
-			init_hydrostatic_pressure = 1;
 			break;
 
 		case 18: // Liu15 section 4.1 planar droplet on a static cylinder
@@ -1037,7 +1045,6 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 					CART3D_TWOD_ABORT(params,
 						"init_type = 20 requires TWOD_CARTESIAN.");
 				VoF_init_liu17_sinking_cylinder_2d(data_bag);
-				init_hydrostatic_pressure = 1;
 				break;
 
 			case 21: // Liu17 section 6.4 axisymmetric sphere impact onto water
@@ -1045,8 +1052,42 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 					CART3D_TWOD_ABORT(params,
 						"init_type = 21 requires AXISYM_RZ.");
 				VoF_init_liu17_axisymmetric_sphere_impact(data_bag);
-				init_hydrostatic_pressure = 1;
 				break;
+
+			case 22: // Rajesh/Sauret 2026 section 3.1 capillary bridge
+				if (!params->axisym_rz_enabled)
+					CART3D_TWOD_ABORT(params,
+						"init_type = 22 requires AXISYM_RZ.");
+				VoF_init_axisymmetric_capillary_bridge_two_spheres(data_bag);
+				break;
+
+			case 23: // full-domain planar 2D pair of sinking cylinders
+			if (!params->twod_cartesian_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 23 requires TWOD_CARTESIAN.");
+			VoF_init_liu17_two_sinking_cylinders_2d(data_bag);
+			break;
+
+			case 24: // full-domain planar 2D triplet of sinking cylinders
+			if (!params->twod_cartesian_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 24 requires TWOD_CARTESIAN.");
+			VoF_init_liu17_three_sinking_cylinders_2d(data_bag);
+			break;
+
+			case 25: // Nguyen et al. APT 2021 section 5.3 static liquid bridge
+				if (!params->axisym_rz_enabled)
+					CART3D_TWOD_ABORT(params,
+						"init_type = 25 requires AXISYM_RZ.");
+				VoF_init_nguyen21_axisymmetric_static_bridge(data_bag);
+			break;
+
+			case 26: // Liu17 section 6.6 planar 2D self-assembly of floating cylinders
+			if (!params->twod_cartesian_enabled)
+				CART3D_TWOD_ABORT(params,
+					"init_type = 26 requires TWOD_CARTESIAN.");
+			VoF_init_liu17_self_assembly_floating_cylinders_2d(data_bag);
+			break;
 
 
 		    }
@@ -1066,16 +1107,16 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 		VOF_update_density_viscosity(data_bag);
 
-		if (init_hydrostatic_pressure) {
-			Pressure_init_hydrostatic_VOF(data_bag);
-		}
 
 		// Bootstrap the balanced-force arrays from the initialized interface
-		#ifdef SURFACE_TENSION
-		#ifdef VOF_DIFFUSE
-		VOF_DIFFUSE_compute_psi_LG(data_bag);
-		VOF_DIFFUSE_compute_f_sigma(data_bag);
-		#endif
+			#ifdef SURFACE_TENSION
+			#ifdef VOF_DIFFUSE
+			VOF_DIFFUSE_compute_psi_LG(data_bag);
+			#ifdef VOF_IBM
+			VOF_DIFFUSE_extend_psi_LG_contact_angle(data_bag);
+			#endif
+			VOF_DIFFUSE_compute_f_sigma(data_bag);
+			#endif
 
 		#ifdef VOF_PLIC
 		VoF_smoothing(data_bag);

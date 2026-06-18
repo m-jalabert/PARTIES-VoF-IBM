@@ -123,6 +123,7 @@ CFG(vof, Pe_CH, -1.0, atof)       // If <= 0, set to 0.9 / Cn in Input.c
 CFG(vof, weno_order, 5, atoi)     // Advection order for diffuse-interface transport
 CFG(vof, ch_iter_max, 300, atoi)  // Max iterations for implicit CH solve
 CFG(vof, ch_tol, 1e-9, atof)      // Tolerance for implicit CH solve
+CFG(vof, bridge_volume_over_r3, 0.09375, atof) // Rajesh/Sauret bridge target V/R^3
 
 // Test cases 
 // Rider & Kothe Advection testcase (1998) 

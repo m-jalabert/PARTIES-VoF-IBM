@@ -64,10 +64,7 @@ void Pressure_operator_variableCoeff(
 /******************************************************************************/
 void Pressure_apply_BCs(double ***phi, MAC_grid *grid, Parameters *params);
 
-/******************************************************************************/
-// Initialize the pressure field hydrostatically.
-/******************************************************************************/
-void Pressure_init_hydrostatic_VOF(Cart3d_bag *data_bag);
+
 
 /******************************************************************************/
 // HYPRE-based pressure solver (PCG + PFMG)
@@ -76,7 +73,6 @@ void Pressure_init_hydrostatic_VOF(Cart3d_bag *data_bag);
 void Pressure_hypre_setup(Cart3d_bag *data_bag);
 int  Pressure_solve_hypre(Cart3d_bag *data_bag);
 void Pressure_hypre_destroy(void);
-void Pressure_hypre_mark_dirty(void);
 #endif
 
 

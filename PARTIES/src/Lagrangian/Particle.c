@@ -23,6 +23,30 @@ MPI_Datatype MPI_COLLISION;
 // Effective radius of particle (area of influence)
 #define R_EFF (p->R)
 
+static double Particle_ibm_exchange_range(MAC_grid *grid, Parameters *params)
+{
+	double h = grid->dx_u[1];
+	double range = DELTA_FUNC_RADIUS * h;
+
+#if defined(VOF_DIFFUSE) && defined(VOF_IBM)
+	/*
+	 * The diffuse wetting/capillary force is integrated in a wider shell than
+	 * the IBM delta kernel.  Particle copies must therefore reach every rank
+	 * owning cells in that shell; otherwise multi-rank CCF is under-counted at
+	 * processor cuts.
+	 */
+	double h_ref = (grid->dy_min > 0.0) ? grid->dy_min : h;
+	double cn = (params->Cn > 0.0) ? params->Cn : 0.0;
+	double wetting_range = 8.0 * ((cn > h_ref) ? cn : h_ref);
+	if (wetting_range > range)
+		range = wetting_range;
+#else
+	(void)params;
+#endif
+
+	return range;
+}
+
 
 /******************************************************************************/
 /*
@@ -204,7 +228,15 @@ void Particle_initialize(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 		p_mobile_list->Np = p_mobile_list->Np + p_release_list->Np;
 #endif
+#if defined(VOF_DIFFUSE) && defined(VOF_IBM)
+		/*
+		 * Diffuse IBM needs the particle lists before VOF_DIFFUSE_init()
+		 * builds C_S, but velocity initialization now uses C_S and rho.  Defer
+		 * it until Cart3d has initialized the diffuse VOF fields.
+		 */
+#else
 		Particle_initialize_velocities(data_bag, DTRACE("Particle_initialize_velocities"));
+#endif
 	}
 	else {
 		ParticleInput_h5(data_bag, DTRACE("ParticleInput_h5"));
@@ -314,22 +346,29 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		}
 	}
 
-#else
+	#else
 
 	// Integrate fluid velocities on each processor subdomain
 	Particle_MPI_update(p_mobile_list, data_bag, DTRACE("Particle_MPI_update"));
+#ifdef VOF_IBM
+	Particle_MPI_update(p_fixed_list, data_bag, DTRACE("Particle_MPI_update"));
+	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfc);
+	Interpolate_add_to_volume_fraction('c', p_mobile_list, data_bag,
+			DTRACE("Interpolate_add_to_volume_fraction"));
+	Interpolate_add_to_volume_fraction('c', p_fixed_list, data_bag,
+			DTRACE("Interpolate_add_to_volume_fraction"));
+#endif
 	Interpolate_integrate_momentum(data_bag->u, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
 	Interpolate_integrate_momentum(data_bag->v, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
 	Interpolate_integrate_momentum(data_bag->w, p_mobile_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
 
 	// Add volume fractions for fixed particles as well
+#ifndef VOF_IBM
 	Particle_MPI_update(p_fixed_list, data_bag, DTRACE("Particle_MPI_update"));
+#endif
 	Interpolate_add_to_volume_fraction('u', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('v', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('w', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
-	#ifdef VOF_IBM
-	Interpolate_add_to_volume_fraction('c', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
-	#endif
 
 	Particle_list_remove(p_fixed_list, FOREIGN, grid, params, DTRACE("Particle_list_remove"));
 
@@ -349,22 +388,9 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	p = p_mobile_list -> start;
 	while (p != NULL) {
 
-	    #ifdef VOF_IBM
-			// 1. Calculate equilibrium velocity from fluid (likely ~0.0 if quiescent)
-			FORI3 {
-				if (p->Int_rho[i] > 1e-12) {
-					p->U[i]     = p->Int_U[i] / p->Int_rho[i];
-					p->Omega[i] = p->Int_Omega[i] / p->Int_rho[i];
-				} else {
-					p->U[i]     = 0.0;
-					p->Omega[i] = 0.0;
-				}
-			}
-	    #else
-	        // Single-phase: use solid density
-	        FORI3 p->U[i]     = p->Int_U[i] * p->rho_s / p->M;
-	        FORI3 p->Omega[i] = p->Int_Omega[i] * p->rho_s / p->I_p;
-	    #endif
+		// Use exact solid mass/inertia normalization.
+		FORI3 p->U[i]     = p->Int_U[i] * p->rho_s / p->M;
+		FORI3 p->Omega[i] = p->Int_Omega[i] * p->rho_s / p->I_p;
 
 		// ---------------------------------------------------------------------
 		// NEW FIX: Enforce Startup Velocity BEFORE setting U_old
@@ -453,7 +479,6 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 			DSET_ZERO(q->Int_U, 3);
 			DSET_ZERO(q->Int_Omega, 3);
 #ifdef VOF_IBM
-			DSET_ZERO(q->Int_rho, 3);
 			q->Int_rho_scalar = 0.0;
 #endif
 			q = q->next;
@@ -461,8 +486,7 @@ void Particle_initialize_velocities(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	}
 
 	/* Reset staggered-face volume fractions (mobile + fixed contributions
-	 * will be re-added below).  ng_vfc is left intact: it is filled only by
-	 * fixed particles and is consumed read-only by Int_rho_scalar. */
+	 * will be re-added below). */
 	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfu);
 	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfv);
 	Memory_reset_noghost_variable(grid, params, data_bag->lag->ng_vfw);
@@ -532,6 +556,10 @@ void Particle_initialize_volume_fraction(Cart3d_bag *data_bag, Debug_trace *dtra
 	Memory_reset_noghost_variable(grid, params, lag->ng_vfv);
 	Memory_reset_noghost_variable(grid, params, lag->ng_vfw);
 
+#ifdef VOF_IBM
+	Memory_reset_noghost_variable(grid, params, lag->ng_vfc);
+#endif
+
 	Interpolate_add_to_volume_fraction('u', p_mobile_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('v', p_mobile_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('w', p_mobile_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
@@ -540,6 +568,7 @@ void Particle_initialize_volume_fraction(Cart3d_bag *data_bag, Debug_trace *dtra
 	Interpolate_add_to_volume_fraction('w', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 
 	#ifdef VOF_IBM
+	Interpolate_add_to_volume_fraction('c', p_mobile_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	Interpolate_add_to_volume_fraction('c', p_fixed_list, data_bag, DTRACE("Interpolate_add_to_volume_fraction"));
 	#endif
 
@@ -674,10 +703,8 @@ void Particle_calc_derived_data(Particle *p, MAC_grid *grid, Parameters *params)
 	 * Axisymmetric IBM still represents a physical sphere, but the markers are
 	 * meridional rings.  The per-ring control volume varies with radius and is
 	 * filled during marker generation; Vol_L remains a safe average fallback.
-	 * Marker arc spacing follows Liu et al. (2017) with ds ~ 1.2 h to keep the
-	 * IBM correction matrix well-conditioned.
 	 */
-	N_L = max(4, (int)ceil(PI * R / (1.2 * h)));
+	N_L = max(4, (int)ceil(PI * R / h));
 	Vol_L = 4.0 * PI * R2 * h / N_L;
 #endif
 
@@ -1458,7 +1485,7 @@ void Particle_destroy_internal_arrays(Particle *p) {
 
 #if defined(LAG_PARTICLE_RESOLVED)
 #ifdef VOF_IBM
-#define PARTICLE_FORCE_RECORD_N 28
+#define PARTICLE_FORCE_RECORD_N 25
 #else
 #define PARTICLE_FORCE_RECORD_N 12
 #endif
@@ -1813,7 +1840,7 @@ static void Particle_exchange_oversized_overlaps(Particle_list *p_list,
 
 	int nrecv = 0;
 	Particle *recv =
-	    Particle_collect_owned_overlaps(p_list, data_bag, 0.0, threshold,
+	    Particle_collect_owned_overlaps(p_list, data_bag, range, threshold,
 	                                    0, &nrecv);
 
 	for (int n = 0; n < nrecv; n++) {
@@ -1835,7 +1862,6 @@ static void Particle_pack_force_record(const Particle *p,
 #ifdef VOF_IBM
 	for (int i = 0; i < 3; i++) record->value[k++] = p->F_CCF[i];
 	for (int i = 0; i < 3; i++) record->value[k++] = p->T_CCF[i];
-	for (int i = 0; i < 3; i++) record->value[k++] = p->Int_rho[i];
 	record->value[k++] = p->Int_rho_scalar;
 	for (int i = 0; i < 3; i++) record->value[k++] = p->F_CSF_solid[i];
 	for (int i = 0; i < 3; i++) record->value[k++] = p->T_CSF_solid[i];
@@ -1851,7 +1877,6 @@ static void Particle_zero_hydro_force_fields(Particle *p)
 #ifdef VOF_IBM
 	DSET_ZERO(p->F_CCF, 3);
 	DSET_ZERO(p->T_CCF, 3);
-	DSET_ZERO(p->Int_rho, 3);
 	p->Int_rho_scalar = 0.0;
 	DSET_ZERO(p->F_CSF_solid, 3);
 	DSET_ZERO(p->T_CSF_solid, 3);
@@ -1869,7 +1894,6 @@ static void Particle_add_force_record(Particle *p,
 #ifdef VOF_IBM
 	for (int i = 0; i < 3; i++) p->F_CCF[i] += record->value[k++];
 	for (int i = 0; i < 3; i++) p->T_CCF[i] += record->value[k++];
-	for (int i = 0; i < 3; i++) p->Int_rho[i] += record->value[k++];
 	p->Int_rho_scalar += record->value[k++];
 	for (int i = 0; i < 3; i++) p->F_CSF_solid[i] += record->value[k++];
 	for (int i = 0; i < 3; i++) p->T_CSF_solid[i] += record->value[k++];
@@ -1881,7 +1905,7 @@ void Particle_reduce_oversized_forces_to_owner(Particle_list *p_list,
 {
 	MAC_grid *grid = data_bag->grid;
 	Parameters *params = data_bag->params;
-	const double range = DELTA_FUNC_RADIUS * grid->dx_u[1];
+	const double range = Particle_ibm_exchange_range(grid, params);
 
 	int nproc;
 	MPI_Comm_size(PCW, &nproc);
@@ -2025,11 +2049,9 @@ void Particle_MPI_update(Particle_list *p_list, Cart3d_bag *data_bag,
 	MAC_grid   *grid   = data_bag -> grid;
 	Lagrangian *lag    = data_bag -> lag;
 
-	// Grid spacing
-	double h = grid -> dx_u[1];
-
 	// Range outside processor boundaries particle has an influence
-	double range = DELTA_FUNC_RADIUS * h;
+	double h = grid -> dx_u[1];
+	double range = Particle_ibm_exchange_range(grid, params);
 #if defined LAG_MARKER_FLAG || defined LAG_MARKER_PRIORITY
 	range += LAG_FLAG_RANGE * h;
 #endif

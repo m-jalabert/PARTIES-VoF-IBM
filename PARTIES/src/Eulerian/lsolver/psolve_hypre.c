@@ -147,7 +147,7 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     double ***rho   = vof->rho;
     double ***phi   = p->deltap;
     double ***rhs   = p->rhs;
-    char statement[200];
+    char statement[1024];
 
     const int NX = grid->NX;
     const int NY = grid->NY;
@@ -156,9 +156,19 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     const int Is = hypre_Is, Js = hypre_Js, Ks = hypre_Ks;
     const int Ie = hypre_Ie, Je = hypre_Je, Ke = hypre_Ke;
 
+    double t_total0 = MPI_Wtime();
+    double t0, t1;
+    double cpu_assemble_time = 0.0;
+    double hypre_set_values_time = 0.0;
+    double hypre_setup_time = 0.0;
+    double hypre_solve_time = 0.0;
+    double hypre_get_values_time = 0.0;
+    double postprocess_time = 0.0;
+
     /* ================================================================== *
      *  1. Fill matrix coefficients and RHS vector
      * ================================================================== */
+    t0 = MPI_Wtime();
     int n = 0;
     for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
@@ -213,30 +223,72 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
         }
     }
 
-    /* ================================================================== *
-     *  2. Remove RHS null-space BEFORE solving for pure Neumann setup
-     * ================================================================== */
+/* ================================================================== *
+ *  2. Remove RHS null-space BEFORE solving pure Neumann pressure
+ *
+ *  IMPORTANT:
+ *  In AXISYM_RZ the matrix rows are multiplied by row_w = r_c[i] to
+ *  recover an SPD operator for PCG/PFMG:
+ *
+ *      A = - row_w * div( beta grad(phi) )
+ *      b = - row_w * rhs
+ *
+ *  Therefore the compatibility correction must subtract a constant
+ *  physical divergence from rhs, i.e.
+ *
+ *      b_i <- b_i - row_w_i * mean_b_per_weight
+ *
+ *  NOT b_i <- b_i - arithmetic_mean(b).
+ *
+ *  The latter is equivalent to subtracting a source proportional to 1/r
+ *  in axisymmetry and can create a spurious pressure correction near r=0.
+ * ================================================================== */
 #if NEED_REFERENCE_PRESSURE
-    {
-        double local_rhs_sum = 0.0, global_rhs_sum = 0.0;
-        long   local_cnt = 0,   global_cnt = 0;
+{
+    double local_b_sum = 0.0, global_b_sum = 0.0;
+    double local_w_sum = 0.0, global_w_sum = 0.0;
 
-        for (int idx = 0; idx < hypre_n_local; idx++) {
-            local_rhs_sum += hypre_rhs[idx];
-            local_cnt++;
-        }
+    int idx = 0;
+    for (int k = Ks; k < Ke; k++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++, idx++) {
+                const double row_w =
+                    TwodOps_pressure_row_weight(grid, params, i);
 
-        MPI_Allreduce(&local_rhs_sum, &global_rhs_sum, 1, MPI_DOUBLE, MPI_SUM, PCW);
-        MPI_Allreduce(&local_cnt, &global_cnt, 1, MPI_LONG, MPI_SUM, PCW);
-
-        if (global_cnt > 0) {
-            double rhs_avg = global_rhs_sum / (double)global_cnt;
-            for (int idx = 0; idx < hypre_n_local; idx++) {
-                hypre_rhs[idx] -= rhs_avg;
+                local_b_sum += hypre_rhs[idx];
+                local_w_sum += row_w;
             }
         }
     }
+
+    MPI_Allreduce(&local_b_sum, &global_b_sum, 1, MPI_DOUBLE, MPI_SUM, PCW);
+    MPI_Allreduce(&local_w_sum, &global_w_sum, 1, MPI_DOUBLE, MPI_SUM, PCW);
+
+    if (global_w_sum > 0.0) {
+        /*
+         * This is algebraic b_sum / sum(row_w).
+         * Since hypre_rhs already stores b = -row_w*rhs, this makes
+         * sum_i hypre_rhs_i exactly zero while subtracting a constant
+         * physical rhs from the projection equation.
+         */
+        const double mean_b_per_weight = global_b_sum / global_w_sum;
+
+        idx = 0;
+        for (int k = Ks; k < Ke; k++) {
+            for (int j = Js; j < Je; j++) {
+                for (int i = Is; i < Ie; i++, idx++) {
+                    const double row_w =
+                        TwodOps_pressure_row_weight(grid, params, i);
+
+                    hypre_rhs[idx] -= row_w * mean_b_per_weight;
+                }
+            }
+        }
+    }
+}
 #endif
+    t1 = MPI_Wtime();
+    cpu_assemble_time += t1 - t0;
 
     /* ================================================================== *
      *  3. Set matrix values
@@ -244,6 +296,7 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     HYPRE_Int ilower[3] = { Is, Js, Ks };
     HYPRE_Int iupper[3] = { Ie - 1, Je - 1, Ke - 1 };
 
+    t0 = MPI_Wtime();
     for (int s = 0; s < 7; s++) {
         HYPRE_StructMatrixSetBoxValues(hypre_A, ilower, iupper, 1, 
                                        &hypre_stencil_indices[s], 
@@ -255,6 +308,8 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     HYPRE_StructVectorSetBoxValues(hypre_x, ilower, iupper, hypre_sol);
     HYPRE_StructVectorAssemble(hypre_b);
     HYPRE_StructVectorAssemble(hypre_x);
+    t1 = MPI_Wtime();
+    hypre_set_values_time += t1 - t0;
 
     /* ================================================================== *
      *  4. Create fresh solver + preconditioner (Ensures ZERO memory leak)
@@ -296,8 +351,15 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     /* ================================================================== *
      *  5. Setup + Solve
      * ================================================================== */
+    t0 = MPI_Wtime();
     HYPRE_StructPCGSetup(solver, hypre_A, hypre_b, hypre_x);
+    t1 = MPI_Wtime();
+    hypre_setup_time += t1 - t0;
+
+    t0 = MPI_Wtime();
     HYPRE_StructPCGSolve(solver, hypre_A, hypre_b, hypre_x);
+    t1 = MPI_Wtime();
+    hypre_solve_time += t1 - t0;
 
     HYPRE_Int num_iters;
     double final_res;
@@ -307,12 +369,16 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     /* ================================================================== *
      *  6. Extract solution 
      * ================================================================== */
+    t0 = MPI_Wtime();
     HYPRE_StructVectorGetBoxValues(hypre_x, ilower, iupper, hypre_sol);
+    t1 = MPI_Wtime();
+    hypre_get_values_time += t1 - t0;
 
     /* Destroy solver + preconditioner to completely prevent memory leaks */
     HYPRE_StructPCGDestroy(solver);
     HYPRE_StructPFMGDestroy(precond);
 
+    t0 = MPI_Wtime();
     n = 0;
     for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
@@ -322,33 +388,47 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
         }
     }
 
-    /* ================================================================== *
-     *  7. Remove null-space from SOLUTION (pin average to 0)
-     * ================================================================== */
+/* ================================================================== *
+ *  7. Remove null-space from SOLUTION
+ *
+ *  This is only a gauge choice.  It does not affect velocity because
+ *  grad(phi) is unchanged.  Use the same row weight as the pressure
+ *  operator for a clean axisymmetric mean.
+ * ================================================================== */
 #if NEED_REFERENCE_PRESSURE
-    {
-        double local_sum = 0.0, global_sum = 0.0;
-        long   local_cnt = 0,   global_cnt = 0;
+{
+    double local_phi_w_sum = 0.0, global_phi_w_sum = 0.0;
+    double local_w_sum     = 0.0, global_w_sum     = 0.0;
+
+    for (int k = Ks; k < Ke; k++) {
+        for (int j = Js; j < Je; j++) {
+            for (int i = Is; i < Ie; i++) {
+                const double row_w =
+                    TwodOps_pressure_row_weight(grid, params, i);
+
+                local_phi_w_sum += row_w * phi[k][j][i];
+                local_w_sum     += row_w;
+            }
+        }
+    }
+
+    MPI_Allreduce(&local_phi_w_sum, &global_phi_w_sum,
+                  1, MPI_DOUBLE, MPI_SUM, PCW);
+    MPI_Allreduce(&local_w_sum, &global_w_sum,
+                  1, MPI_DOUBLE, MPI_SUM, PCW);
+
+    if (global_w_sum > 0.0) {
+        const double phi_mean = global_phi_w_sum / global_w_sum;
 
         for (int k = Ks; k < Ke; k++) {
             for (int j = Js; j < Je; j++) {
                 for (int i = Is; i < Ie; i++) {
-                    local_sum += phi[k][j][i];
-                    local_cnt++;
+                    phi[k][j][i] -= phi_mean;
                 }
             }
         }
-
-        MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, PCW);
-        MPI_Allreduce(&local_cnt, &global_cnt, 1, MPI_LONG,   MPI_SUM, PCW);
-
-        const double phi_avg = global_sum / (double)global_cnt;
-
-        for (int k = Ks; k < Ke; k++)
-            for (int j = Js; j < Je; j++)
-                for (int i = Is; i < Ie; i++)
-                    phi[k][j][i] -= phi_avg;
     }
+}
 #endif
 
     /*
@@ -359,9 +439,18 @@ int Pressure_solve_hypre(Cart3d_bag *data_bag)
     Pressure_apply_BCs(phi, grid, params);
     Communication_update_ghost_nodes_flow_variable(
         phi, 'h', params->ghost_nodes, data_bag);
+    t1 = MPI_Wtime();
+    postprocess_time += t1 - t0;
 
-    sprintf(statement, "HYPRE PCG+PFMG converged to %g after %d iterations\n",
-            final_res, (int)num_iters);
+    sprintf(statement,
+            "[HYPRE-CPU] PCG+PFMG converged to %g after %d iterations | "
+            "wall %.6e s | cpu_assembly %.6e s | h2d_transfer %.6e s | "
+            "d2h_transfer %.6e s | set_values %.6e s | setup %.6e s | "
+            "solve %.6e s | get_values %.6e s | postprocess %.6e s\n",
+            final_res, (int)num_iters, MPI_Wtime() - t_total0,
+            cpu_assemble_time, 0.0, 0.0, hypre_set_values_time,
+            hypre_setup_time, hypre_solve_time, hypre_get_values_time,
+            postprocess_time);
     Display_progress(params, statement);
 
     return (int)num_iters;

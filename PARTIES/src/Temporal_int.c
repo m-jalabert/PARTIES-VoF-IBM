@@ -699,21 +699,16 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
             VOF_normals_IBM(data_bag);
             Vfc_smoothing(data_bag);
     	#endif
-
         
         VOF_reconstruct_interface(data_bag);
-
-        
         VOF_set_advection(data_bag);
 
     #elif defined VOF_DIFFUSE
 
 		#ifdef VOF_IBM
 		VOF_DIFFUSE_compute_C_S(data_bag);
-        
 		#endif
-
-        VOF_DIFFUSE_set_boundary_values(vof->C_L, data_bag);
+		        
         VOF_DIFFUSE_step(data_bag);
 
     #endif /* advection method */
@@ -904,14 +899,19 @@ if(which_stage == 0){
 #endif
 
 
-#ifdef SURFACE_TENSION
+	#ifdef SURFACE_TENSION
 
-	#ifdef VOF_DIFFUSE
-	VOF_DIFFUSE_compute_psi_LG(data_bag);
-	VOF_DIFFUSE_compute_f_sigma(data_bag);
-	VOF_apply_f_sigma_old(data_bag);
+		#ifdef VOF_DIFFUSE
+		VOF_DIFFUSE_compute_psi_LG(data_bag);
+		#ifdef VOF_IBM
+		if (params->which_stage == 2) {
+			VOF_DIFFUSE_extend_psi_LG_contact_angle(data_bag);
+		}
+		#endif
+		VOF_DIFFUSE_compute_f_sigma(data_bag);
+		VOF_apply_f_sigma_old(data_bag);
 
-	#else
+		#else
 
     // /* Smooth VOF*/
      VoF_smoothing(data_bag);
@@ -1197,7 +1197,6 @@ if(which_stage == 0){
 				DSET_ZERO(p->Int_U, 3);
 				DSET_ZERO(p->Int_Omega, 3);
 				#ifdef VOF_IBM
-					DSET_ZERO(p->Int_rho, 3);
 					p->Int_rho_scalar = 0.0;     
 					DSET_ZERO(p->F_CCF, 3);
 					DSET_ZERO(p->T_CCF, 3);
@@ -1210,8 +1209,7 @@ if(which_stage == 0){
 			while (p != NULL) {
 				DSET_ZERO(p->Int_U, 3);
 				DSET_ZERO(p->Int_Omega, 3);
-				#ifdef VOF_IBM
-					 DSET_ZERO(p->Int_rho, 3);   
+				#ifdef VOF_IBM   
 					 p->Int_rho_scalar = 0.0;    
 					 DSET_ZERO(p->F_CCF, 3);
 					 DSET_ZERO(p->T_CCF, 3);  
@@ -1279,5 +1277,3 @@ if(which_stage == 0){
 		} // end of else
 
 }	// end of function
-
-

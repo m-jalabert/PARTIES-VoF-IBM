@@ -23,7 +23,7 @@
 #define DIFFUSE_SOLID_GEOM_CUTOFF 1.0e-12
 
 #ifndef VOF_DIFFUSE_RESTORE_MASS_EVERY_STAGE
-#define VOF_DIFFUSE_RESTORE_MASS_EVERY_STAGE 1
+#define VOF_DIFFUSE_RESTORE_MASS_EVERY_STAGE 0
 #endif
 
 #ifdef VOF_DIFFUSE
@@ -541,32 +541,30 @@ void VOF_DIFFUSE_init(Cart3d_bag *db)
     VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
     VOF_DIFFUSE_update_phase_cache(db);
 
-    /*
-     * Make Data_0 the same projected state that will be advanced by the first
-     * CH/MCL step.  Without this, Data_0 is the raw geometric initialization,
-     * while the first stage immediately enforces C_L + C_S <= 1 and the Liu MCL
-     * ghost-contact-line update.  That creates an artificial jump between the
-     * initialization output and the first physical step.
-     *
-     * The target mass is the raw initialized liquid mass over the non-solid
-     * region, matching Liu's S = integral_{C_S<0.05} C_L dOmega definition.
-     * The projection is conservative: any mass removed by bounding/limiting is
-     * redistributed into admissible non-solid capacity.
-     */
+    #if VOF_DIFFUSE_RESTORE_MASS_EVERY_STAGE
     double initial_mass = diffuse_liquid_mass_integral(db);
+    #endif
 
     diffuse_bound_liquid_fraction(db);
     VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
     VOF_DIFFUSE_update_phase_cache(db);
+
+    #if VOF_DIFFUSE_RESTORE_MASS_EVERY_STAGE
     diffuse_restore_liquid_mass(db, initial_mass, "initial C_L+CS projection");
+    #endif
 
 #ifdef VOF_IBM
     VOF_DIFFUSE_apply_contact_angle(db);
+
+    #if VOF_DIFFUSE_RESTORE_MASS_EVERY_STAGE
     diffuse_restore_liquid_mass(db, initial_mass, "initial MCL projection");
+    #endif
+
 #endif
 
     VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
     VOF_DIFFUSE_update_phase_cache(db);
+    VOF_DIFFUSE_set_boundary_values(vof->C_G, db);
 }
 
 
@@ -615,11 +613,11 @@ void VOF_DIFFUSE_set_boundary_values(double ***f, Cart3d_bag *db)
         int i1 = NX - 1;
         for (int k = KsL; k < KeL; ++k)
         for (int j = JsL; j < JeL; ++j)
-        for (int g = 1; g <= NG; ++g) {
+        for (int g = 0; g < NG; ++g) {
 #ifdef RIGHT_WALL_VELOCITY_FREESLIP
-            f[k][j][i1 + g] = f[k][j][i1 - g + 1];
+            f[k][j][i1 + g] = f[k][j][i1 - 1 - g];
 #else
-            f[k][j][i1 + g] = f[k][j][i1];
+            f[k][j][i1 + g] = f[k][j][i1 - 1];
 #endif
         }
     }
@@ -643,11 +641,11 @@ void VOF_DIFFUSE_set_boundary_values(double ***f, Cart3d_bag *db)
         int j1 = NY - 1;
         for (int k = KsL; k < KeL; ++k)
         for (int i = IsL; i < IeL; ++i)
-        for (int g = 1; g <= NG; ++g) {
+        for (int g = 0; g < NG; ++g) {
 #ifdef TOP_WALL_VELOCITY_FREESLIP
-            f[k][j1 + g][i] = f[k][j1 - g + 1][i];
+            f[k][j1 + g][i] = f[k][j1 - 1 - g][i];
 #else
-            f[k][j1 + g][i] = f[k][j1][i];
+            f[k][j1 + g][i] = f[k][j1 - 1][i];
 #endif
         }
     }
@@ -671,11 +669,11 @@ void VOF_DIFFUSE_set_boundary_values(double ***f, Cart3d_bag *db)
         int k1 = NZ - 1;
         for (int j = JsL; j < JeL; ++j)
         for (int i = IsL; i < IeL; ++i)
-        for (int g = 1; g <= NG; ++g) {
+        for (int g = 0; g < NG; ++g) {
 #ifdef FRONT_WALL_VELOCITY_FREESLIP
-            f[k1 + g][j][i] = f[k1 - g + 1][j][i];
+            f[k1 + g][j][i] = f[k1 - 1 - g][j][i];
 #else
-            f[k1 + g][j][i] = f[k1][j][i];
+            f[k1 + g][j][i] = f[k1 - 1][j][i];
 #endif
         }
     }
@@ -807,7 +805,11 @@ void VOF_DIFFUSE_compute_C_S(Cart3d_bag *db)
 
 #endif
 
+    VOF_DIFFUSE_set_boundary_values(vof->C_S, db);
+    diffuse_bound_liquid_fraction(db);
+    VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
     VOF_DIFFUSE_update_phase_cache(db);
+    VOF_DIFFUSE_set_boundary_values(vof->C_G, db);
 }
 
 #ifndef VOF_IBM
@@ -865,7 +867,7 @@ void VOF_DIFFUSE_compute_bulk_S(Cart3d_bag *db)
     MAC_grid       *grid = db->grid;
     VolumeFraction *vof  = db->vof;
 
-    VOF_DIFFUSE_update_phase_cache(db);
+    
 
     for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
         for (int j = grid->G_Js; j < grid->G_Je; ++j) {
@@ -923,9 +925,7 @@ void VOF_DIFFUSE_compute_psi_LG(Cart3d_bag *db)
 
     VOF_DIFFUSE_set_boundary_values(vof->psi_LG, db);
 
-#ifdef VOF_IBM
-    VOF_DIFFUSE_extend_psi_LG_contact_angle(db);
-#endif
+
 }
 
 void VOF_DIFFUSE_advect_WENO5(Cart3d_bag *db, double ***rhs_out)
@@ -1058,7 +1058,7 @@ void VOF_DIFFUSE_solve_implicit_biharmonic(Cart3d_bag *db, double ***rhs_explici
 
     iters = diffuse_solve_biharmonic_pcg(vof->C_L, rhs_explicit,
                                          a_dt, bih_coeff, &final_res, db);
-    VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
+    
 
     sprintf(statement,
             "VOF diffuse biharmonic %s to %g after %d iterations\n",
@@ -1321,38 +1321,28 @@ void VOF_DIFFUSE_step(Cart3d_bag *db)
      */
     VOF_DIFFUSE_solve_implicit_biharmonic(db, rhs_vec);
 
+    diffuse_bound_liquid_fraction(db);
+    VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
+    VOF_DIFFUSE_update_phase_cache(db);
+
 
     const int last_stage = (which_stage == 2);   /* LSRK3 has 3 substages, idx 0..2 */
 
-    /*
-    * Soft per-substage clamp.  Numerically keeps C_L in [0,1] for the next CH
-    * stencil; does NOT enforce C_L + C_S <= 1 — that is the once-per-dt job of
-    * the contact-angle / admissibility projection below.
-    */
-    for (int k = grid->G_Ks; k < grid->G_Ke; ++k)
-    for (int j = grid->G_Js; j < grid->G_Je; ++j)
-    for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
-        double c = vof->C_L[k][j][i];
-        if (c < 0.0) c = 0.0;
-        if (c > 1.0) c = 1.0;
-        vof->C_L[k][j][i] = c;
-    }
-    VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
-    VOF_DIFFUSE_update_phase_cache(db);
 
 #if VOF_DIFFUSE_RESTORE_MASS_EVERY_STAGE
     diffuse_restore_liquid_mass(db, mass_target, "RK3 soft clamp");
 #endif
 
     if (last_stage) {
-        /* Pi_adm: C_L + C_S <= 1, applied once per dt as in Liu-Ding Step 2 */
-        diffuse_bound_liquid_fraction(db);
-        VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
-        VOF_DIFFUSE_update_phase_cache(db);
+
 
     #ifdef VOF_IBM
         /* Pi_theta: characteristic MCL projection, also once per dt */
         VOF_DIFFUSE_apply_contact_angle(db);
+        VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
+
+            /* Pi_adm: C_L + C_S <= 1 */
+        diffuse_bound_liquid_fraction(db);
         VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
         VOF_DIFFUSE_update_phase_cache(db);
     #endif
@@ -1361,6 +1351,8 @@ void VOF_DIFFUSE_step(Cart3d_bag *db)
         diffuse_restore_liquid_mass(db, mass_target, "RK3 contact-angle projection");
     #endif
     }
+
+
 
     Array_copy_withghost(vof->ch_rhs_n, vof->ch_rhs_nm1, grid, params);
     Array_copy_withghost(rhs_cur, vof->ch_rhs_n, grid, params);
@@ -1379,7 +1371,7 @@ void VOF_DIFFUSE_compute_f_sigma(Cart3d_bag *db)
     /* Match the code's -2*grad(p) convention used in the momentum RHS. */
     const double scale = 2.0 * 6.0 * sqrt(2.0) / (params->Cn * params->We + 1e-30);
 
-    VOF_DIFFUSE_update_phase_cache(db);
+    
 
     for (int k = grid->G_Ks; k < grid->G_Ke; ++k)
     for (int j = grid->G_Js; j < grid->G_Je; ++j)
@@ -1477,21 +1469,16 @@ void VOF_DIFFUSE_update_density_viscosity(Cart3d_bag *db)
     const double rho_s = 1.0;
     const double mu_s  = 1.0;
 
-    VOF_DIFFUSE_update_phase_cache(db);
+    
 
     for (int k = grid->G_Ks; k < grid->G_Ke; ++k) {
         for (int j = grid->G_Js; j < grid->G_Je; ++j) {
             for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
 
-                double cl = clampDouble(vof->C_L[k][j][i], 0.0, 1.0);
-                double cs = clampDouble(vof->C_S[k][j][i], 0.0, 1.0);
-                double cg = 1.0 - cl - cs;
 
-                if (cg < 0.0) cg = 0.0;
-                if (cg > 1.0) cg = 1.0;
 
-                vof->rho[k][j][i] = cl + rho_s * cs + rho_g * cg;
-                vof->mu[k][j][i]  = cl + mu_s  * cs + mu_g  * cg;
+                vof->rho[k][j][i] = vof->C_L[k][j][i] + rho_s * vof->C_S[k][j][i] + rho_g * vof->C_G[k][j][i];
+                vof->mu[k][j][i]  = vof->C_L[k][j][i] + mu_s  * vof->C_S[k][j][i] + mu_g  * vof->C_G[k][j][i];
             }
         }
     }

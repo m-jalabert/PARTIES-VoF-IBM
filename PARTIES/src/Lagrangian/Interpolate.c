@@ -24,6 +24,18 @@
 #define SMOOTH(eta, delta_s) (erf( eta/delta_s)+1)/2  // version OII
 #define SMOOTH_BL(eta, delta_s,bl_thick) (erf((bl_thick + eta)/delta_s)+1)/2  // version OII
 
+static inline void Interpolate_accumulate_volume_fraction(double ***vf,
+                                                          int k, int j, int i,
+                                                          double vf_cell)
+{
+	if (vf_cell <= 0.0)
+		return;
+
+	vf[k][j][i] += vf_cell;
+	if (vf[k][j][i] > 1.0)
+		vf[k][j][i] = 1.0;
+}
+
 #if defined(LAG_PARTICLE_RESOLVED)
 
 /* Geometry-only view used by the Eulerian solid-volume rasterization. */
@@ -193,8 +205,10 @@ static void Interpolate_add_to_volume_fraction_global(char component,
 				const double phi11 =
 				    Interpolate_geom_level_set_3d(xe[i + 1], ye[j + 1], 0.0, &geom[n]);
 
-				vf[k][j][i] += Interpolate_volume_fraction_from_phi_2d(
-					phi00, phi10, phi01, phi11);
+					Interpolate_accumulate_volume_fraction(
+						vf, k, j, i,
+						Interpolate_volume_fraction_from_phi_2d(
+							phi00, phi10, phi01, phi11));
 			}
 		}
 	}
@@ -240,7 +254,9 @@ static void Interpolate_add_to_volume_fraction_global(char component,
 						                                  &geom[n]);
 					}
 
-					vf[k][j][i] += Interpolate_volume_fraction_from_phi_3d(phi);
+						Interpolate_accumulate_volume_fraction(
+							vf, k, j, i,
+							Interpolate_volume_fraction_from_phi_3d(phi));
 				}
 			}
 		}
@@ -687,26 +703,13 @@ static void Interpolate_integrate_momentum_twod(Velocity *vel,
 
 				double vf_cell = Interpolate_twod_volume_fraction_from_phi(
 					phi[0][0], phi[0][1], phi[1][0], phi[1][1]);
-				vf[k][j][i] += vf_cell;
+				Interpolate_accumulate_volume_fraction(vf, k, j, i, vf_cell);
 
-#ifdef VOF_IBM
-				VolumeFraction *vof = data_bag->vof;
-				if (component == 0) {
-					double dV_scalar = Interpolate_twod_cell_volume(grid, 'c',
-					                                                grid->xc, i, j);
-					p->Int_rho_scalar += lag->ng_vfc[k][j][i] * dV_scalar;
-				}
-#else
-				const double rho_loc = 1.0;
-#endif
 				double r[2] = {xc[i] - X[0], yc[j] - X[1]};
 				double dV = Interpolate_twod_cell_volume(grid, vel->component,
 				                                         xc, i, j);
 				double dP = vf_cell * data[k][j][i] * dV;
 
-#ifdef VOF_IBM
-				p->Int_rho[component] += vf_cell * dV;
-#endif
 				p->Int_U[component] += dP;
 #ifdef TWOD_CARTESIAN
 				/* Cylinder rotation is about the collapsed z axis only. */
@@ -725,7 +728,7 @@ static void Interpolate_integrate_momentum_twod(Velocity *vel,
  * Blend rigid-body translation+rotation onto the staggered velocity face
  * inside each particle's level-set support.  Mirrors
  * Interpolate_integrate_momentum_twod's geometry stencil so that a subsequent
- * re-integration sees Int_U == Int_rho * U_rigid for a quiescent exterior,
+ * re-integration sees a self-consistent Int_U for a quiescent exterior,
  * eliminating the cold-start IBM impulse on the first time step.
  */
 static void Interpolate_paint_rigid_body_velocity_twod(Velocity *vel,
@@ -874,8 +877,10 @@ static void Interpolate_add_to_volume_fraction_twod(char component,
 					for (ii = 0; ii < 2; ii++)
 						phi[jj][ii] = Interpolate_twod_level_set(xe[i + ii],
 						                                          ye[j + jj], p);
-				vf[k][j][i] += Interpolate_twod_volume_fraction_from_phi(
-					phi[0][0], phi[0][1], phi[1][0], phi[1][1]);
+				Interpolate_accumulate_volume_fraction(
+					vf, k, j, i,
+					Interpolate_twod_volume_fraction_from_phi(
+						phi[0][0], phi[0][1], phi[1][0], phi[1][1]));
 			}
 		}
 		p = p->next;
@@ -1374,24 +1379,16 @@ void Interpolate_Eul_to_Lag(double ***a, double *A, char which, Particle *p,
 
 /******************************************************************************/
 /*
- * Interpolate_integrate_momentum – VOF-IBM aware
+ * Interpolate_integrate_momentum
  *
  *  • Integrates translational (Int_U) and rotational (Int_Omega) momentum of
  *    every (mobile) particle in p_list that overlaps the current MPI sub-domain.
  *  • Accumulates the particle volume fraction on the staggered velocity faces
  *    (lag->ng_vfu | ng_vfv | ng_vfw).
  *
- *  ───────────────────────────────────────────────────────────────────────────
- *  NEW (when VOF_IBM is defined)
- *  ───────────────────────────────────────────────────────────────────────────
- *      ‣ Each staggered control-volume contribution to momentum is multiplied
- *        by the local mixture density ρ̃(F)=F+(1-F)(ρ₂/ρ₁) taken from vof->rho.
- *      ‣ Face-centred density for momentum is obtained by arithmetic averaging
- *        of the two adjacent cell-centred values.
- *      ‣ Particle integrated density (p->Int_rho[component]) uses face-centered
- *        density matching the stencil used for Int_U[component]
- *      ‣ When VOF_IBM is *not* defined the routine reverts to the original
- *        single-phase (ρ̃=1) behaviour with zero additional cost.
+ *  As in the tested 2D implementation, the integrated quantity is the
+ *  volume-weighted velocity inside the particle support.  It intentionally
+ *  does not use the VOF mixture density field.
  *
  *  Assumes a uniform Cartesian grid of spacing h.
  */
@@ -1420,12 +1417,6 @@ void Interpolate_integrate_momentum(Velocity      *vel,
     Parameters     *params = data_bag->params;
     MAC_grid       *grid   = data_bag->grid;
     Lagrangian     *lag    = data_bag->lag;
-
-#ifdef VOF_IBM
-    /* Density field produced by VOF_update_density_viscosity() */
-    VolumeFraction *vof       = data_bag->vof;
-    double       ***rho_cc    = vof->rho;   /* cell-centred ρ̃ */
-#endif
 
     /* Cell- and face-centred coordinates (will re-map below) */
     double *xc = grid->xc, *yc = grid->yc, *zc = grid->zc;
@@ -1521,7 +1512,7 @@ void Interpolate_integrate_momentum(Velocity      *vel,
                     phi[k][j][i] = lvl_set(xe[i], ye[j], ze[k]);
 
         /* ----------------------------------------------------------------- */
-        /* 3. Integrate ρ̃ u and ρ̃ (r×u) over the particle volume            */
+        /* 3. Integrate u and r×u over the particle volume                    */
         /* ----------------------------------------------------------------- */
         for (k = k_start; k < k_end; k++) {
             r[2] = zc[k] - X[2];
@@ -1542,54 +1533,17 @@ void Interpolate_integrate_momentum(Velocity      *vel,
                                 if (temp < 0.0) vf_cell -= temp;
                                 sum_phi += fabs(temp);
                             }
-                    vf_cell = vf_cell / sum_phi;
-                    vf[k][j][i] += vf_cell;
+                    vf_cell = (sum_phi > 0.0) ? vf_cell / sum_phi : 0.0;
+                    Interpolate_accumulate_volume_fraction(vf, k, j, i, vf_cell);
 
-                    /* -- (b) Face-centred density ρ̃^{(c)} ----------------- */
-#ifdef VOF_IBM
-
-					// Get CELL-CENTERED density for scalar buoyancy integral
-                    double rho_cc_here = rho_cc[k][j][i];
-					double vf_center = vof->vfc[k][j][i];
-                    
-                    // Accumulate scalar density (same for all components)
-                    // Only accumulate once per cell, not per velocity component
-                    if (component == 0) {  // Only on u-pass to avoid triple counting
-                        p->Int_rho_scalar += vf_center * rho_cc_here * dV;
-                    }
-					
-                    double rho_loc;
-                    if (component == 0) {     /* u-faces */
-                        double rR = rho_cc[k][j][i];
-                        double rL = rho_cc[k][j][i-1];
-                        rho_loc   = 0.5 * (rR + rL);
-                    } else if (component == 1) { /* v-faces */
-                        double rT = rho_cc[k][j][i];
-                        double rB = rho_cc[k][j-1][i];
-                        rho_loc   = 0.5 * (rT + rB);
-                    } else {                   /* w-faces */
-                        double rF = rho_cc[k][j][i];
-                        double rB = rho_cc[k-1][j][i];
-                        rho_loc   = 0.5 * (rF + rB);
-                    }
-#else
-                    const double rho_loc = 1.0; /* single-phase */
-#endif
-
-                    /* -- (c) Momentum & moment integrals ------------------- */
+                    /* -- (b) Momentum & moment integrals ------------------- */
                     const double u_loc = data[k][j][i];
-                    const double dVloc = vf_cell * rho_loc * u_loc * dV;
-					
-					#ifdef VOF_IBM
-						// Integrate density for each component using the SAME face-centered 
-						// stencil as used for momentum (ensures consistency: U = Int_U / Int_rho)
-						p->Int_rho[component] += vf_cell * rho_loc * dV;
-					#endif
+                    const double dP = vf_cell * u_loc * dV;
 
-                    Int_U[component]       += dVloc;
+                    Int_U[component]       += dP;
 
-                    Int_Omega[comp_pos]   += dVloc * r[comp_neg];
-                    Int_Omega[comp_neg]   -= dVloc * r[comp_pos];
+                    Int_Omega[comp_pos]   += dP * r[comp_neg];
+                    Int_Omega[comp_neg]   -= dP * r[comp_pos];
                 }
             }
         }
@@ -1607,9 +1561,9 @@ void Interpolate_integrate_momentum(Velocity      *vel,
  * Blend rigid-body translation+rotation onto the staggered velocity face
  * (vel->data) inside each particle's level-set support, using the same
  * geometry stencil as Interpolate_integrate_momentum.  After painting and a
- * fresh integration, Int_U[i] == Int_rho[i] * U[i] for a quiescent exterior,
- * which removes the cold-start IBM impulse felt by an imposed-velocity
- * particle on the first time step (see Particle_initialize_velocities).
+ * fresh integration removes the cold-start IBM impulse felt by an
+ * imposed-velocity particle on the first time step (see
+ * Particle_initialize_velocities).
  *
  * Each rank paints only the cells it owns; callers are responsible for
  * synchronising halos and reapplying physical wall BCs afterwards.
@@ -1897,7 +1851,8 @@ else if (component == 'z') {
 						}
 					}
 
-					vf[k][j][i] += vf_cell / sum_phi;
+					Interpolate_accumulate_volume_fraction(vf, k, j, i,
+					                                        vf_cell / sum_phi);
 				}
 			}
 		}
@@ -2040,7 +1995,8 @@ void Interpolate_add_to_volume_fraction_vof(char component, Particle_list *p_lis
 
 #ifdef VOF_NO_VOLUME
 					eta= ETA(xc[i], yc[j], zc[k]);  // distance to the particle surface positive if inside
-					vf[k][j][i] += SMOOTH(eta,delta_s);
+					Interpolate_accumulate_volume_fraction(vf, k, j, i,
+					                                        SMOOTH(eta,delta_s));
 					vf_prime[k][j][i] += SMOOTH(eta,delta_s);
 					u_vof[k][j][i] += SMOOTH(eta,delta_s)*(U[0]+Omega[1]*(zc[k]-X[2])-Omega[2]*(yc[j]-X[1]));
 
@@ -2062,7 +2018,8 @@ void Interpolate_add_to_volume_fraction_vof(char component, Particle_list *p_lis
 						}
 					}
 
-					vf[k][j][i] += vf_cell / sum_phi;
+					Interpolate_accumulate_volume_fraction(vf, k, j, i,
+					                                        vf_cell / sum_phi);
 	#ifdef VOF_SMOOTH_VELO
 					eta= ETA(xc[i], yc[j], zc[k]);  // distance to the particle surface positive if inside
 					vf_prime[k][j][i] += SMOOTH(eta,delta_s)*vf_cell / sum_phi;
@@ -2094,7 +2051,8 @@ void Interpolate_add_to_volume_fraction_vof(char component, Particle_list *p_lis
 #ifdef VOF_NO_VOLUME
 
 						eta= ETA(xc[i], yc[j], zc[k]);  // distance to the particle surface positive if inside
-						vf[k][j][i] += SMOOTH(eta,delta_s);
+						Interpolate_accumulate_volume_fraction(vf, k, j, i,
+						                                        SMOOTH(eta,delta_s));
 						vf_prime[k][j][i] += SMOOTH(eta,delta_s);
 						v_vof[k][j][i] += SMOOTH(eta,delta_s)*( U[1]+Omega[2]*(xc[i]-X[0])-Omega[0]*(zc[k]-X[2]) );
 
@@ -2115,7 +2073,8 @@ void Interpolate_add_to_volume_fraction_vof(char component, Particle_list *p_lis
 							}
 						}
 
-						vf[k][j][i] += vf_cell / sum_phi;
+						Interpolate_accumulate_volume_fraction(vf, k, j, i,
+						                                        vf_cell / sum_phi);
 	#ifdef VOF_SMOOTH_VELO
 
 						eta= ETA(xc[i], yc[j], zc[k]);  // distance to the particle surface positive if inside
@@ -2150,7 +2109,8 @@ void Interpolate_add_to_volume_fraction_vof(char component, Particle_list *p_lis
 #ifdef VOF_NO_VOLUME
 
 									eta= ETA(xc[i], yc[j], zc[k]);  // distance to the particle surface positive if inside
-									vf[k][j][i] += SMOOTH(eta,delta_s);
+									Interpolate_accumulate_volume_fraction(
+										vf, k, j, i, SMOOTH(eta,delta_s));
 									vf_prime[k][j][i] += SMOOTH(eta,delta_s);
 									w_vof[k][j][i] += SMOOTH(eta,delta_s)*( U[2]+Omega[0]*(yc[j]-X[1])-Omega[1]*(xc[i]-X[0]) );
 
@@ -2170,7 +2130,8 @@ void Interpolate_add_to_volume_fraction_vof(char component, Particle_list *p_lis
 											}
 										}
 									}
-									vf[k][j][i] += vf_cell / sum_phi;
+									Interpolate_accumulate_volume_fraction(
+										vf, k, j, i, vf_cell / sum_phi);
 									#ifdef VOF_SMOOTH_VELO
 									eta= ETA(xc[i], yc[j], zc[k]);  // distance to the particle surface positive if inside
 									vf_prime[k][j][i] += SMOOTH(eta,delta_s)*vf_cell / sum_phi;

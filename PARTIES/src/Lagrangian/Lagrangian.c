@@ -59,6 +59,21 @@ static void Lagrangian_generate_points_2d(Particle *p, MAC_grid *grid);
 #endif
 
 
+#ifdef VOF_IBM
+static void Lagrangian_set_exact_solid_body_mass(Particle *p)
+{
+	/*
+	 * Liu's diffuse solid phase uses liquid density in the Navier-Stokes
+	 * equations.  The body-force split in the particle ODE therefore needs
+	 * the exact volume of that fictitious liquid, not the corner-based
+	 * Eulerian volume estimate used for momentum interpolation diagnostics.
+	 */
+	if (p != NULL && p->rho_s > 0.0)
+		p->Int_rho_scalar = p->M / p->rho_s;
+}
+#endif
+
+
 #if defined(TWOD_MODE) && defined(LAG_PARTICLE_RESOLVED)
 static int Lagrangian_local_point_2d(double x, double y, MAC_grid *grid)
 {
@@ -375,27 +390,33 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 	Display_assert_list_state(p_mobile_list, LIST_STATE_BOTH, params, DTRACE("Display_assert_list_state"));
 	Display_assert_list_state(p_fixed_list, LIST_STATE_BOTH, params, DTRACE("Display_assert_list_state"));
 
-	#ifdef VOF_IBM
-	//==========================================================================
-    // 0. Compute Capillary Forces (CCF)
-    //==========================================================================
-    // We do this BEFORE collecting forces so that the CCF force calculated
-    // on each processor is added to the local particle copy, then summed globally.
+#ifdef VOF_IBM
+		//==========================================================================
+		// 0. Compute Capillary Forces (CCF)
+		//==========================================================================
+		// We do this BEFORE collecting forces so that the CCF force calculated
+		// on each processor is added to the local particle copy, then summed globally.
 
-    // Loop over mobile particles
-    p = p_mobile_list -> start;
-    while (p != NULL) {
-        // Calculate CCF for this particle
-        VOF_accumulate_solid_capillary_force(p, data_bag);
-        p = p -> next;
-    }
+		VOF_reset_solid_capillary_force_density(data_bag);
 
-    // Loop over fixed particles (if they interact with capillary interface)
-    p = p_fixed_list -> start;
-    while (p != NULL) {
-         VOF_accumulate_solid_capillary_force(p, data_bag);
-         p = p -> next;
-    }
+		// Loop over mobile particles
+		p = p_mobile_list -> start;
+		while (p != NULL) {
+			// Calculate CCF for this particle
+			DSET_ZERO(p->F_CCF, 3);
+			DSET_ZERO(p->T_CCF, 3);
+			VOF_accumulate_solid_capillary_force(p, data_bag);
+			p = p -> next;
+		}
+
+		// Loop over fixed particles (if they interact with capillary interface)
+		p = p_fixed_list -> start;
+		while (p != NULL) {
+			DSET_ZERO(p->F_CCF, 3);
+			DSET_ZERO(p->T_CCF, 3);
+			VOF_accumulate_solid_capillary_force(p, data_bag);
+			p = p -> next;
+		}
 
 
 
@@ -420,7 +441,7 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 		#if defined(LAG_PARTICLE_RESOLVED)
 			Particle_reduce_oversized_forces_to_owner(p_mobile_list, data_bag);
-		#endif
+#endif
 
 	//#ifndef ONE_WAY
 		p_list_foreign = Particle_list_foreign_create(p_mobile_list, data_bag, DTRACE("Particle_list_foreign_create"));
@@ -434,9 +455,9 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 		// Remove foreign particles from p_fixed for advecting particles
 		p_list_foreign = Particle_list_foreign_create(p_fixed_list, data_bag, DTRACE("Particle_list_foreign_create"));
-		Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
-		Lagrangian_collect_forces(p_fixed_list, p_list_foreign, LAG_COLLECT_HYDRO, params, DTRACE("Lagrangian_collect_forces"));
-		Particle_list_destroy(p_list_foreign);
+			Particle_MPI_update(p_list_foreign, data_bag, DTRACE("Particle_MPI_update"));
+			Lagrangian_collect_forces(p_fixed_list, p_list_foreign, LAG_COLLECT_HYDRO, params, DTRACE("Lagrangian_collect_forces"));
+			Particle_list_destroy(p_list_foreign);
 	//#endif
 
 
@@ -497,14 +518,6 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				p->T_CCF[1] = 0.0;  
 				p->T_CCF[2] = 0.0;  
 
-				/*
-				 * The half-domain particle represents the full mirrored cylinder.
-				 * Int_rho_scalar is used below in the reduced-gravity correction
-				 * (M - displaced_fictitious_fluid_mass) g, so it must be mirrored
-				 * just like the vertical IBM/CCF forces and internal momentum.
-				 */
-				p->Int_rho_scalar *= 2.0;
-				FORI3 p->Int_rho[i] *= 2.0;
 			#endif
 		#endif
 		/* ====================================================================== */
@@ -529,6 +542,10 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				p->F_CCF[2] = 0.0;
 				DSET_ZERO(p->T_CCF, 3);
 			#endif
+		#endif
+
+		#ifdef VOF_IBM
+			Lagrangian_set_exact_solid_body_mass(p);
 		#endif
 
 		#ifdef FORCES_DAT_OLD
@@ -736,8 +753,8 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 		#endif
 
-		p = p -> next;
-	}
+			p = p -> next;
+		}
 
 	//--------------------------------------------------------------------------
 	// Evaluate fluid forces for fixed particles
@@ -758,6 +775,72 @@ void Lagrangian_evaluate_fluid_forces(Cart3d_bag *data_bag, Debug_trace *dtrace)
 		T_IBM = p -> T_IBM;
 		F_rigid = p -> F_rigid;
 		T_rigid = p -> T_rigid;
+
+		/* ======================================================================
+		 * SYMMETRY CORRECTION FOR HALF-DOMAIN
+		 * ====================================================================== 
+		 * By applying this to the raw single-stage variables at the very top,
+		 * ALL downstream variables (F_IBM, F_CCF_cum, F_rigid) automatically 
+		 * inherit the correct full-domain values without RK compounding errors!
+		 * ====================================================================== */
+		#ifdef LEFT_WALL_VELOCITY_FREESLIP
+			// 1. Hydrodynamic Forces & Torques (from Lagrangian_collect_forces)
+			F[0] = 0.0;         // Normal force cancels out exactly
+			F[1] *= 2.0;        // Tangential drag is doubled
+			F[2] *= 2.0;        // Tangential lateral force is doubled
+
+			T[0] *= 2.0;        // Normal torque (rotation in Y-Z plane) is doubled
+			T[1] = 0.0;         // Tangential torque cancels out exactly
+			T[2] = 0.0;         // Tangential torque cancels out exactly
+
+			// 2. Rigid Body Velocity Integrals (from fluid velocity inside particle)
+			Int_U[0] = 0.0;     
+			Int_U[1] *= 2.0;    
+			Int_U[2] *= 2.0;    
+
+			Int_Omega[0] *= 2.0; 
+			Int_Omega[1] = 0.0;  
+			Int_Omega[2] = 0.0;  
+
+			#ifdef VOF_IBM
+				// 3. Capillary Forces & Torques (from VOF_accumulate_solid_capillary_force)
+				p->F_CCF[0] = 0.0;  
+				p->F_CCF[1] *= 2.0; 
+				p->F_CCF[2] *= 2.0; 
+
+				p->T_CCF[0] *= 2.0; 
+				p->T_CCF[1] = 0.0;  
+				p->T_CCF[2] = 0.0;  
+
+			#endif
+		#endif
+		/* ====================================================================== */
+
+		#ifdef AXISYM_RZ
+			/*
+			 * The meridional particle markers represent full azimuthal rings.
+			 * For an on-axis sphere, radial force components and torques cancel
+			 * around the ring; only the axial force is a translational degree of
+			 * freedom.
+			 */
+			F[0] = 0.0;
+			F[2] = 0.0;
+			DSET_ZERO(T, 3);
+
+			Int_U[0] = 0.0;
+			Int_U[2] = 0.0;
+			DSET_ZERO(Int_Omega, 3);
+
+			#ifdef VOF_IBM
+				p->F_CCF[0] = 0.0;
+				p->F_CCF[2] = 0.0;
+				DSET_ZERO(p->T_CCF, 3);
+			#endif
+		#endif
+
+		#ifdef VOF_IBM
+			Lagrangian_set_exact_solid_body_mass(p);
+		#endif
 
 		// Reset forces measured over entire timestep
 		if (params->which_stage == 0) {
@@ -1578,7 +1661,6 @@ void Lagrangian_collect_forces(Particle_list *p_list, Particle_list *p_list_fore
 					#ifdef VOF_IBM
 					FORI3 p -> F_CCF[i] += pf -> F_CCF[i]; 
 					FORI3 p -> T_CCF[i] += pf -> T_CCF[i];
-					FORI3 p -> Int_rho[i] += pf -> Int_rho[i];
 					p->Int_rho_scalar += pf->Int_rho_scalar;  
 					FORI3 p->F_CSF_solid[i] += pf->F_CSF_solid[i]; 
 					FORI3 p->T_CSF_solid[i] += pf->T_CSF_solid[i];  
@@ -2866,17 +2948,31 @@ static void Lagrangian_generate_points_2d(Particle *p, MAC_grid *grid)
 	}
 #else
 	/*
-	 * Axisymmetric particles are on-axis spheres.  Each meridional marker is a
-	 * full ring with area theta_span*r*ds; multiplying by h gives the same
-	 * regularized control-volume role as Vol_L in the legacy 3D IBM path.
+	 * Axisymmetric particles are on-axis spheres.  Marker placement assumes
+	 * X[0] = 0; the Eulerian solid level set still uses X[0] in its distance,
+	 * so a nonzero X[0] would silently desynchronise the two representations.
+	 */
+	if (fabs(X[0]) > TWOD_RADIAL_EPS) {
+		fprintf(stderr,
+		        "AXISYM_RZ error: particle center X[0]=%.17g, but axisymmetric "
+		        "sphere markers require X[0]=0.\n", X[0]);
+		MPI_Abort(PCW, 1);
+	}
+	/*
+	 * Meridional ring markers, midpoint quadrature in theta.  The control
+	 * volume is the exact spherical-band area 2*pi*R^2*(cos(theta_m)-cos(theta_p))
+	 * times the regularization width h, which is consistent at the poles
+	 * (band area is finite while the midpoint 2*pi*r*ds underestimates it).
 	 */
 	const double dtheta = PI / p->N_L;
 	for (mv = 0; mv < p->N_L; mv++) {
 		double theta = (mv + 0.5) * dtheta;
+		double theta_m = mv * dtheta;
+		double theta_p = (mv + 1) * dtheta;
 		double r_ring = R * sin(theta);
 		double z_axial = X[1] + R * cos(theta);
-		double ds = R * dtheta;
-		double ring_volume = TWOD_AXISYM_THETA_SPAN_FULL * r_ring * ds * hgrid;
+		double ring_volume = TWOD_AXISYM_THETA_SPAN_FULL * R * R *
+		                     (cos(theta_m) - cos(theta_p)) * hgrid;
 		if (Lagrangian_near_point_2d(r_ring, z_axial, range, grid)) {
 			X_L[N_L_local] = r_ring;
 			Y_L[N_L_local] = z_axial;

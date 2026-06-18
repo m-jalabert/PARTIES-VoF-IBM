@@ -7,6 +7,7 @@
 void VOF_DIFFUSE_init(Cart3d_bag *db);
 void VOF_DIFFUSE_set_boundary_values(double ***f, Cart3d_bag *db);
 void VOF_DIFFUSE_update_phase_cache(Cart3d_bag *db);
+void VOF_DIFFUSE_remove_disconnected_gas(Cart3d_bag *db);
 
 void VOF_DIFFUSE_compute_C_S(Cart3d_bag *db);
 void VOF_DIFFUSE_apply_contact_angle(Cart3d_bag *db);

@@ -58,6 +58,140 @@
 
 #if defined(VOF_DIFFUSE) && defined(VOF_IBM)
 
+static double mcl_particle_point_distance2(const Particle *p,
+                                           double x, double y, double z,
+                                           int twod)
+{
+    const double dx = x - p->X[0];
+    const double dy = y - p->X[1];
+    const double dz = twod ? 0.0 : z - p->X[2];
+
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static int mcl_particle_owns_diffuse_support(const Particle *target,
+                                             Cart3d_bag *db,
+                                             double x, double y, double z,
+                                             double support_width)
+{
+    if (db == NULL || db->lag == NULL || target == NULL)
+        return 1;
+
+    Parameters *params = db->params;
+    const int twod = params->twod_mode_enabled;
+    const double tol = 1.0e-12;
+    double best_gap = DBL_MAX;
+    int best_id = target->ID;
+    int found = 0;
+
+    Particle_list *lists[2] = {
+        db->lag->p_mobile_list,
+        db->lag->p_fixed_list
+    };
+
+    for (int list_id = 0; list_id < 2; ++list_id) {
+        Particle_list *plist = lists[list_id];
+        if (plist == NULL)
+            continue;
+
+        for (Particle *q = plist->start; q != NULL; q = q->next) {
+            const double support = q->R + support_width;
+            const double d2 = mcl_particle_point_distance2(q, x, y, z, twod);
+
+            if (d2 > support * support)
+                continue;
+
+            const double gap = sqrt(d2) - q->R;
+            if (!found ||
+                gap < best_gap - tol ||
+                (fabs(gap - best_gap) <= tol && q->ID < best_id)) {
+                best_gap = gap;
+                best_id = q->ID;
+                found = 1;
+            }
+        }
+    }
+
+    return (!found || best_id == target->ID);
+}
+
+static int mcl_nearest_particle_normal(Cart3d_bag *db,
+                                       double x, double y, double z,
+                                       double support_width,
+                                       double n[3])
+{
+    if (db == NULL || db->lag == NULL)
+        return 0;
+
+    Parameters *params = db->params;
+    const int twod = params->twod_mode_enabled;
+    const double eps = 1.0e-30;
+    double best_gap = DBL_MAX;
+    double best_vec[3] = {0.0, 0.0, 0.0};
+    int best_id = INT_MAX;
+    int found = 0;
+
+    Particle_list *lists[2] = {
+        db->lag->p_mobile_list,
+        db->lag->p_fixed_list
+    };
+
+    for (int list_id = 0; list_id < 2; ++list_id) {
+        Particle_list *plist = lists[list_id];
+        if (plist == NULL)
+            continue;
+
+        for (Particle *p = plist->start; p != NULL; p = p->next) {
+            const double support = p->R + support_width;
+            const double dx = x - p->X[0];
+            const double dy = y - p->X[1];
+            const double dz = twod ? 0.0 : z - p->X[2];
+            const double d2 = dx * dx + dy * dy + dz * dz;
+
+            if (d2 > support * support || d2 <= eps)
+                continue;
+
+            const double gap = sqrt(d2) - p->R;
+            if (!found ||
+                gap < best_gap - 1.0e-12 ||
+                (fabs(gap - best_gap) <= 1.0e-12 && p->ID < best_id)) {
+                best_gap = gap;
+                best_vec[0] = dx;
+                best_vec[1] = dy;
+                best_vec[2] = dz;
+                best_id = p->ID;
+                found = 1;
+            }
+        }
+    }
+
+    if (!found)
+        return 0;
+
+    const double len = sqrt(best_vec[0] * best_vec[0] +
+                            best_vec[1] * best_vec[1] +
+                            best_vec[2] * best_vec[2]);
+    if (len <= eps)
+        return 0;
+
+    n[0] = best_vec[0] / len;
+    n[1] = best_vec[1] / len;
+    n[2] = twod ? 0.0 : best_vec[2] / len;
+
+    return 1;
+}
+
+void VOF_reset_solid_capillary_force_density(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+
+    Memory_reset_flow_variable(grid, params, vof->f_ccf_x);
+    Memory_reset_flow_variable(grid, params, vof->f_ccf_y);
+    Memory_reset_flow_variable(grid, params, vof->f_ccf_z);
+}
+
 //------------------------------------------------------------------------------
 // VOF_accumulate_solid_capillary_force
 //------------------------------------------------------------------------------
@@ -97,10 +231,6 @@ void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag)
     const int Je = grid->G_Je;
     const int Ke = grid->G_Ke;
 
-    Memory_reset_flow_variable(grid, params, f_ccf_x);
-    Memory_reset_flow_variable(grid, params, f_ccf_y);
-    Memory_reset_flow_variable(grid, params, f_ccf_z);
-
     for (int k = Ks; k < Ke; k++) {
         for (int j = Js; j < Je; j++) {
             for (int i = Is; i < Ie; i++) {
@@ -113,6 +243,11 @@ void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag)
                                r_vec[1] * r_vec[1] +
                                r_vec[2] * r_vec[2];
                 if (dist2 > support_radius2)
+                    continue;
+
+                if (!mcl_particle_owns_diffuse_support(p, data_bag,
+                                                       xc[i], yc[j], zc[k],
+                                                       support_width))
                     continue;
 
                 /*
@@ -218,9 +353,9 @@ void VOF_accumulate_solid_capillary_force(Particle *p, Cart3d_bag *data_bag)
                     force_density[2] * dV
                 };
 
-                f_ccf_x[k][j][i] = force_density[0];
-                f_ccf_y[k][j][i] = force_density[1];
-                f_ccf_z[k][j][i] = force_density[2];
+                f_ccf_x[k][j][i] += force_density[0];
+                f_ccf_y[k][j][i] += force_density[1];
+                f_ccf_z[k][j][i] += force_density[2];
 
                 p->F_CCF[0] += dF[0];
                 p->F_CCF[1] += dF[1];
@@ -249,7 +384,6 @@ static const double MCL_ACUTE_BAND_THETA_DEG = 45.0;
 static const double MCL_ACUTE_IFACE_MIN = 0.05;
 static const double MCL_ACUTE_IFACE_MAX = 0.95;
 static const int    MCL_REQUIRED_GHOST_NODES = 3;
-static const int    MCL_CONTACT_DEPTH_CELLS  = 1;
 static const int    MCL_MAX_ITERS            = 1;
 static const int    MCL_MAX_DDA_STEPS        = 32;
 
@@ -890,11 +1024,14 @@ void VOF_DIFFUSE_compute_solid_normals_MCL(Cart3d_bag *db)
     Parameters     *params = db->params;
     VolumeFraction *vof    = db->vof;
 
-    VOF_DIFFUSE_set_boundary_values(vof->C_S, db);
+    
 
     const int Is = grid->L_Is, Ie = grid->L_Ie;
     const int Js = grid->L_Js, Je = grid->L_Je;
     const int Ks = grid->L_Ks, Ke = grid->L_Ke;
+    const double h_ref = (grid->dy_min > 0.0) ? grid->dy_min : 1.0e-14;
+    const double cn = (params->Cn > 0.0) ? params->Cn : 0.0;
+    const double support_width = 8.0 * ((cn > h_ref) ? cn : h_ref);
 
     for (int k = Ks; k < Ke; ++k) {
         for (int j = Js; j < Je; ++j) {
@@ -925,9 +1062,23 @@ void VOF_DIFFUSE_compute_solid_normals_MCL(Cart3d_bag *db)
 
                 double mag = sqrt(gx * gx + gy * gy);
                 if (mag < MCL_GRAD_EPS) {
-                    vof->nx_IBM[k][j][i] = 0.0;
-                    vof->ny_IBM[k][j][i] = 0.0;
-                    vof->nz_IBM[k][j][i] = 0.0;
+                    double n_fallback[3] = {0.0, 0.0, 0.0};
+                    const double cs = vof->C_S[k][j][i];
+                    if (cs > 1.0e-12 && cs < 1.0 - 1.0e-12 &&
+                        mcl_nearest_particle_normal(db,
+                                                    grid->xc[i],
+                                                    grid->yc[j],
+                                                    grid->zc[k],
+                                                    support_width,
+                                                    n_fallback)) {
+                        vof->nx_IBM[k][j][i] = n_fallback[0];
+                        vof->ny_IBM[k][j][i] = n_fallback[1];
+                        vof->nz_IBM[k][j][i] = 0.0;
+                    } else {
+                        vof->nx_IBM[k][j][i] = 0.0;
+                        vof->ny_IBM[k][j][i] = 0.0;
+                        vof->nz_IBM[k][j][i] = 0.0;
+                    }
                 } else {
                     /* n_s points from solid into fluid: -grad(C_S)/|grad(C_S)|. */
                     vof->nx_IBM[k][j][i] = -gx / mag;
@@ -1764,9 +1915,7 @@ static void mcl_iter_apply_C_L(Cart3d_bag *db,
 
                 if (new_cl < 0.0) new_cl = 0.0;
                 if (new_cl > 1.0) new_cl = 1.0;
-                double cs = vof->C_S[k][j][i];
-                if (new_cl + cs > 1.0) new_cl = 1.0 - cs;
-                if (new_cl < 0.0) new_cl = 0.0;
+
 
                 vof->C_L[k][j][i] = new_cl;
                 mcl_branch_set(db, i, j, k, branch);
@@ -1806,11 +1955,7 @@ void VOF_DIFFUSE_apply_contact_angle(Cart3d_bag *db)
         Display_throw_warning(msg, params);
     }
 
-    /* Keep C_S boundary halo and the phase cache (C_G, F) in sync first. */
-    VOF_DIFFUSE_set_boundary_values(db->vof->C_S, db);
-    VOF_DIFFUSE_set_boundary_values(db->vof->C_L, db);
-    VOF_DIFFUSE_update_phase_cache(db);
-    VOF_DIFFUSE_set_boundary_values(db->vof->C_G, db);
+
 
     VOF_DIFFUSE_compute_solid_normals_MCL(db);
 
@@ -1854,46 +1999,12 @@ void VOF_DIFFUSE_apply_contact_angle(Cart3d_bag *db)
         mcl_iter_apply_C_L(db, theta, db->vof->C_L, &diag);
         mcl_global_cache_clear();
 
-        mcl_apply_full_domain_limiter(db, &diag);
-        VOF_DIFFUSE_set_boundary_values(db->vof->C_L, db);
-        VOF_DIFFUSE_update_phase_cache(db);
-        VOF_DIFFUSE_set_boundary_values(db->vof->C_G, db);
+       
+
     }
     mcl_global_cache_clear();
 
-    diag.mass_after = mcl_mass_integral(db);
-    diag.mass_restored = diag.mass_before - diag.mass_after;
-    if (fabs(diag.mass_restored) > 1.0e-14) {
-        diag.mass_restore_residual =
-            mcl_redistribute_liquid_mass_delta(db, diag.mass_restored);
-        VOF_DIFFUSE_set_boundary_values(db->vof->C_L, db);
-        VOF_DIFFUSE_update_phase_cache(db);
-        VOF_DIFFUSE_set_boundary_values(db->vof->C_G, db);
-        diag.mass_after = mcl_mass_integral(db);
-    }
 
-    /*
-     * Display_progress is collective (MPI_Barrier inside) so all ranks must
-     * call it; the rank check happens inside.  Diagnostic counters were
-     * already MPI-reduced above, so the message is identical on every rank.
-     */
-    if (params->ghost_nodes >= MCL_REQUIRED_GHOST_NODES) {
-        char msg[520];
-        snprintf(msg, sizeof(msg),
-                 "MCL: theta=%.2fdeg ghost=%ld two=%ld one=%ld "
-                 "fail_both=%ld fail_normal=%ld fail_face=%ld "
-                 "fail_quad=%ld fail_halo=%ld fallback=0 mass_before=%.6e "
-                 "mass_after=%.6e removed=%.3e restored=%.3e "
-                 "restore_residual=%.3e max_over=%.3e\n",
-                 theta_deg, diag.ghost_cells, diag.updated_two_rays,
-                 diag.updated_one_ray, diag.fail_both_branches,
-                 diag.fail_zero_normal, diag.fail_no_fluid_face,
-                 diag.fail_quad_stencil, diag.fail_halo,
-                 diag.mass_before, diag.mass_after,
-                 diag.mass_removed_by_limiter, diag.mass_restored,
-                 diag.mass_restore_residual, diag.max_overflow);
-        Display_progress(params, msg);
-    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1908,11 +2019,7 @@ void VOF_DIFFUSE_extend_psi_LG_contact_angle(Cart3d_bag *db)
     if (params->ghost_nodes < MCL_REQUIRED_GHOST_NODES)
         return;
 
-    VOF_DIFFUSE_set_boundary_values(vof->psi_LG, db);
-    VOF_DIFFUSE_set_boundary_values(vof->C_S, db);
-    VOF_DIFFUSE_set_boundary_values(vof->C_L, db);
-    VOF_DIFFUSE_update_phase_cache(db);
-    VOF_DIFFUSE_set_boundary_values(vof->C_G, db);
+
 
     VOF_DIFFUSE_compute_solid_normals_MCL(db);
 

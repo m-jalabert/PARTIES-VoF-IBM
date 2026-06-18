@@ -32,9 +32,9 @@
 #undef RISING_BUBBLE
 
 
-#undef TWOD_CARTESIAN
-#define AXISYM_RZ
-#define AXISYM_NO_SWIRL
+#define TWOD_CARTESIAN
+#undef AXISYM_RZ
+#undef AXISYM_NO_SWIRL
 
 
 #ifdef LEFT_RIGHT_INFLOW_TOP_OUTFLOW
@@ -183,8 +183,8 @@
 		#undef  LEFT_INFLOW
 		#undef  LEFT_OUTFLOW
 #else
-		#undef  LEFT_WALL_VELOCITY_NOSLIP
-		#define LEFT_WALL_VELOCITY_FREESLIP
+		#define  LEFT_WALL_VELOCITY_NOSLIP
+		#undef LEFT_WALL_VELOCITY_FREESLIP
 		#undef  LEFT_INFLOW
 		#undef  LEFT_OUTFLOW
 #endif
@@ -256,6 +256,7 @@
 
 
 #define USE_HYPRE
+#undef GPU_PRESSURE_SOLVER
 
 /******************************************************************************/
 /* 						Volume of Fluid - Immersed Boundary coupling	      */
@@ -323,12 +324,12 @@
 #define LAG_PARTICLE_RESOLVED  // Turn on Lagrangian particles
 #undef  PARTICLE_TRN           // Save Particle_*.h5 files for every timestep in
                                //     subfolder './trn'
-#undef  SUBSTEP                // Resolve particle collisions with sub-timesteps
-#define STARTUP                // Prescribe velocity for particle
+#define  SUBSTEP                // Resolve particle collisions with sub-timesteps
+#undef STARTUP                // Prescribe velocity for particle
 #undef  FORCES_DAT             // Print out 'forces.dat' - F acting on particle // error here
 #undef  DRY_COLLISION          // Turn off fluid forces for large St collisions
 #undef ROUGH_COLLISION        // Start collision at surface roughness
-#undef  LAG_MARKER_FLAG        // Turn off all competing Lag markers
+#define  LAG_MARKER_FLAG        // Turn off all competing Lag markers
 #undef  LAG_MARKER_PRIORITY    // Turn off only half of competing Lag markers
 
 #undef PARTICLE_OSCILLATION        // Oscillation force acting on the particle due to ISS-vibration (corresponds to FLUID_OSCILLATION)
@@ -344,7 +345,7 @@
 
 
 // Long-range collision models (surface distance > 0)
-#undef LUBRICATION_NORMAL     // Turn on lubrication forces (normal direction)
+#define LUBRICATION_NORMAL     // Turn on lubrication forces (normal direction)
 #undef  LUBRICATION_TANGENTIAL // Turn on lubrication forces (tangential direction)
 #undef  ELECTROSTATIC_REPULSION // Turn on electrostatic repulsive force
 // Normal force collision models
@@ -353,7 +354,7 @@
 // Tangential force collision models
 #undef  ATFM  // Set zero slip between particles (unstable for many particles)
 #undef  ENABLE_ATFM_ROLLING
-#undef LIN_TAN  // Linear spring-dashpot
+#define LIN_TAN  // Linear spring-dashpot
 #undef COHESION // Cohesive force model
 
 // Apply Stokes drag force for a sheared dry suspension (requires a wall
@@ -863,6 +864,14 @@
 	#ifndef ZPERIODIC
 		#error 'TWOD_MODE requires ZPERIODIC for the dummy storage slab'
 	#endif
+#endif
+
+#if defined(GPU_PRESSURE_SOLVER) && !defined(USE_HYPRE)
+	#error 'GPU_PRESSURE_SOLVER requires USE_HYPRE'
+#endif
+
+#if defined(GPU_PRESSURE_SOLVER) && defined(BICG_SOLVE)
+	#error 'GPU_PRESSURE_SOLVER currently targets the HYPRE PCG/PFMG pressure path, not BICG_SOLVE'
 #endif
 
 #if defined SURFACE_TENSION && !defined VOF

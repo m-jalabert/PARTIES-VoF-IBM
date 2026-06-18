@@ -478,6 +478,7 @@ struct parameters {
 	int weno_order;       // Advection order for diffuse-interface transport
 	int ch_iter_max;      // Max iterations for implicit CH solve
 	double ch_tol;        // Tolerance for implicit CH solve
+	double bridge_volume_over_r3; // Capillary-bridge target liquid volume V/R^3
 
 
 
@@ -1422,7 +1423,6 @@ struct particle {
 		double T_CCF_cum[3];
 		double F_body_solid_cum[3];
 
-		double Int_rho[3]; // Volume integral of density
 		double Int_rho_scalar; // Volume integral of scalar
 
 	double F_CSF_solid[3];      // CSF force integrated over solid (to subtract)
@@ -1597,6 +1597,14 @@ struct collision_bag {
 
 	double surface_distance;
 	double normal_force_norm;
+
+	// Representative contact/gap point used by local multiphase closures.
+	double contact_point[3];
+
+	// Local fluid information sampled near the contact point for diagnostics
+	// and phase-aware lubrication.
+	double lub_liquid_fraction;
+	double lub_viscosity_ratio;
 
 };
 typedef struct collision_bag Collision_bag;
