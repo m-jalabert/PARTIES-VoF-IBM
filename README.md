@@ -1,12 +1,14 @@
-# Volume of Fluid (VoF) Multiphase Extension for PARTIES
+# Diffuse-Interface Wetting FSI Extension for PARTIES
 
 **Branch:** `VoF-MaximeJalabert`  
 **Maintainer:** Maxime Jalabert (PhD Student @UCSB)  
-**Status:** Active research / beta
+**Status:** Active research / JCP manuscript in preparation
 
-This branch extends the original **PARTIES** framework from a single-phase particle-laden flow solver to a **multiphase Volume of Fluid - Piecewise Linear Interface Construction (VoF–PLIC) + Immersed Boundary Method (IBM)** solver capable of handling free surfaces, moving contact lines, and fluid–particles interaction.
+This branch extends the original **PARTIES** framework from a grain-resolving single-phase immersed-boundary solver to a **two-phase wetting fluid-structure interaction solver** for incompressible liquid-gas flows with fully resolved rigid bodies.
 
-The implementation is research-grade (under active development), but already supports a set of canonical multiphase benchmarks and contact-line problems used in my PhD work.
+The current formulation uses a conservative **diffuse-interface (Cahn-Hilliard) phase field** with variable density and viscosity, a balanced potential-form surface-tension force, a direct-forcing **Immersed Boundary Method (IBM)** for moving solids, characteristic contact-angle enforcement on curved immersed boundaries, and a continuum capillary force whose net force and torque are fed back into the rigid-body equations.
+
+The implementation is research-grade and under active development. The wetting machinery currently targets planar two-dimensional and axisymmetric configurations.
 
 ---
 
@@ -14,50 +16,57 @@ The implementation is research-grade (under active development), but already sup
 
 This branch focuses on:
 
-- Geometric **VoF–PLIC** interface tracking for multiphase flows.
-- **Surface tension** and curvature modeling via a Continuum Surface Force (CSF) approach.
-- Coupling VoF with the existing **Immersed Boundary Method** for moving solids.
-- Validated test cases (Standard bubble advection, static droplet (Laplace pressure test), rising bubble, equilibrium droplet on a spherical surface) as a basis for more complex physics (moving contact line).
+- Conservative Cahn-Hilliard liquid-gas interface transport with variable density and viscosity.
+- Potential-form diffuse-interface surface-tension forcing, avoiding explicit VoF curvature reconstruction.
+- Direct-forcing IBM coupling for fully resolved rigid bodies on a staggered Cartesian grid.
+- Prescribed static contact-angle enforcement on curved immersed solids through characteristic phase-field extension into the diffuse solid.
+- Continuum capillary force and torque evaluation for rigid-body feedback, alongside hydrodynamic and gravity loads.
+- Validation from canonical two-phase flow benchmarks through static and dynamic wetting fluid-structure interaction.
 
 ---
 
-
 ## Implemented Features
 
-### 1. Interface Tracking (VoF–PLIC)
+### 1. Diffuse-Interface Two-Phase Solver
 
-- Piecewise Linear Interface Construction (PLIC) for the volume fraction field `F`.
-- Directional sweeps with conservative flux computation to maintain global mass conservation.
-- Interface sharpening consistent with the underlying discretization.
+- Conservative transport of the liquid indicator `C_L` with a Cahn-Hilliard phase-field equation.
+- Liquid, gas, and solid volume-fraction indicators `C_L`, `C_G`, and `C_S` forming the local material properties.
+- Potential-form surface-tension forcing based on the liquid-gas chemical potential.
+- Planar two-dimensional and axisymmetric staggered-grid discretizations advanced within a low-storage Runge-Kutta cycle.
 - Validated on:
-  - **Standard Bubble Advection Test**
+  - Axisymmetric rising-bubble convergence and mass-conservation tests.
+  - Rising-bubble topology change to a toroidal bubble.
+  - Single-mode Rayleigh-Taylor instability.
 
-### 2. Surface Tension and Curvature
+### 2. Immersed-Boundary Coupling for Resolved Bodies
 
-- **CSF formulation** (Continuum Surface Force) using reconstructed interface normals.
-- Curvature computed from VoF-derived normals and fed back as a body force in the momentum equation.
+- Direct-forcing immersed-boundary representation of fully resolved rigid particles.
+- Hydrodynamic force and torque recovery from the IBM reaction force with a sharp fictitious-fluid correction.
+- Rigid-body motion advanced with hydrodynamic, gravity, and capillary contributions.
 - Validated on:
-  - **Static droplet**:
-    - Laplace pressure jump vs. theoretical prediction.
-    - Spurious current levels used as a quality metric.
-  - **Rising bubble**:
-    - Terminal rise velocity and bubble shape compared against reference data.
+  - A translating/falling cylinder at `Re = 40`, including drag coefficient and wake recirculation length.
 
-### 3. Immersed Boundary Method (IBM) Coupling for static bodies
+### 3. Moving Contact-Line Treatment
 
-- Coupling of VoF with the existing IBM framework for static bodies.
-- Volume of Fluid extension via an advection PDE and contact angle enforcement at the contact line via rotation of the smoothed normals.
-- Validated on:
-    - **Equilibrium droplet on a spherical surface**, for contact angles from 30° to 150°.
+- Characteristic contact-angle extension of the phase field into the diffuse solid.
+- Contact-angle enforcement on curved immersed boundaries in planar and axisymmetric geometries.
+- Static wetting validation on:
+  - Droplets on cylinders over prescribed contact angles.
+  - Gravity-free droplets on spheres, including capillary and pressure-load force balance.
 
-### 4. Moving Contact Line — In progress
+### 4. Continuum Capillary Force on Solids
 
-- Implementation of the Continuum Capillary Force (CCF) for the solid equations.
-- Replacement of the older **PDE-based extension** by a **geometric extension** strategy for `F` in solid cells.
-- Ongoing work toward:
-  - Robust handling of moving contact lines on spherical immersed geometries.
-- Test case to be handled:
-  - **Impact of a superhydrophobic sphere**
+- Eulerian continuum capillary force density evaluated from the same phase-field and diffuse-solid support.
+- Net capillary force and torque passed directly to the rigid-body equations.
+- Equilibrium tests recover prescribed contact angles within about `1.5%`.
+- Sphere force-balance residuals and liquid-volume errors show near second-order convergence on refined grids.
+
+### 5. Dynamic Wetting Benchmarks
+
+- Sinking cylinder from a water surface, reproducing the contact-line migration and trajectory measured by Vella et al.
+- Superhydrophobic sphere impact, reproducing the sinking-versus-bouncing bifurcation measured by Lee and Kim.
+- Three-cylinder impact demonstration with multiple moving contact lines and interacting capillary cavities.
+
 ---
 
 
