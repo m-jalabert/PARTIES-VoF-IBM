@@ -2,7 +2,7 @@
 
 > **Capillary fluid–structure interaction between incompressible liquid–gas flows and fully resolved rigid bodies.**
 
-**Branch:** `VoF-MaximeJalabert` &nbsp;•&nbsp; **Maintainer:** Maxime Jalabert (PhD Student, UC Santa Barbara) &nbsp;•&nbsp; **Status:** Active research / JCP manuscript in preparation
+**Branch:** `VoF-MaximeJalabert` &nbsp;•&nbsp; **Maintainer:** Maxime Jalabert (PhD Student, UC Santa Barbara) &nbsp;•&nbsp; **Status:** JCP manuscript under review.
 
 <p align="center">
   <img src="docs/figures/Graphical_abstract.png" alt="Sinking cylinder: simulation (blue) vs. experiment of Vella et al. (2006)" width="70%">
