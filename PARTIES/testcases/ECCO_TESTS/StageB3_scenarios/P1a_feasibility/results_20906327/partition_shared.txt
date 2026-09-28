@@ -1,0 +1,15 @@
+PartitionName=shared
+   AllowGroups=ALL AllowAccounts=ALL DenyQos=wide-80,node-10,node-1,gpu,hw_perf
+   AllocNodes=ALL Default=YES QoS=part-shared
+   DefaultTime=00:30:00 DisableRootJobs=NO Exclusive=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=UNLIMITED MinNodes=0 LLN=NO MaxCPUsPerNode=128 MaxCPUsPerSocket=UNLIMITED
+   Nodes=a[000-249]
+   PriorityJobFactor=1 PriorityTier=1 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=CANCEL
+   State=UP TotalCPUs=32000 TotalNodes=250 SelectTypeParameters=NONE
+   JobDefaults=(null)
+   DefMemPerCPU=1896 MaxMemPerCPU=1896
+   TRES=cpu=32000,mem=64350000M,node=250,billing=32000
+   TRESBillingWeights=CPU=1.0
+   ResumeTimeout=GLOBAL SuspendTimeout=GLOBAL SuspendTime=GLOBAL PowerDownOnIdle=NO
+

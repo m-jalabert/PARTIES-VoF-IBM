@@ -1,0 +1,14 @@
+comparing only at the reference run's own output times (no interpolation of the coarser series)
+
+     t  V_new(128r, 6a8fa6eb)  V_old(256r, aac878bf)    abs diff   rel diff
+  2.00             0.96419947             0.96419947   +1.61e-12   1.67e-12
+  4.00             0.94654399             0.94655470   -1.07e-05   1.13e-05
+  6.00             0.92720016             0.92725349   -5.33e-05   5.75e-05
+
+max relative difference over t in [0,6.00]: 5.752e-05
+  (discriminating size: a t_half 60.3-vs-71 difference shows as ~1.2e-2 at t=10)
+VERDICT: PASS -- the two binaries agree at round-off level.
+  Provenance closed (binary AND rank count).  The 60.287 point is real,
+  and its position below the ladder's t_half(inf) needs a physical
+  explanation instead -- start with whether convergence is genuinely
+  non-monotone between N=720 and N=1440.

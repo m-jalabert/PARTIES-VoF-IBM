@@ -1,0 +1,690 @@
+--- a/src/Temporal_int.c
++++ b/src/Temporal_int.c
+@@ -209,6 +209,9 @@
+ 	// Saving the initial conditions
+ 	//--------------------------------------------------------------------------
+ 
++#ifdef ECCO_PROFILES
++    ECCO_write_profiles(data_bag);
++#endif
+ 	if (!params->resume) {
+ 		Output_h5_data(data_bag, DTRACE("Output_h5_data"));
+ 		Output_h5_resume(data_bag, DTRACE("Output_h5_resume"));
+@@ -274,6 +277,10 @@
+ 		params -> ntime = ntime;
+ 		params -> time  = time;
+ 		params->dt = dt;
++#ifdef ECCO_PROFILES
++        if(ntime%10==0 || time>=params->output_time)
++            ECCO_write_profiles(data_bag);
++#endif
+ 
+ 
+ 		//----------------------------------------------------------------------
+@@ -545,6 +552,10 @@
+ 
+ 	} // main time-stepping while
+ 
++#ifdef ECCO_PROFILES
++    ECCO_write_profiles(data_bag);
++#endif
++
+ 
+ 	MPI_Barrier(PCW);
+ 	fflush(stdout);
+@@ -717,7 +728,12 @@
+     #elif defined VOF_DIFFUSE
+ 
+ 		#ifdef VOF_IBM
+-		VOF_DIFFUSE_compute_C_S(data_bag);
++		#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++        VOF_DIFFUSE_move_ice_mask(data_bag);
++
++#else
++        VOF_DIFFUSE_compute_C_S(data_bag);
++#endif
+ 		#endif
+ 		        
+         VOF_DIFFUSE_step(data_bag);
+--- a/src/Lagrangian/Particle.c
++++ b/src/Lagrangian/Particle.c
+@@ -1916,12 +1916,12 @@
+ 	                                    NULL);
+ }
+ 
+-Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
++static Particle *Particle_collect_owned_overlaps_impl(Particle_list *p_list,
+                                           Cart3d_bag *data_bag,
+                                           double extra_range,
+                                           double min_radius,
+                                           int include_self,
+-                                          int *n_recv)
++                                          int *n_recv, int shift_images)
+ {
+ 	MAC_grid *grid = data_bag->grid;
+ 	Parameters *params = data_bag->params;
+@@ -1980,7 +1980,7 @@
+ 				continue;
+ 
+ 			send_buf[offset[rank]] = *p;
+-			for (int d = 0; d < 3; d++) {
++			for (int d = 0; shift_images && d < 3; d++) {
+ 				send_buf[offset[rank]].X[d] += shift[d];
+ 				send_buf[offset[rank]].X_old[d] += shift[d];
+ 			}
+@@ -2006,6 +2006,26 @@
+ 	}
+ 	return recv_buf;
+ }
++
++Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
++        Cart3d_bag *data_bag,double extra_range,double min_radius,
++        int include_self,int *n_recv)
++{
++    return Particle_collect_owned_overlaps_impl(p_list,data_bag,extra_range,
++        min_radius,include_self,n_recv,1);
++}
++
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++/* Preserve the owner's exact coordinates. Each Eulerian cell will choose its
++ * own minimum periodic distance; a single image cannot cover a broad support
++ * or both ends of a periodic rank. */
++Particle *Particle_collect_owned_centers(Particle_list *p_list,
++        Cart3d_bag *data_bag,double extra_range,int *n_recv)
++{
++    return Particle_collect_owned_overlaps_impl(p_list,data_bag,extra_range,
++        -1.0,1,n_recv,0);
++}
++#endif
+ 
+ static double Particle_min_width_for_rank(MAC_grid *grid, Parameters *params,
+                                           int rank)
+--- a/src/IO/Resume.c
++++ b/src/IO/Resume.c
+@@ -23,6 +23,38 @@
+ 	return H5Lexists(file_id, fieldname, H5P_DEFAULT) > 0;
+ }
+ 
++/* The CH history is liquid in legacy files and ice in the sediment scheme.
++ * Reject a cross-scheme restart instead of silently mixing their state. */
++static void Resume_check_phase_transport(hid_t file_id, const char *filename,
++                                         Parameters *params, Debug_trace *dtrace)
++{
++    if (file_id < 0) {
++        char msg[240];
++        snprintf(msg,sizeof(msg),"Cannot open restart file %s\n",filename);
++        Display_progress(params,msg);
++        MPI_Abort(PCW,92);
++    }
++#ifdef VOF_DIFFUSE
++    int version=0;
++    if (Resume_h5_field_exists(file_id,"/sediment_ice_transport_version")) {
++        hsize_t one[1]={1};
++        Resume_h5_dataset(&version,H5T_NATIVE_INT,1,one,file_id,
++            "/sediment_ice_transport_version",params,DTRACE("Resume_h5_dataset"));
++    }
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++    const int expected=VOF_DIFFUSE_SEDIMENT_TRANSPORT_VERSION;
++#else
++    const int expected=0;
++#endif
++    if (version != expected) {
++        char msg[240];
++        snprintf(msg,sizeof(msg),"Restart phase transport mismatch in %s: file=%d build=%d. Use a matching binary or a fresh run.\n",filename,version,expected);
++        Display_progress(params,msg);
++        MPI_Abort(PCW,93);
++    }
++#endif
++}
++
+ /******************************************************************************/
+ /*
+  * Reads data from Resume_XX.h5
+@@ -66,6 +98,7 @@
+ 	Display_progress(params, "Read in Resume.h5\n");
+ 	sprintf(h5_resume_filename, "Resume.h5");
+ 	file_id = H5Fopen(h5_resume_filename, H5F_ACC_RDONLY, H5P_DEFAULT);
++    Resume_check_phase_transport(file_id,h5_resume_filename,params,dtrace);
+ 
+ 	sprintf(groupname, "/Resume");
+ 
+@@ -383,6 +416,7 @@
+ 	sprintf(message, "Read from File: %s\n", h5_resume_filename);
+ 	Display_progress(params, message);
+ 	file_id = H5Fopen(h5_resume_filename, H5F_ACC_RDONLY, H5P_DEFAULT);
++    Resume_check_phase_transport(file_id,h5_resume_filename,params,dtrace);
+ 
+ 	Resume_h5_flow_variable(u->data, file_id, "/u", grid, params, DTRACE("Resume_h5_flow_variable"));
+ 	Resume_h5_flow_variable(v->data, file_id, "/v", grid, params, DTRACE("Resume_h5_flow_variable"));
+--- a/src/IO/Output.c
++++ b/src/IO/Output.c
+@@ -28,6 +28,8 @@
+  #include "Immersed.h"
+  #include "Memory.h"
+  #include "Output.h"
++ #include "VOF_DIFFUSE.h"
++ #include "post_processing.h"
+  #include "Particle.h"
+  #include "Velocity.h"
+  #include "post_processing.h"
+@@ -74,6 +76,14 @@
+      Display_progress(params, "Write Resume H5\n");
+      sprintf(h5_resume_filename, "Resume_%d.h5", abs(params->noutput));
+      file_id = Output_h5_open(h5_resume_filename, params, DTRACE("Output_h5_open"));
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++     {
++         int version=VOF_DIFFUSE_SEDIMENT_TRANSPORT_VERSION;
++         hsize_t one[1]={1};
++         Output_h5_dataset(&version,H5T_NATIVE_INT,1,one,file_id,
++             "/sediment_ice_transport_version",params,DTRACE("Output_h5_dataset"));
++     }
++#endif
+  
+      sprintf(groupname, "/Resume");
+      Output_h5_create_group(file_id, groupname, params, DTRACE("Output_h5_create_group"));
+@@ -311,6 +321,9 @@
+      //--------------------------------------------------------------------------
+      Parameters *params = data_bag -> params;
+      MAC_grid   *grid   = data_bag -> grid;
++#ifdef ECCO_PROFILES
++     ECCO_write_profiles(data_bag);
++#endif
+  
+      // Flow data
+      Velocity *u = data_bag -> u;
+@@ -350,6 +363,14 @@
+      /*------------------------------------------------------------------------*/
+      sprintf(h5filename, "Data_%d.h5", abs(params->noutput));
+      file_id = Output_h5_open(h5filename, params, DTRACE("Output_h5_open"));
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++     {
++         int version=VOF_DIFFUSE_SEDIMENT_TRANSPORT_VERSION;
++         hsize_t one[1]={1};
++         Output_h5_dataset(&version,H5T_NATIVE_INT,1,one,file_id,
++             "/sediment_ice_transport_version",params,DTRACE("Output_h5_dataset"));
++     }
++#endif
+  
+  
+      /*------------------------------------------------------------------------*/
+--- a/src/Eulerian/post_processing.c
++++ b/src/Eulerian/post_processing.c
+@@ -918,3 +918,77 @@
+ 
+ 
+ 
++
++#ifdef ECCO_PROFILES
++#include "VOF_DIFFUSE.h"
++/* Face velocities interpolated to cell centres, only for cross derivatives. */
++static double ecco_uc(double ***u,int k,int j,int i) { return .5*(u[k][j][i]+u[k][j][i+1]); }
++static double ecco_vc(double ***v,int k,int j,int i) { return .5*(v[k][j][i]+v[k][j+1][i]); }
++static double ecco_wc(double ***w,int k,int j,int i) { return .5*(w[k][j][i]+w[k+1][j][i]); }
++
++/* O(NY) distributed reductions; no 3-D gather.  Raw profiles support offline
++ * EOS-specific budgets/BPE and time-integrated dissipation. No mixing-efficiency
++ * formula is assumed for an open, melting domain. */
++void ECCO_write_profiles(Cart3d_bag *db)
++{
++    static double last_time=-INFINITY;
++    if(db->params->time==last_time) return;
++    last_time=db->params->time;
++    MAC_grid *g=db->grid;
++    Parameters *p=db->params;
++    if(p->NConc<3) { Display_progress(p,"ECCO_PROFILES requires T,S,tracer\n"); MPI_Abort(PCW,94); }
++    enum {M=13};
++    const int ny=g->NY-1;
++    double *local=calloc((size_t)ny*M,sizeof(double));
++    double *sum=calloc((size_t)ny*M,sizeof(double));
++    if(!local || !sum) MPI_Abort(PCW,95);
++    double ***u=db->u->data,***v=db->v->data,***w=db->w->data;
++    Communication_update_ghost_nodes_flow_variable(u,'u',p->ghost_nodes,db);
++    Communication_update_ghost_nodes_flow_variable(v,'v',p->ghost_nodes,db);
++    Communication_update_ghost_nodes_flow_variable(w,'w',p->ghost_nodes,db);
++    for(int k=g->G_Ks;k<min(g->G_Ke,g->NZ-1);++k)
++    for(int j=g->G_Js;j<min(g->G_Je,g->NY-1);++j)
++    for(int i=g->G_Is;i<min(g->G_Ie,g->NX-1);++i) {
++        const double dv=g->dx_u[i]*g->dy_v[j]*g->dz_w[k];
++        const double cs=db->vof->C_S[k][j][i];
++        const int fluid=cs<DIFFUSE_SOLID_MASS_CUTOFF;
++        const double liquid=fluid ? db->vof->C_L[k][j][i] : 0.0;
++        const double ice=fluid ? fmax(0.0,1.0-cs-liquid) : 0.0;
++        const double weight=liquid*dv;
++        const double vv=ecco_vc(v,k,j,i);
++        const double T=db->c[0]->data[k][j][i],S=db->c[1]->data[k][j][i],tr=db->c[2]->data[k][j][i];
++        const double ux=(u[k][j][i+1]-u[k][j][i])/g->dx_u[i];
++        const double vy=(v[k][j+1][i]-v[k][j][i])/g->dy_v[j];
++        const double wz=(w[k+1][j][i]-w[k][j][i])/g->dz_w[k];
++        const double uy=(ecco_uc(u,k,j+1,i)-ecco_uc(u,k,j-1,i))/(g->yc[j+1]-g->yc[j-1]);
++        const double uz=(ecco_uc(u,k+1,j,i)-ecco_uc(u,k-1,j,i))/(g->zc[k+1]-g->zc[k-1]);
++        const double vx=(ecco_vc(v,k,j,i+1)-ecco_vc(v,k,j,i-1))/(g->xc[i+1]-g->xc[i-1]);
++        const double vz=(ecco_vc(v,k+1,j,i)-ecco_vc(v,k-1,j,i))/(g->zc[k+1]-g->zc[k-1]);
++        const double wx=(ecco_wc(w,k,j,i+1)-ecco_wc(w,k,j,i-1))/(g->xc[i+1]-g->xc[i-1]);
++        const double wy=(ecco_wc(w,k,j+1,i)-ecco_wc(w,k,j-1,i))/(g->yc[j+1]-g->yc[j-1]);
++        const double eps=2.0/p->Re*(ux*ux+vy*vy+wz*wz+.5*((uy+vx)*(uy+vx)+(uz+wx)*(uz+wx)+(vz+wy)*(vz+wy)));
++        double *a=local+j*M;
++        a[0]+=weight; a[1]+=weight*vv;
++        a[2]+=weight*T; a[3]+=weight*S; a[4]+=weight*tr;
++        a[5]+=weight*vv*T; a[6]+=weight*vv*S; a[7]+=weight*vv*tr;
++        a[8]+=weight*eps; a[9]+=ice*dv;
++        a[10]+=T*dv; a[11]+=S*dv; a[12]+=tr*dv;
++    }
++    MPI_Allreduce(local,sum,ny*M,MPI_DOUBLE,MPI_SUM,PCW);
++    if(p->rank==0) {
++        FILE *f=fopen("ecco_profiles.csv",(!p->resume && p->time==0.0) ? "w" : "a");
++        if(!f) MPI_Abort(PCW,96);
++        if(ftell(f)==0) fprintf(f,"time,step,y,liquid_volume,mean_v,mean_T,mean_S,mean_tracer,flux_vT,flux_vS,flux_vtracer,epsilon_integral,ice_volume,T_integral,S_integral,tracer_integral\n");
++        for(int j=0;j<ny;++j) {
++            double *a=sum+j*M,den=a[0];
++            double mv=den>0?a[1]/den:NAN,mT=den>0?a[2]/den:NAN,mS=den>0?a[3]/den:NAN,mt=den>0?a[4]/den:NAN;
++            fprintf(f,"%.17g,%d,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g\n",
++                p->time,p->ntime,g->yc[j],den,mv,mT,mS,mt,
++                den>0?a[5]/den-mv*mT:NAN,den>0?a[6]/den-mv*mS:NAN,den>0?a[7]/den-mv*mt:NAN,
++                a[8],a[9],a[10],a[11],a[12]);
++        }
++        if(fclose(f)!=0) MPI_Abort(PCW,97);
++    }
++    free(local);free(sum);
++}
++#endif
+--- a/src/Eulerian/VOF_DIFFUSE.c
++++ b/src/Eulerian/VOF_DIFFUSE.c
+@@ -63,6 +63,10 @@
+ 
+ #ifdef VOF_DIFFUSE
+ 
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++static int diffuse_evolving_ice = 0;
++static void diffuse_step_ice(Cart3d_bag *db);
++#endif
+ static double diffuse_liquid_mass_integral(Cart3d_bag *db);
+ static double diffuse_bound_liquid_fraction_split(Cart3d_bag *db,
+                                                   double *sediment_delta);
+@@ -102,9 +106,13 @@
+                                         int *n_local)
+ {
+     int n_particles = 0;
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++    Particle *particles=Particle_collect_owned_centers(p_list,db,extra_range,&n_particles);
++#else
+     Particle *particles =
+         Particle_collect_owned_overlaps(p_list, db, extra_range, -1.0,
+                                         1, &n_particles);
++#endif
+ 
+     if (n_particles == 0) {
+         *n_local = 0;
+@@ -190,6 +198,11 @@
+                                             const Parameters *params,
+                                             int i, int j, int k)
+ {
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++    /* G_*e includes the high boundary plane on the last rank. It is a
++     * boundary copy, not a physical finite-volume cell. */
++    if (i >= grid->NX-1 || j >= grid->NY-1 || k >= grid->NZ-1) return 0.0;
++#endif
+     double measure = TwodOps_cell_measure_c(grid, params, i, j, k);
+ 
+     if (params->twod_mode_enabled) {
+@@ -806,13 +819,22 @@
+             const double support = R + support_extra;
+ 
+             for (int k = grid->L_Ks; k < grid->L_Ke; ++k) {
+-                const double dz = grid->zc[k] - X[2];
++                double dz = grid->zc[k] - X[2];
++#if defined(VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT) && defined(ZPERIODIC)
++                        dz -= params->Lz * nearbyint(dz/params->Lz);
++#endif
+ 
+                 for (int j = grid->L_Js; j < grid->L_Je; ++j) {
+-                    const double dy = grid->yc[j] - X[1];
++                    double dy = grid->yc[j] - X[1];
++#if defined(VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT) && defined(YPERIODIC)
++                        dy -= params->Ly * nearbyint(dy/params->Ly);
++#endif
+ 
+                     for (int i = grid->L_Is; i < grid->L_Ie; ++i) {
+-                        const double dx = grid->xc[i] - X[0];
++                        double dx = grid->xc[i] - X[0];
++#if defined(VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT) && defined(XPERIODIC)
++                        dx -= params->Lx * nearbyint(dx/params->Lx);
++#endif
+ 
+                         double dist = sqrt(dx * dx + dy * dy + dz * dz);
+ 
+@@ -889,6 +911,140 @@
+     VOF_DIFFUSE_update_phase_cache(db);
+     VOF_DIFFUSE_set_boundary_values(vof->C_G, db);
+ }
++
++
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++/* Symmetric face-neighbour sum. Physical walls have no transfer; periodic
++ * neighbours are read from the freshly exchanged halo. Uniform Cartesian
++ * cells have equal volume, so the paired transfers conserve physical volume. */
++static double diffuse_neighbour_sum(double ***a,double ***b,
++                                    MAC_grid *g,int i,int j,int k)
++{
++    double sum=0.0;
++    for(int axis=0;axis<3;++axis)
++    for(int sign=-1;sign<=1;sign+=2) {
++        int ii=i+(axis==0?sign:0),jj=j+(axis==1?sign:0),kk=k+(axis==2?sign:0);
++#ifndef XPERIODIC
++        if(ii<0 || ii>=g->NX-1) continue;
++#endif
++#ifndef YPERIODIC
++        if(jj<0 || jj>=g->NY-1) continue;
++#endif
++#ifndef ZPERIODIC
++        if(kk<0 || kk>=g->NZ-1) continue;
++#endif
++        sum+=a[kk][jj][ii]*(b ? b[kk][jj][ii] : 1.0);
++    }
++    return sum;
++}
++
++void VOF_DIFFUSE_move_ice_mask(Cart3d_bag *db)
++{
++    MAC_grid *g=db->grid;
++    Parameters *p=db->params;
++    VolumeFraction *v=db->vof;
++    const int ie=min(g->G_Ie,g->NX-1),je=min(g->G_Je,g->NY-1),ke=min(g->G_Ke,g->NZ-1);
++    /* Scratch fields are rebuilt by the following CH stage. No history is
++     * borrowed, and all donor states remain frozen during each transfer. */
++    double ***ice=v->ch_aux2,***lost=v->ch_aux1;
++    double ***room=v->psi,***ratio=v->bulk_S,***accept=v->psi_LG;
++    for(int k=g->G_Ks;k<ke;++k)
++    for(int j=g->G_Js;j<je;++j)
++    for(int i=g->G_Is;i<ie;++i)
++        ice[k][j][i]=v->C_S[k][j][i]>=DIFFUSE_SOLID_MASS_CUTOFF ? 0.0 :
++            fmax(0.0,1.0-v->C_S[k][j][i]-v->C_L[k][j][i]);
++    VOF_DIFFUSE_compute_C_S(db);
++    double local=0.0,remaining=0.0;
++    for(int k=g->G_Ks;k<ke;++k)
++    for(int j=g->G_Js;j<je;++j)
++    for(int i=g->G_Is;i<ie;++i) {
++        const double cap=v->C_S[k][j][i]>=DIFFUSE_SOLID_MASS_CUTOFF ? 0.0 : 1.0-v->C_S[k][j][i];
++        const double ni=fmin(cap,ice[k][j][i]);
++        lost[k][j][i]=ice[k][j][i]-ni;
++        ice[k][j][i]=ni;
++        local+=lost[k][j][i]*diffuse_physical_cell_measure(g,p,i,j,k);
++    }
++    MPI_Allreduce(&local,&remaining,1,MPI_DOUBLE,MPI_SUM,PCW);
++    static double moved=0.0,unplaced=0.0;
++    moved+=remaining;
++    /* Geometric displacement is not phase change: move real ice to adjacent
++     * available pore space, never silently delete it or inject meltwater. */
++    for(int pass=0;pass<4 && remaining>1.e-14;++pass) {
++        for(int k=g->G_Ks;k<ke;++k)
++        for(int j=g->G_Js;j<je;++j)
++        for(int i=g->G_Is;i<ie;++i) {
++            const double cap=v->C_S[k][j][i]>=DIFFUSE_SOLID_MASS_CUTOFF ? 0.0 : 1.0-v->C_S[k][j][i];
++            room[k][j][i]=fmax(0.0,cap-ice[k][j][i]);
++        }
++        VOF_DIFFUSE_set_boundary_values(room,db);
++        for(int k=g->G_Ks;k<ke;++k)
++        for(int j=g->G_Js;j<je;++j)
++        for(int i=g->G_Is;i<ie;++i) {
++            const double available=lost[k][j][i]>0.0 ? diffuse_neighbour_sum(room,NULL,g,i,j,k) : 0.0;
++            ratio[k][j][i]=available>0.0 ? lost[k][j][i]/available : 0.0;
++        }
++        VOF_DIFFUSE_set_boundary_values(ratio,db);
++        for(int k=g->G_Ks;k<ke;++k)
++        for(int j=g->G_Js;j<je;++j)
++        for(int i=g->G_Is;i<ie;++i) {
++            const double rate=room[k][j][i]>0.0 ? diffuse_neighbour_sum(ratio,NULL,g,i,j,k) : 0.0;
++            accept[k][j][i]=rate>1.0 ? 1.0/rate : 1.0;
++        }
++        VOF_DIFFUSE_set_boundary_values(accept,db);
++        local=0.0;
++        for(int k=g->G_Ks;k<ke;++k)
++        for(int j=g->G_Js;j<je;++j)
++        for(int i=g->G_Is;i<ie;++i) {
++            if(room[k][j][i]>0.0)
++                ice[k][j][i]+=room[k][j][i]*accept[k][j][i]*diffuse_neighbour_sum(ratio,NULL,g,i,j,k);
++            if(ratio[k][j][i]>0.0)
++                lost[k][j][i]=fmax(0.0,lost[k][j][i]-ratio[k][j][i]*diffuse_neighbour_sum(room,accept,g,i,j,k));
++            local+=lost[k][j][i]*diffuse_physical_cell_measure(g,p,i,j,k);
++        }
++        MPI_Allreduce(&local,&remaining,1,MPI_DOUBLE,MPI_SUM,PCW);
++    }
++    unplaced+=remaining;
++    if(remaining>1.e-12) {
++        char name[80],msg[180];
++        snprintf(msg,sizeof(msg),"ICE_MASK remaining=%.17g time=%.17g stage=%d\n",remaining,p->time,p->which_stage);
++        Display_progress(p,msg);
++        snprintf(name,sizeof(name),"remap_failure_rank%04d.csv",p->rank);
++        FILE *f=fopen(name,"w");
++        if(f) {
++            fprintf(f,"i,j,k,cs,ice,lost,room6,room26\n");
++            for(int k=g->G_Ks;k<ke;++k)
++            for(int j=g->G_Js;j<je;++j)
++            for(int i=g->G_Is;i<ie;++i) if(lost[k][j][i]>1.e-14) {
++                double near=0.0;
++                for(int dk=-1;dk<=1;++dk)
++                for(int dj=-1;dj<=1;++dj)
++                for(int di=-1;di<=1;++di)
++                    if(j+dj>=0 && j+dj<g->NY-1) near+=room[k+dk][j+dj][i+di];
++                fprintf(f,"%d,%d,%d,%.17g,%.17g,%.17g,%.17g,%.17g\n",i,j,k,v->C_S[k][j][i],ice[k][j][i],lost[k][j][i],diffuse_neighbour_sum(room,NULL,g,i,j,k),near);
++            }
++            fclose(f);
++        }
++        MPI_Barrier(PCW);
++        Display_progress(p,"ICE_MASK ERROR: adjacent pore space cannot hold displaced ice; reduce motion timestep or review release geometry.\n");
++        MPI_Abort(PCW,98);
++    }
++    for(int k=g->G_Ks;k<ke;++k)
++    for(int j=g->G_Js;j<je;++j)
++    for(int i=g->G_Is;i<ie;++i) {
++        const double cap=v->C_S[k][j][i]>=DIFFUSE_SOLID_MASS_CUTOFF ? 0.0 : 1.0-v->C_S[k][j][i];
++        v->C_L[k][j][i]=fmax(0.0,cap-ice[k][j][i]);
++    }
++    if(p->which_stage==2 && p->ntime%100==0) {
++        char msg[200];
++        snprintf(msg,sizeof(msg),"ICE_MASK ntime=%d redistributed_ice=%.12e unplaced=%.12e\n",p->ntime,moved,unplaced);
++        Display_progress(p,msg);
++    }
++    VOF_DIFFUSE_set_boundary_values(v->C_L,db);
++    VOF_DIFFUSE_update_phase_cache(db);
++    VOF_DIFFUSE_set_boundary_values(v->C_G,db);
++}
++#endif
++
+ 
+ #ifndef VOF_IBM
+ /*
+@@ -1025,6 +1181,9 @@
+             for (int i = grid->G_Is; i < grid->G_Ie; ++i) {
+                 double c = vof->C_L[k][j][i];
+                 double cs = vof->C_S[k][j][i];
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++                if (diffuse_evolving_ice) cs = 0.0;
++#endif
+                 vof->bulk_S[k][j][i] =
+                     0.5 * c - 1.5 * c * c + c * c * c -
+                     c * cs * (1.0 - c - cs);
+@@ -1109,15 +1268,33 @@
+                 double vel = u->data[k][j][i];
+                 double state = diffuse_face_state_x(vof->C_L, i, j, k, vel, params->weno_order);
+                 flux_x[k][j][i] = vel * state;
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++                if (diffuse_evolving_ice &&
++                    (vof->C_S[k][j][i] >= DIFFUSE_SOLID_MASS_CUTOFF ||
++                     vof->C_S[k][j][i-1] >= DIFFUSE_SOLID_MASS_CUTOFF))
++                    flux_x[k][j][i] = 0.0;
++#endif
+ 
+                 vel = v->data[k][j][i];
+                 state = diffuse_face_state_y(vof->C_L, i, j, k, vel, params->weno_order);
+                 flux_y[k][j][i] = vel * state;
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++                if (diffuse_evolving_ice &&
++                    (vof->C_S[k][j][i] >= DIFFUSE_SOLID_MASS_CUTOFF ||
++                     vof->C_S[k][j-1][i] >= DIFFUSE_SOLID_MASS_CUTOFF))
++                    flux_y[k][j][i] = 0.0;
++#endif
+ 
+                 if (!collapsed_z) {
+                     vel = w->data[k][j][i];
+                     state = diffuse_face_state_z(vof->C_L, i, j, k, vel, params->weno_order);
+                     flux_z[k][j][i] = vel * state;
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++                if (diffuse_evolving_ice &&
++                    (vof->C_S[k][j][i] >= DIFFUSE_SOLID_MASS_CUTOFF ||
++                     vof->C_S[k-1][j][i] >= DIFFUSE_SOLID_MASS_CUTOFF))
++                    flux_z[k][j][i] = 0.0;
++#endif
+                 }
+             }
+         }
+@@ -1710,6 +1887,11 @@
+ 
+                 double f = F[k][j][i];
+                 double w = f * (1.0 - f) * band_norm;
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++                /* Sediment excludes volume but is not a meltable phase. */
++                const double pore=1.0-vof->C_S[k][j][i];
++                w=f*fmax(0.0,pore-f)/(pore+1.0e-30)*band_norm;
++#endif
+                 if (w <= 0.0)
+                     continue;
+ 
+@@ -1744,6 +1926,11 @@
+ 
+ void VOF_DIFFUSE_step(Cart3d_bag *db)
+ {
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++    diffuse_step_ice(db);
++    return;
++#endif
++
+     MAC_grid       *grid   = db->grid;
+     Parameters     *params = db->params;
+     VolumeFraction *vof    = db->vof;
+@@ -2022,6 +2209,81 @@
+     Array_copy_withghost(rhs_cur, vof->ch_rhs_n, grid, params);
+ }
+ 
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++/* Evolve real ice outside the resolved sediment mask.  The complementary
++ * variable makes zero ice an exact invariant of transport: a moving rock
++ * cannot nucleate another phase.  CH uses the same symmetric no-flux operator;
++ * its polynomial is the binary ice/water potential.  Fluxes into sediment are
++ * zero. Positive melt remains positive in melt_src for heat/tracer, but enters
++ * ice with the opposite sign. ch_rhs_n stores the ICE RHS in this build.
++ */
++static void diffuse_step_ice(Cart3d_bag *db)
++{
++    MAC_grid *g=db->grid;
++    Parameters *p=db->params;
++    VolumeFraction *v=db->vof;
++    const double BET[]={BETA},GAMB[]={GAMBETA},ZETB[]={ZETBETA};
++    const int st=p->which_stage;
++    const double a=1.0/(p->dt*BET[st]);
++    double ***cur=v->ch_aux2,***tmp=v->ch_aux1,***rhs=v->ch_rhs_nm1;
++    VOF_DIFFUSE_compute_melt_rate(db);
++    double local_source=0.0,global_source=0.0;
++    for (int k=g->G_Ks;k<g->G_Ke;++k)
++    for (int j=g->G_Js;j<g->G_Je;++j)
++    for (int i=g->G_Is;i<g->G_Ie;++i)
++        local_source += p->dt*BET[st]*(GAMB[st]*v->melt_src[k][j][i]
++            + ZETB[st]*v->melt_src_old[k][j][i])*diffuse_physical_cell_measure(g,p,i,j,k);
++    MPI_Allreduce(&local_source,&global_source,1,MPI_DOUBLE,MPI_SUM,PCW);
++    static double melt_integral=0.0;
++    melt_integral+=global_source;
++    if(st==2 && p->ntime%100==0) {
++        char msg[200];
++        snprintf(msg,sizeof(msg),"MELT_INTEGRAL ntime=%d time=%.12e source=%.12e\n",p->ntime,p->time,melt_integral);
++        Display_progress(p,msg);
++    }
++    for (int k=g->G_Ks;k<g->G_Ke;++k)
++    for (int j=g->G_Js;j<g->G_Je;++j)
++    for (int i=g->G_Is;i<g->G_Ie;++i)
++        v->C_L[k][j][i]=v->C_S[k][j][i]>=DIFFUSE_SOLID_MASS_CUTOFF ? 0.0 :
++            fmax(0.0,1.0-v->C_S[k][j][i]-v->C_L[k][j][i]);
++    VOF_DIFFUSE_set_boundary_values(v->C_L,db);
++    diffuse_evolving_ice=1;
++    VOF_DIFFUSE_advect_WENO5(db,cur);
++    VOF_DIFFUSE_explicit_diffusion(db,tmp);
++    for (int k=g->G_Ks;k<g->G_Ke;++k)
++    for (int j=g->G_Js;j<g->G_Je;++j)
++    for (int i=g->G_Is;i<g->G_Ie;++i) {
++        cur[k][j][i]+=tmp[k][j][i]-v->melt_src[k][j][i];
++        if (v->C_S[k][j][i]>=DIFFUSE_SOLID_MASS_CUTOFF) cur[k][j][i]=0.0;
++        rhs[k][j][i]=a*v->C_L[k][j][i]+GAMB[st]*cur[k][j][i];
++        if(st) rhs[k][j][i]+=ZETB[st]*v->ch_rhs_n[k][j][i];
++    }
++    VOF_DIFFUSE_set_boundary_values(cur,db);
++    VOF_DIFFUSE_set_boundary_values(rhs,db);
++    VOF_DIFFUSE_solve_implicit_biharmonic(db,rhs);
++    double delta=diffuse_bound_liquid_fraction(db),residual=0.0;
++    if(fabs(delta)>1.e-14) residual=diffuse_redistribute_liquid_mass_delta(db,-delta);
++    static double clip=0.0,unplaced=0.0;
++    clip+=delta;unplaced+=residual;
++    if(st==2 && p->ntime%100==0) {
++        char msg[200];
++        snprintf(msg,sizeof(msg),"ICE_TRANSPORT ntime=%d clip=%.12e unplaced=%.12e\n",p->ntime,clip,unplaced);
++        Display_progress(p,msg);
++    }
++    for (int k=g->G_Ks;k<g->G_Ke;++k)
++    for (int j=g->G_Js;j<g->G_Je;++j)
++    for (int i=g->G_Is;i<g->G_Ie;++i)
++        v->C_L[k][j][i]=v->C_S[k][j][i]>=DIFFUSE_SOLID_MASS_CUTOFF ? 0.0 :
++            1.0-v->C_S[k][j][i]-v->C_L[k][j][i];
++    diffuse_evolving_ice=0;
++    VOF_DIFFUSE_set_boundary_values(v->C_L,db);
++    VOF_DIFFUSE_update_phase_cache(db);
++    VOF_DIFFUSE_set_boundary_values(v->C_G,db);
++    Array_copy_withghost(v->ch_rhs_n,v->ch_rhs_nm1,g,p);
++    Array_copy_withghost(cur,v->ch_rhs_n,g,p);
++}
++#endif
++
+ 
+ 
+ #ifdef SURFACE_TENSION
+--- a/src/Eulerian/Include/post_processing.h
++++ b/src/Eulerian/Include/post_processing.h
+@@ -12,3 +12,7 @@
+ void Conc_compute_active_potential_energy(Concentration *c, MAC_grid *grid, Parameters *params);
+ void Conc_compute_passive_potential_energy(Concentration *c, MAC_grid *grid, Parameters *params) ;
+ void Conc_update_world_potential_energies(Concentration **c, MAC_grid *grid, Parameters *params) ;
++
++#ifdef ECCO_PROFILES
++void ECCO_write_profiles(Cart3d_bag *data_bag);
++#endif
+--- a/src/Eulerian/Include/VOF_DIFFUSE.h
++++ b/src/Eulerian/Include/VOF_DIFFUSE.h
+@@ -2,6 +2,9 @@
+ #define VOF_DIFFUSE_H
+ 
+ #include "DataTypes.h"
++
++/* Version 2 adds canonical periodic solid geometry to ice transport. */
++#define VOF_DIFFUSE_SEDIMENT_TRANSPORT_VERSION 2
+ 
+ /*
+  * Threshold above which a cell counts as RESOLVED SEDIMENT rather than fluid.
+@@ -64,6 +67,9 @@
+ void VOF_DIFFUSE_remove_disconnected_gas(Cart3d_bag *db);
+ 
+ void VOF_DIFFUSE_compute_C_S(Cart3d_bag *db);
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++void VOF_DIFFUSE_move_ice_mask(Cart3d_bag *db);
++#endif
+ void VOF_DIFFUSE_apply_contact_angle(Cart3d_bag *db);
+ void VOF_DIFFUSE_extend_psi_LG_contact_angle(Cart3d_bag *db);
+ void VOF_DIFFUSE_compute_solid_normals_MCL(Cart3d_bag *db);
+--- a/src/Lagrangian/Include/Particle.h
++++ b/src/Lagrangian/Include/Particle.h
+@@ -47,6 +47,10 @@
+ Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
+ 		Cart3d_bag *data_bag, double extra_range, double min_radius,
+ 		int include_self, int *n_recv);
++#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
++Particle *Particle_collect_owned_centers(Particle_list *p_list,
++        Cart3d_bag *data_bag,double extra_range,int *n_recv);
++#endif
+ void Particle_reduce_oversized_forces_to_owner(Particle_list *p_list,
+ 		Cart3d_bag *data_bag);
+ #endif

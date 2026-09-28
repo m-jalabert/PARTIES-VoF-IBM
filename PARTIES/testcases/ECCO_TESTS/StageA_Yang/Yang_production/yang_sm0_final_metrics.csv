@@ -1,0 +1,26 @@
+metric,value,target,status,notes
+job_state,COMPLETED,COMPLETED,PASS,SLURM exit code 0:0
+final_time,200.00000637991047,200,PASS,101 complete Data and Resume pairs
+iterations,400019,,diagnostic,dt reached 5e-4 cap
+initial_ice_volume,0.10000000000000003,0.1,PASS,physical cells only
+half_volume_time_sm0,60.286604261213576,approximately 59,PASS,inferred Yang f0 target
+mean_melt_rate_sm0,0.016587432851,approximately 0.01695,PASS,1 over half-volume time
+final_ice_volume_ratio,0.19787485664625282,,diagnostic,no raw Yang f0 curve
+half_volume_time_sm5,179.8484,approximately 118,FAIL,completed salty production run
+melt_rate_ratio_sm5_over_sm0,0.33520789877,approximately 0.5,FAIL,67.04 percent of target
+phase_min,0,0,PASS,all outputs
+phase_max,1,1,PASS,all outputs
+salt_max_abs,0,0,PASS,all outputs
+max_projection_divergence,1.1e-9,less than 1e-6,PASS,full log
+max_ch_iterations,17,,PASS,full log
+max_velocity_iterations,9,,PASS,full log
+max_concentration_iterations,4,,PASS,full log
+max_hypre_iterations,9,,PASS,full log
+max_fluid_speed,0.13631370586134622,,diagnostic,active freshwater convection
+max_solid_speed,0.00016860637339729569,much less than 1,PASS,F less than 0.1
+max_prehalf_window_enthalpy_change,5.99568709389e-7,less than 1e-6,PASS,t less than or equal to 60
+cumulative_enthalpy_drift_at_half,-9.324894225078614e-6,,PASS,equivalent to 0.0105 percent of V0
+max_fullrun_window_enthalpy_change,1.43355902293e-5,less than 1e-6,WARN,at t=84 after local melt-through
+final_enthalpy_drift,-0.0003545175969519063,,WARN,equivalent to 0.399 percent of V0
+first_local_meltthrough_output_time,72.00000637725294,,diagnostic,65 fully liquid rows
+fully_liquid_rows_at_t200,847,0,diagnostic,58.8194 percent of vertical rows

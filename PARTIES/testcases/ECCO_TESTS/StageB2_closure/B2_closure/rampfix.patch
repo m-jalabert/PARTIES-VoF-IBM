@@ -1,0 +1,74 @@
+--- a/PARTIES/src/Lagrangian/Lagrangian.c
++++ b/PARTIES/src/Lagrangian/Lagrangian.c
+@@ -1140,8 +1140,33 @@
+ 			else if (p->release_ramp > 0 && params->release_ramp_steps > 0) {
+ 				const double a = 1.0 - (double)p->release_ramp
+ 				                     / (double)params->release_ramp_steps;
+-				FORI3 U[i]     *= a;
+-				FORI3 Omega[i] *= a;
++				/* Ramp the STEP'S INCREMENT, not the accumulated velocity.
++				 *
++				 * `U[i] *= a` re-damped everything already accumulated, and it
++				 * did so once per RK stage: release_ramp is decremented by
++				 * Particle_release_by_interface at stage 0 only, while this
++				 * integrator runs every stage and the corrector rebuilds U from
++				 * an unchanged U_old.  The post-ramp velocity was therefore
++				 *     sum_k dt A_k prod_{j>=k} a_j  ~  dt A sqrt(pi N / 2)
++				 * with N = release_ramp_steps.  Holding the ramp DURATION fixed
++				 * means N ~ 1/dt, so that is U ~ A sqrt(dt T_ramp): the release
++				 * transient vanished as sqrt(dt) and had no convergent limit.
++				 * Measured at d/dx = 16 with the ramp duration matched at 0.1
++				 * (20478206 at max_dt = 0.01 and 10 steps, 20487690 at 0.005 and
++				 * 20 steps): post-ramp U_y differed by a factor 1.28.  Constant-
++				 * force models of the sequence give 1.23 (three stages per step)
++				 * to 1.24 (one), bracketing it; the force is not constant over
++				 * the ramp, so they fix the mechanism, not the constant.  The
++				 * grain leaves the ice by creeping, so that factor set the whole
++				 * break-out and left a permanent 0.874 time-unit offset -- 13.5%
++				 * of the fall distance, far outside the 2% debugging bar.
++				 *
++				 * Scaling only (U - U_old) = dt * A instead integrates a ramped
++				 * acceleration, so the post-ramp velocity tends to A * T_ramp / 2
++				 * independently of dt, first order.  It opens the response over
++				 * the same steps and so still suppresses the release impulse. */
++				FORI3 U[i]     = U_old[i]     + a * (U[i]     - U_old[i]);
++				FORI3 Omega[i] = Omega_old[i] + a * (Omega[i] - Omega_old[i]);
+ 			}
+ 		}
+ #endif
+@@ -1474,8 +1499,33 @@
+ 			else if (p->release_ramp > 0 && params->release_ramp_steps > 0) {
+ 				const double a = 1.0 - (double)p->release_ramp
+ 				                     / (double)params->release_ramp_steps;
+-				FORI3 U[i]     *= a;
+-				FORI3 Omega[i] *= a;
++				/* Ramp the STEP'S INCREMENT, not the accumulated velocity.
++				 *
++				 * `U[i] *= a` re-damped everything already accumulated, and it
++				 * did so once per RK stage: release_ramp is decremented by
++				 * Particle_release_by_interface at stage 0 only, while this
++				 * integrator runs every stage and the corrector rebuilds U from
++				 * an unchanged U_old.  The post-ramp velocity was therefore
++				 *     sum_k dt A_k prod_{j>=k} a_j  ~  dt A sqrt(pi N / 2)
++				 * with N = release_ramp_steps.  Holding the ramp DURATION fixed
++				 * means N ~ 1/dt, so that is U ~ A sqrt(dt T_ramp): the release
++				 * transient vanished as sqrt(dt) and had no convergent limit.
++				 * Measured at d/dx = 16 with the ramp duration matched at 0.1
++				 * (20478206 at max_dt = 0.01 and 10 steps, 20487690 at 0.005 and
++				 * 20 steps): post-ramp U_y differed by a factor 1.28.  Constant-
++				 * force models of the sequence give 1.23 (three stages per step)
++				 * to 1.24 (one), bracketing it; the force is not constant over
++				 * the ramp, so they fix the mechanism, not the constant.  The
++				 * grain leaves the ice by creeping, so that factor set the whole
++				 * break-out and left a permanent 0.874 time-unit offset -- 13.5%
++				 * of the fall distance, far outside the 2% debugging bar.
++				 *
++				 * Scaling only (U - U_old) = dt * A instead integrates a ramped
++				 * acceleration, so the post-ramp velocity tends to A * T_ramp / 2
++				 * independently of dt, first order.  It opens the response over
++				 * the same steps and so still suppresses the release impulse. */
++				FORI3 U[i]     = U_old[i]     + a * (U[i]     - U_old[i]);
++				FORI3 Omega[i] = Omega_old[i] + a * (Omega[i] - Omega_old[i]);
+ 			}
+ 		}
+ #endif
