@@ -1,0 +1,27 @@
+# Yang figure 3(b) [= JFM fig 4(b)]: normalized melt rate f_bar/f_bar_0.
+# series_rank 0 = lightest = dSv 0; ranks increase with dSv.
+# The digitizer recovers the well-separated series; overlapping markers
+# in the two darkest series are partially missed.  2-D circles only.
+series_rank,Sm_g_per_kg,f_ratio
+0,2.01,0.9388
+0,4.01,0.8923
+0,5.01,0.9101
+0,7.51,0.9388
+0,10.01,0.9554
+0,15.01,1.0484
+1,2.01,0.8117
+1,4.01,0.6876
+1,5.01,0.7345
+1,7.51,0.7602
+1,10.01,0.7880
+1,15.01,0.8179
+2,1.26,0.7880
+2,2.51,0.6240
+2,5.01,0.6099
+2,7.51,0.6543
+2,10.01,0.6830
+2,15.01,0.7345
+3,5.01,0.4972
+3,7.51,0.5213
+3,10.01,0.5213
+3,15.01,0.5290

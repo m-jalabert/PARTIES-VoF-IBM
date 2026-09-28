@@ -1,8 +1,18 @@
 # A.4 Yang production run — paper-grounded expected results
 
-> **Post-run status (2026-07-12): overall FAIL.** Morphology passed, but `t½=179.848` and
-> `V(200)/V₀=0.45616` missed the required melt-curve targets. See the full
-> [production analysis](../../../../docs/md_files/YANG_PRODUCTION_ANALYSIS_REPORT.md).
+> **TARGETS CORRECTED 2026-07-27 — §1.1 below was wrong.** Yang figure 3(a)/4(a), from which the
+> `t½ ≈ 118` and `V(200)/V₀ ≈ 0.32` targets were digitized, is the **`ΔSv = 0`** series, not
+> `ΔSv = 5`. This case is `Sm = 5, ΔSv = 5`, whose only published datum is the panel-(b) marker
+> `f̄/f̄₀ = 0.497` ⇒ `t½ ≈ 216`. The error is visible in the two rows of §1.1 below that mix the
+> panel-(a) `Sm`-curve ordering with the panel-(b) `ΔSv = 5` series. Corrected targets are in
+> §1.1a; provenance and three independent proofs are in
+> [YANG_REFERENCE_CORRECTION_REPORT.md](../../../../../docs/md_files/NASA-JPL/YANG_REFERENCE_CORRECTION_REPORT.md).
+>
+> **Post-run status (2026-07-12, re-scored 2026-07-27): overall FAIL, but in the opposite
+> direction.** Morphology passed. `t½ = 179.848` against the corrected target `≈216` is **1.20×
+> too fast**, not 52 % too slow. The companion `Sm=0` run (`t½ = 60.287` against the directly
+> digitized `107.42`) is **1.78× too fast** and is now the campaign's largest discrepancy. See the
+> [production analysis](../../../../../docs/md_files/NASA-JPL/YANG_PRODUCTION_ANALYSIS_REPORT.md).
 
 **Case:** 2-D Cartesian reproduction of the reference case of Yang, Howland, Liu, Verzicco &
 Lohse (2023), *Ice melting in salty water* (JFM 969, R2,
@@ -62,6 +72,29 @@ therefore be diagnosed before assigning it solely to resolution or geometry.
 Project acceptance: `t½` within 10 % and `V(200)/V₀` within about 0.05 of the digitized 2-D
 curve. These tolerances are project choices, not uncertainty bounds stated by Yang et al. The
 ordering is a sharper later check: another `Sm` point must reproduce the non-monotonic trend.
+
+### 1.1a CORRECTED targets (2026-07-27) — supersede the table above
+
+The table in §1.1 reads the panel-(a) curve family (`ΔSv = 0`, four `Sm` values) as if it were the
+panel-(b) `ΔSv = 5` series. It is not. Digitized from the archived arXiv vector figure by
+`digitize_yang_fig3.py` (data: `yang_fig3a_reference.csv`, `yang_fig3b_reference.csv`):
+
+| Case | Yang `t½` | Yang `V(200)/V₀` | source |
+|---|---:|---:|---|
+| `Sm=0` (`ΔSv=0` necessarily) | **107.42** | 0.2483 | fig 3(a), measured directly |
+| `Sm=5, ΔSv=0` | 118.42 | 0.3142 | fig 3(a) |
+| `Sm=10, ΔSv=0` | 112.21 | 0.2837 | fig 3(a) |
+| `Sm=15, ΔSv=0` | 101.84 | 0.2245 | fig 3(a) |
+| **`Sm=5, ΔSv=5` — THIS CASE** | **≈216** | not published | fig 3(b) rank 3: `f̄/f̄₀ = 0.497` |
+
+`f̄ = 1/t½` is confirmed verbatim from the paper source, so `f̄₀ = 1/107.42`.
+
+**Whenever a target is quoted from now on, state `ΔSv` with it.** The whole error was possible
+because the campaign wrote "the Sm = 5 curve" without its `ΔSv`, and the paper plots two different
+`Sm = 5` cases in the two panels of the same figure.
+
+`yang_fig4_sm5_reference.csv` is **superseded**: it holds the `Sm=5, ΔSv=0` curve under a
+`Sm5_DeltaSv5` label. Retained for provenance only; do not score against it.
 
 ### 1.2 Melt-front layering vs Huppert & Turner (published Yang Fig. 3b; arXiv Fig. 2b)
 
