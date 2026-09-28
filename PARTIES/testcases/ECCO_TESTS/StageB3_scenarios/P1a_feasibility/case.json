@@ -1,0 +1,154 @@
+{
+  "selection_date": "2026-09-25",
+  "selection": "User accepted proposed idealized case",
+  "physical": {
+    "d_m": 0.001,
+    "rho_p_kg_m3": 2650.0,
+    "CT_bottom_C": 0.0,
+    "SA_interface_g_kg": 34.0,
+    "gamma_S_g_kg_m": 0.01,
+    "p0_dbar": 0.0,
+    "CT_ice_C": -1.8487606749834498,
+    "rho0_kg_m3": 1027.1720724319753,
+    "nu_m2_s": 1.8e-06,
+    "kappa_T_m2_s": 1.4e-07,
+    "cp_J_kg_K": 3991.86795711963,
+    "latent_J_kg": 333500.0,
+    "salt_diffusivity_reference_m2_s": 1e-09,
+    "properties_note": "Fixed idealized constants, not a site calibration. cp is TEOS-10 cp0 for CT; constant latent heat and unit ice/water diffusivity are model approximations."
+  },
+  "eos": {
+    "choice": "Existing EOS_NONLINEAR, q=2; thermal-response fit with pinned density-maximum locus",
+    "gsw_version": "3.6.23",
+    "pressure_dbar": 0.0,
+    "density_routine": "rho_t_exact(SA,t_from_CT(SA,CT,p),p)",
+    "CT_range_C": [
+      -1.8487606749834498,
+      0.03
+    ],
+    "SA_range_g_kg": [
+      0.0,
+      34.00022
+    ],
+    "linear_coefficients_rho_c0_cT_cS": [
+      999.8294388716997,
+      0.01861513967636952,
+      0.8060674934300912
+    ],
+    "linear_rejected": "Positive d(rho)/dCT gives wrong sign in ambient seawater; a total-density least-squares objective hides local thermal errors.",
+    "dimensional_rho_a_b_Tmd0_TmdSlope_h": [
+      999.9357419686098,
+      0.00755122590804251,
+      4.194739622718169,
+      -0.22876573973504447,
+      0.8018694945119678
+    ],
+    "density_error_kg_m3": {
+      "max_absolute": 0.06982610246495824,
+      "rms": 0.027326500350098856
+    },
+    "thermal_derivative_error_kg_m3_K": {
+      "max_absolute": 0.0038998186239750515,
+      "rms": 0.0009492947089405421
+    },
+    "haline_derivative_error_kg_m3_per_g_kg": {
+      "max_absolute": 0.013129225315681281,
+      "rms": 0.00598530666984805
+    },
+    "density_maximum_locus_error_K": {
+      "max_absolute": 0.03912701775736016,
+      "rms": 0.011212317467298592
+    },
+    "ambient_thermal_relative_error_max": 0.06401654058395224,
+    "coefficients": {
+      "eos_q": 2.0,
+      "eos_betaT": 0.0009466648317134033,
+      "eos_betaS": 1.0,
+      "eos_Tmd0": 3.2689468028389994,
+      "eos_Tmd_slope": -4.207161725279094
+    },
+    "density_error_over_haline_scale": {
+      "max_absolute": 0.002561151047750118,
+      "rms": 0.0010023084853994578
+    }
+  },
+  "liquidus": {
+    "a_f_C": 0.01794734606501719,
+    "m_f_K_per_g_kg": 0.0549031770896608,
+    "error_K": {
+      "max_absolute": 0.02080975231268578,
+      "rms": 0.014023007690450165
+    },
+    "T_melt": 1.009707771431896,
+    "liquidus_slope": 1.009707771431896,
+    "note": "Secant exact at SA=0 and 34; includes pressure-dependent freshwater CT freezing. Interior residual is reported, not hidden."
+  },
+  "scaling": {
+    "U_ref_m_s": 0.01613630918449052,
+    "t_ref_s": 0.061972040109466546,
+    "DeltaT_K": 1.8487606749834498,
+    "beta_per_g_kg": 0.0007806574146953083,
+    "Re": 8.964616213605847,
+    "Pr": 12.857142857142856,
+    "Sc_sim": 70.0,
+    "Le": 5.444444444444445,
+    "Pe_T": 115.25935131778945,
+    "Pe_S": 627.5231349524094,
+    "St": 0.022128961016039856,
+    "G_star": 37.675636139780735,
+    "rho_s": 2.5798988028614818,
+    "Ga": 69.16344761824494,
+    "salt_diffusivity_sim_m2_s": 2.571428571428571e-08,
+    "N_squared_s2": 7.540014015030902e-05
+  },
+  "bounded_P1": {
+    "time_max": 10.0,
+    "physical_duration_s": 0.6197204010946654,
+    "max_dt": 0.002,
+    "default_dt": 0.0002,
+    "intended_ramp_duration": 0.1,
+    "release_ramp_steps": 50,
+    "field_interval": 0.025,
+    "nominal_steps_at_cap": 5000.0,
+    "source_relaxation_scale": 0.9004636821702301,
+    "speed_planning_bound": 5.0,
+    "advective_cfl_at_bound": 0.24,
+    "nominal_SU": [
+      98.14696485623003,
+      663.4989200863931
+    ],
+    "SU_with_30pct_contingency": [
+      127.59105431309904,
+      862.5485961123111
+    ],
+    "allocated_cores": 128,
+    "wall_hours_hard_cap": 3,
+    "SU_hard_cap": 384,
+    "note": "Bounded feasibility segment, not an assertion of completed P1 or a post-escape window; stop/checkpoint at 170 min, scheduler limit 180 min. No automatic continuation.",
+    "storage_estimate_GiB": 250
+  },
+  "heat_planning": {
+    "initial_reservoir_melt_depth_d": 0.17703168812831885,
+    "one_d_retreat_conduction_time": 36434.86680453334,
+    "one_d_retreat_physical_s": 2257.9430269936115,
+    "one_d_retreat_SU": [
+      357597.15918059554,
+      2417449.477829944
+    ],
+    "caveat": "Order-of-magnitude heat estimate, not release prediction or rigorous cost bound; cold top reduces heat, convection can increase it, dilution changes liquidus. Actual detachment timing is unvalidated."
+  },
+  "P2_planning": {
+    "cells": 5242880,
+    "max_dt": 0.001,
+    "default_dt": 0.0001,
+    "same_duration_SU": [
+      465.28931487397944,
+      3145.476361891049
+    ],
+    "authorized": false
+  },
+  "references": [
+    "https://teos-10.github.io/GSW-Python/density.html",
+    "https://teos-10.github.io/GSW-Python/gsw_flat.html#gsw.CT_freezing"
+  ]
+}

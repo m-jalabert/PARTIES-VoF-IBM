@@ -1,0 +1,185 @@
+# Salty resolution test, N = 288.  Identical to the completed 1440^2
+# Sm=5 dSv=5 production input except the grid and the four grid-tied
+# numbers (Cn = melt_band_eps = 0.75dx, Pe_CH = 0.9/Cn, zmax = dx,
+# dt ~ dx) and time_max.  cbd2=0.5 / cbd5=1.5 keep the stratification.
+# Cn = 0.75dx is a TUNED mapping -- do not vary it independently
+# (see roadmap A.5.5 item 3, Step C failure).
+[geometry]
+# A.4 Yang production run (Yang et al. 2023 reference case).
+# x = horizontal ice-normal direction, y = vertical (gravity -y), z = storage-only periodic slab in TWOD_CARTESIAN.
+# H = 5 cm, dT = 20 K, Sm = 5 g/kg, dSv = 5 g/kg, RaT = 1e7, Pr = 10, Sc = 1000, St_Yang = 4.
+xmin = 0.0
+xmax = 1.0
+ymin = 0.0
+ymax = 1.0
+zmin = 0.0
+zmax = 0.003472222222222222
+twod_slab_thickness = 0.003472222222222222
+# = 1/1440: TWOD_CARTESIAN uses one storage-only periodic slab. Keep FULL
+# double precision; GRID_UNIFORM aborts if dz deviates from dx by > 1e-12
+# relative.
+
+[grid]
+NXM = 288
+NYM = 288
+NZM = 1
+ImportGridFromFile = 0
+
+[simulation]
+# Published comparison window (JFM Fig. 4a; arXiv Fig. 3a) ends at t/t_ff = 200.
+time_max = 350.0
+# Two free-fall units resolve the volume curve/front while limiting this 2-D
+# storage run to about 101 Data/Resume pairs (roughly 60 GB with the present
+# HDF5 layout).
+output_time_interval = 2.0
+output_time_interval_2d = 2.0
+# adaptive CFL stepping; 1e-4 is the safe production start (see roadmap A.4 timestep check).
+default_dt = 0.0005
+max_dt = 0.0025
+constant_dt = 0
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+Re = 1000.0
+# = sqrt(RaT/Pr) = sqrt(1e7/10); free-fall units on the thermal density scale Cb*dT^2/2
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+# water = phase1 (F=1), ice = phase2 (F=0); Boussinesq: rho2 = rho1.
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+# Yang's momentum equation uses one constant liquid viscosity throughout the
+# diffuse phase field; ice rigidity is supplied by the penalty term.
+mu2 = 1.0
+init_type = 27
+vof_slab_x0 = 0.9
+# PARTIES-calibrated CH thickness (0.75*dx), retained from the converged Stefan
+# gates. This is not a literal copy of AFiD's epsilon parameterization.
+Cn = 0.0026041666666666665
+# Pe_CH = 0.9/Cn, the same rule as the A.3/A.3b gates and the A.2 checkout.
+Pe_CH = 345.6
+# Yang uses eta=dt plus direct zero-velocity forcing for solid fraction >0.9.
+# PARTIES has no such direct-forcing branch; tau=1e-4 is the validated implicit
+# Brinkman value and matches the initial dt.
+darcy_tau = 1.0e-4
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-11
+contact_angle_deg = 90.0
+
+[phase_change]
+stefan = 0.25
+# = cp*dT/L = 1/St_Yang with St_Yang = L/(cp*dT) = 4
+T_melt = 0.0
+liquidus_slope = 0.014
+# = m*Sm/dT = 0.056 K/(g/kg) * 5 / 20 (standard seawater liquidus slope)
+melt_band_eps = 0.0026041666666666665
+# = Cn; explicit melt-source limit dt < Pe_T*eps*4*Cn ~ 1e-2, far above the CFL limit
+
+[eos]
+# Roquet quadratic EOS, Yang et al. 2023 eq. (2) nondimensionalized with
+# theta = (T - Ti)/dT, s = S/Sm, density scale Cb*dT^2/2:
+# b(theta,s) = -|theta - Tmd0 - Tmd_slope*s|^q + betaS*s
+# Cb = 0.011 kg/m^3/K^2, b0 = 0.77 kg/m^3/(g/kg), T0 = 4 C, cS = -0.25 K/(g/kg)
+eos_q = 2.0
+eos_betaT = 1.0
+eos_betaS = 1.75
+# = LambdaT = 2*b0*Sm/(Cb*dT^2) = RaS/RaT
+eos_Tmd0 = 0.2
+# = (T0 - Ti)/dT = 4/20
+eos_Tmd_slope = -0.0625
+# = cS*Sm/dT = -0.25*5/20 (density-maximum shift; NOT the liquidus)
+
+[conc]
+# field 0 = theta (temperature), field 1 = s (salinity)
+NConc = 2
+Nbin = 1000
+Pe = {1.0e4, 1.0e6}
+# = {Re*Pr, Re*Sc}
+richardson = {0.0, 0.0}
+# linear buoyancy off: EOS_NONLINEAR supplies b(theta,s)
+V_s0 = {0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0}
+conductivity_s = {1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0}
+# heat conducts in ice, salt flux masked in ice
+conc_init_type = {30, 31}
+cbd0 = 1.0
+# theta_water = (Tw - Ti)/dT = 1 (Tw = 20 C)
+cbd1 = 0.0
+theta_ice = 0.0
+# ice initially at the fresh melting temperature (Yang: Ti = 0 C)
+cbd2 = 0.5
+# s_top = (Sm - dSv/2)/Sm = 2.5/5
+cbd5 = 1.5
+# s_bot = (Sm + dSv/2)/Sm = 7.5/5 (stable stratification, s linear in y inside the liquid)
+# Code convention: A*d(c)/dn + B*c = C. All physical walls are no-flux
+# (A=1, B=0, C=0) for BOTH fields, matching Yang; z is periodic.
+BC_AW = {1.0, 1.0}
+BC_BW = {0.0, 0.0}
+BC_CW = {0.0, 0.0}
+BC_AE = {1.0, 1.0}
+BC_BE = {0.0, 0.0}
+BC_CE = {0.0, 0.0}
+BC_AN = {1.0, 1.0}
+BC_BN = {0.0, 0.0}
+BC_CN = {0.0, 0.0}
+BC_AS = {1.0, 1.0}
+BC_BS = {0.0, 0.0}
+BC_CS = {0.0, 0.0}
+BC_AF = {1.0, 1.0}
+BC_BF = {0.0, 0.0}
+BC_CF = {0.0, 0.0}
+BC_AB = {1.0, 1.0}
+BC_BB = {0.0, 0.0}
+BC_CB = {0.0, 0.0}
+
+[particle]
+# no particles in Stage A; gravity unit vector along -y (vertical)
+rho_s = 1.0
+rho_prImp = 1.0
+grav = {0.0, -1.0, 0.0}
+N_forcing_loops = 1
+N_heating_loops = 0
+N_impheating_loops = 0
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0}
+conc_output_Q_int = {0, 0}
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

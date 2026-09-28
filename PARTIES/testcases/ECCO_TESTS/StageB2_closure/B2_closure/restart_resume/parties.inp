@@ -1,0 +1,182 @@
+# Stage-B reduced 3-D shakeout (roadmap B.2).
+#
+# Purpose: exercise the FULL 3-D coupled path -- melt + lock + release + settle
+# + scalars + wall collision -- cheaply, to find bugs.  NOT science: the grid is
+# coarse (d/dx = 16, production wants >= 24) and Pe is reduced.
+#
+# TWO CORRECTIONS TO THE B.2 SPEC AS WRITTEN:
+#
+#  1. conc_init_type was {32, 33, 34}.  The implemented ECCO inits are 34
+#     (ice-layer temperature) and 35 (ice-layer salinity); the meltwater tracer
+#     needs no init (it starts at zero, which is the default branch).  So the
+#     correct triple is {34, 35, 0}.
+#
+#  2. Pe = 700 with time_max = 20 CANNOT free the grain.  The front has to
+#     travel one particle diameter (16 cells) to clear it, which by the
+#     one-phase Stefan law 2*lambda*sqrt(t/Pe) with lambda = 0.354 takes
+#     t ~ 1400 at Pe = 700 -- seventy times the specified time_max.  The run
+#     would have ended with the grain still locked and looked like a release
+#     bug.  Pe_T is reduced to 100 (t ~ 200 by diffusion alone, less with
+#     convection) and time_max raised to 250.  Pe_S keeps Sc = 7 relative to it.
+#
+# Geometry: ice occupies y > 7 (VOF init 28); grain centred at y = 7.5 with
+# R = 0.5, so it spans 7.0-8.0 -- fully inside the ice, its bottom exactly on
+# the interface.  Once freed it settles 7 diameters to the bottom wall, which
+# is what exercises the collision path.
+[geometry]
+xmin = 0.0
+xmax = 4.0
+ymin = 0.0
+ymax = 6.0
+zmin = 0.0
+zmax = 4.0
+
+[grid]
+NXM = 32
+NYM = 48
+NZM = 32
+ImportGridFromFile = 0
+
+[simulation]
+time_max = 0.2
+output_time_interval = 0.05
+output_time_interval_2d = 5.0
+default_dt = 0.001
+max_dt = 0.001
+constant_dt = 1
+cfl = 0.3
+ghost_nodes = 3
+resume = 1
+freeze_velocity = 0
+
+[flow]
+Re = 100.0
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 1.0
+init_type = 28
+vof_slab_x0 = 0.6
+Cn = 0.09375
+Pe_CH = 19.2
+darcy_tau = 1e-3
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-11
+contact_angle_deg = 90.0
+
+[phase_change]
+stefan = 0.25
+T_melt = 0.0
+liquidus_slope = 0.014
+melt_band_eps = 0.09375
+meltwater_tracer = 1
+
+[eos]
+eos_q = 2.0
+eos_betaT = 1.0
+eos_betaS = 1.75
+eos_Tmd0 = 0.2
+eos_Tmd_slope = -0.0625
+
+[conc]
+# 0 = temperature, 1 = salinity, 2 = meltwater tracer (init 0 = zero everywhere)
+NConc = 3
+Nbin = 1000
+Pe = {10.0, 70.0, 10.0}
+richardson = {0.0, 0.0, 0.0}
+V_s0 = {0.0, 0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0, 1.0}
+conductivity_s = {1.0, 1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0, 0.0}
+conc_init_type = {34, 35, 0}
+cbd0 = 1.0
+cbd1 = 0.0
+theta_ice = 0.0
+cbd2 = 0.0
+cbd5 = 0.0
+BC_AW = {1.0, 1.0, 1.0}
+BC_BW = {0.0, 0.0, 0.0}
+BC_CW = {0.0, 0.0, 0.0}
+BC_AE = {1.0, 1.0, 1.0}
+BC_BE = {0.0, 0.0, 0.0}
+BC_CE = {0.0, 0.0, 0.0}
+# Thermal BCs -- CORRECTED 2026-08-30 after run 20218407.
+#
+# These were no-flux on BOTH y walls for all three scalars, which makes the
+# ocean a FINITE heat reservoir: the sensible heat available is int(theta)=0.696
+# against 4*0.304=1.217 needed to melt all the ice, so at most ~57% of the ice
+# can ever melt.  Run 20218407 reached t=250 (full time_max) with mean(theta)
+# decayed 0.696 -> 0.405 and phi_liq still climbing but decelerating (increments
+# per 25 t.u.: 0.058, 0.051, 0.041, 0.034, 0.029, 0.025, 0.023, 0.021).  The
+# grain never released, so B.2 checks (2) impulse-free release and (4) wall
+# collision were untestable -- the same structural defect already found in
+# StageB_release2d.
+#
+# Fixed by matching StageB_release_fn, the deck that demonstrably releases:
+# Dirichlet theta = 1 on the SOUTH (bottom) wall drives sustained melting.
+# Convention: A*dc/dn + B*c = C.  Field 0 = T, 1 = S, 2 = meltwater tracer.
+# Top wall stays no-flux for everything; S and the tracer stay no-flux on both.
+BC_AN = {1,1,1}
+BC_BN = {0,0,0}
+BC_CN = {0,0,0}
+BC_AS = {1,1,1}
+BC_BS = {0,0,0}
+BC_CS = {0,0,0}
+BC_AF = {1.0, 1.0, 1.0}
+BC_BF = {0.0, 0.0, 0.0}
+BC_CF = {0.0, 0.0, 0.0}
+BC_AB = {1.0, 1.0, 1.0}
+BC_BB = {0.0, 0.0, 0.0}
+BC_CB = {0.0, 0.0, 0.0}
+
+[particle]
+rho_s = 2.5
+rho_prImp = 2.5
+grav = {0.0, -1.0, 0.0}
+N_forcing_loops = 1
+N_heating_loops = 0
+N_impheating_loops = 0
+F_release = 0.709
+release_shell_cells = 2.0
+release_ramp_steps = 10
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0, 0}
+conc_output_Q_int = {0, 0, 0}
+output_vfc = 1
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

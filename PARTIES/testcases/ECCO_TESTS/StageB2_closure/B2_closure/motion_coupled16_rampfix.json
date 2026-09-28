@@ -1,0 +1,19 @@
+{
+  "coupled16_rampfix": {
+    "a_free": 0.6,
+    "release_time": 33.72802539,
+    "released": true,
+    "locked_displacement_max": 0.0,
+    "locked_speed_max": 0.0,
+    "release_acceleration_over_free": 0.32368680588549104,
+    "min_y": 0.48818054951714396,
+    "final_y": 0.49969316279025655,
+    "final_U": [
+      -5.190417772055735e-05,
+      1.009884684953123e-05,
+      -1.679518994762387e-05
+    ],
+    "min_Uy": -0.6710554070718441,
+    "first_wall_time": 44.64843733
+  }
+}

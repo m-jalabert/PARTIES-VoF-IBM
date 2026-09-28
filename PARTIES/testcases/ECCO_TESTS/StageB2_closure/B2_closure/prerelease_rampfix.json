@@ -1,0 +1,305 @@
+{
+  "release_time": 33.72802539,
+  "snapshots": [
+    {
+      "file": "Data_0.h5",
+      "time_a": 0.0,
+      "time_b": 0.0,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_1.h5",
+      "time_a": 1.998025392938862,
+      "time_b": 1.998025392938862,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_2.h5",
+      "time_a": 3.9980253929388194,
+      "time_b": 3.9980253929388194,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_3.h5",
+      "time_a": 5.998025392938777,
+      "time_b": 5.998025392938777,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_4.h5",
+      "time_a": 7.998025392938734,
+      "time_b": 7.998025392938734,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_5.h5",
+      "time_a": 9.998025392938692,
+      "time_b": 9.998025392938692,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_6.h5",
+      "time_a": 11.998025392938649,
+      "time_b": 11.998025392938649,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_7.h5",
+      "time_a": 13.998025392938606,
+      "time_b": 13.998025392938606,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_8.h5",
+      "time_a": 15.998025392938564,
+      "time_b": 15.998025392938564,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_9.h5",
+      "time_a": 17.998025392938878,
+      "time_b": 17.998025392938878,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_10.h5",
+      "time_a": 19.99802539293919,
+      "time_b": 19.99802539293919,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_11.h5",
+      "time_a": 21.998025392939503,
+      "time_b": 21.998025392939503,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_12.h5",
+      "time_a": 23.998025392939816,
+      "time_b": 23.998025392939816,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_13.h5",
+      "time_a": 25.99802539294013,
+      "time_b": 25.99802539294013,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_14.h5",
+      "time_a": 27.99802539294044,
+      "time_b": 27.99802539294044,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_15.h5",
+      "time_a": 29.998025392940754,
+      "time_b": 29.998025392940754,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_16.h5",
+      "time_a": 31.998025392941067,
+      "time_b": 31.998025392941067,
+      "before_release": true,
+      "max_abs_difference": 0.0,
+      "worst_field": null,
+      "bit_identical": true
+    },
+    {
+      "file": "Data_17.h5",
+      "time_a": 33.99547480498668,
+      "time_b": 33.99515436312418,
+      "before_release": false,
+      "max_abs_difference": 0.16266006042150016,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_18.h5",
+      "time_a": 35.999443460077224,
+      "time_b": 35.99859008538317,
+      "before_release": false,
+      "max_abs_difference": 1.0488285538479811,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_19.h5",
+      "time_a": 37.99705220878457,
+      "time_b": 38.00320068973452,
+      "before_release": false,
+      "max_abs_difference": 0.9536950808277447,
+      "worst_field": "VOF/C_L",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_20.h5",
+      "time_a": 39.998273776336184,
+      "time_b": 39.99570849999311,
+      "before_release": false,
+      "max_abs_difference": 0.9543426779593693,
+      "worst_field": "VOF/C_L",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_21.h5",
+      "time_a": 41.99579187876957,
+      "time_b": 42.00319351987995,
+      "before_release": false,
+      "max_abs_difference": 0.9559789520403675,
+      "worst_field": "VOF/C_L",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_22.h5",
+      "time_a": 43.995791878769175,
+      "time_b": 44.00319351987955,
+      "before_release": false,
+      "max_abs_difference": 0.960310891734571,
+      "worst_field": "VOF/C_L",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_23.h5",
+      "time_a": 45.998913346866956,
+      "time_b": 46.002597743268346,
+      "before_release": false,
+      "max_abs_difference": 0.14583980522799828,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_24.h5",
+      "time_a": 47.999214491443,
+      "time_b": 47.99768977028039,
+      "before_release": false,
+      "max_abs_difference": 0.08157815859587784,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_25.h5",
+      "time_a": 49.99951563601904,
+      "time_b": 49.99799091485643,
+      "before_release": false,
+      "max_abs_difference": 0.016093710268192757,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_26.h5",
+      "time_a": 51.99981678059508,
+      "time_b": 51.99829205943247,
+      "before_release": false,
+      "max_abs_difference": 0.0446883111876069,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_27.h5",
+      "time_a": 54.000117925171125,
+      "time_b": 53.998593204008515,
+      "before_release": false,
+      "max_abs_difference": 0.018995150208198072,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_28.h5",
+      "time_a": 56.00041906974717,
+      "time_b": 55.99889434858456,
+      "before_release": false,
+      "max_abs_difference": 0.0221853919964331,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_29.h5",
+      "time_a": 58.00072021432321,
+      "time_b": 57.9991954931606,
+      "before_release": false,
+      "max_abs_difference": 0.04069735885422561,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_30.h5",
+      "time_a": 60.00102135889925,
+      "time_b": 59.99949663773664,
+      "before_release": false,
+      "max_abs_difference": 0.022599001619196035,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_31.h5",
+      "time_a": 62.00132250347529,
+      "time_b": 61.99979778231268,
+      "before_release": false,
+      "max_abs_difference": 0.09514819153070292,
+      "worst_field": "p",
+      "bit_identical": false
+    },
+    {
+      "file": "Data_32.h5",
+      "time_a": 64.00162364805134,
+      "time_b": 64.00009892688873,
+      "before_release": false,
+      "max_abs_difference": 0.13103488272641794,
+      "worst_field": "p",
+      "bit_identical": false
+    }
+  ],
+  "pre_release_snapshots": 17,
+  "pre_release_all_bit_identical": true,
+  "pre_release_max_difference": 0.0
+}

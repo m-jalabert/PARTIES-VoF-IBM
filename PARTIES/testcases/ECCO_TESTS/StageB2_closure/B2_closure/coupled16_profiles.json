@@ -1,0 +1,14 @@
+{
+  "start_time": 0.0,
+  "end_time": 65.00698333790199,
+  "profile_times": 855,
+  "max_time_gap": 0.10000000000001741,
+  "tracer_max_relative": 7.305915010270449e-07,
+  "tracer_max_absolute": 8.817267023175646e-06,
+  "heat_max_relative": 1.054476448345442e-06,
+  "salt_nonzero_tested": true,
+  "salt_max_relative": 4.446838374648916e-16,
+  "salt_max_absolute": 3.3306690738754696e-16,
+  "dissipation_integrated": 38.573720344621385,
+  "minimum_dissipation": 0.0
+}

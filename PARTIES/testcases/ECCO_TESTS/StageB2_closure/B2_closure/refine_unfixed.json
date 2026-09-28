@@ -1,0 +1,52 @@
+{
+  "runs": [
+    "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_20478206",
+    "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_halfdt_20487690",
+    "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_quarterdt_20492786"
+  ],
+  "max_dt": [
+    0.01,
+    0.005,
+    0.0025
+  ],
+  "pairs": [
+    {
+      "release_difference": 0.012961619999998675,
+      "escape_lag": 0.874310389119004,
+      "escape_arrival_a": 5.773240513635031,
+      "escape_arrival_b": 6.647550902754035,
+      "open_water_Uy_max_relative": 0.03253017790274306,
+      "open_water_Uy_rms_relative": 0.0257256122559584,
+      "contact_difference": 0.7320541999999932,
+      "max_dt": [
+        0.01,
+        0.005
+      ]
+    },
+    {
+      "release_difference": 0.0045247700000032864,
+      "escape_lag": 0.8005601266691205,
+      "escape_arrival_a": 6.647550902754035,
+      "escape_arrival_b": 7.448111029423155,
+      "open_water_Uy_max_relative": 0.027372409621371795,
+      "open_water_Uy_rms_relative": 0.023140809803283608,
+      "contact_difference": 0.6750000000000043,
+      "max_dt": [
+        0.005,
+        0.0025
+      ]
+    }
+  ],
+  "observed_order": {
+    "escape_lag": 0.12713578063221073,
+    "open_water_Uy_max_relative": 0.24905627006539566,
+    "open_water_Uy_rms_relative": 0.15276606104787163,
+    "contact_difference": 0.11706296489291601
+  },
+  "richardson_error_of_finest": {
+    "escape_lag": 0.8005601266691205,
+    "open_water_Uy_max_relative": 0.1452660855638456,
+    "open_water_Uy_rms_relative": 0.023140809803283608,
+    "contact_difference": 0.6750000000000043
+  }
+}

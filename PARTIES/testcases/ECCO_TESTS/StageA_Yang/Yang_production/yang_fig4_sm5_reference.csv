@@ -1,0 +1,11 @@
+time_t_ff,ice_volume_ratio,digitization_uncertainty,source_figure,curve
+40,0.78218,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+60,0.69664,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+80,0.61855,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+100,0.55273,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+118,0.50360,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+120,0.49000,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+140,0.44218,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+160,0.39164,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+180,0.34818,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue
+198,0.31455,0.01,Yang_et_al_2023_JFM_Fig4a,Sm5_DeltaSv5_light_blue

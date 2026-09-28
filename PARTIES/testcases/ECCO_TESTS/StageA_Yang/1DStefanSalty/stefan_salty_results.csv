@@ -1,0 +1,14 @@
+criterion,measured,reference,tolerance,pass
+1 front law lambda,0.25320,0.25554,rel.err <= 3%,PASS
+2 theta similarity,1.662e-02,0,max err <= 0.05,PASS
+3 s similarity,4.458e-03,0,max err <= 0.05,PASS
+4a interface s(X),0.1646,0.1722,rel.err <= 15%,PASS
+4b interface theta(X),-0.0747,-0.0861,abs.err <= 0.03,PASS
+5 salt conservation,2.924e-13,0,<= 1e-8,PASS
+6 salt in ice,3.621e-11,0,<= 1e-8,PASS
+7 enthalpy conservation,2.990e-10,0,<= 1e-8,PASS
+8 quiescence,0.000e+00,0,< 1e-10,PASS
+
+fit lambda,0.253202,0.255543,t0=0.0199,rms=4.012e-05
+lambda if solid conduction broken,0.233910,,,
+lambda if salt coupling broken,0.216879,,,

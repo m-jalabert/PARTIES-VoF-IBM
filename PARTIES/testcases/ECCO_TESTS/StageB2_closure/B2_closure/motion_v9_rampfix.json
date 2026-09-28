@@ -1,0 +1,70 @@
+{
+  "v9_rampfix_16rank": {
+    "a_free": 0.6,
+    "release_time": 32.65802539,
+    "released": true,
+    "locked_displacement_max": 0.0,
+    "locked_speed_max": 0.0,
+    "release_acceleration_over_free": 0.2617313570047738,
+    "min_y": 0.4926739428000918,
+    "final_y": 0.49991114711358137,
+    "final_U": [
+      -0.637956379578964,
+      0.0035462406618413187,
+      0.43089093710551585
+    ],
+    "min_Uy": -0.5082125112614866,
+    "first_wall_time": 44.48802539
+  },
+  "v9_rampfix_8rank": {
+    "a_free": 0.6,
+    "release_time": 32.65802539,
+    "released": true,
+    "locked_displacement_max": 0.0,
+    "locked_speed_max": 0.0,
+    "release_acceleration_over_free": 0.26173135700477385,
+    "min_y": 0.4926760362073553,
+    "final_y": 0.5000825108878254,
+    "final_U": [
+      -0.643121316039194,
+      2.4851005841579604e-06,
+      0.45463808489240787
+    ],
+    "min_Uy": -0.5082196880262316,
+    "first_wall_time": 44.48802539
+  },
+  "v9_OLD_16rank": {
+    "a_free": 0.6,
+    "release_time": 32.65802539,
+    "released": true,
+    "locked_displacement_max": 0.0,
+    "locked_speed_max": 0.0,
+    "release_acceleration_over_free": 0.39361167946593273,
+    "min_y": 0.4926091812958787,
+    "final_y": 0.5008909737394238,
+    "final_U": [
+      -0.42451650500481947,
+      -0.0014719899004484714,
+      0.6955343014467296
+    ],
+    "min_Uy": -0.5092487595252572,
+    "first_wall_time": 44.50802539
+  },
+  "v9_OLD_8rank": {
+    "a_free": 0.6,
+    "release_time": 32.65802539,
+    "released": true,
+    "locked_displacement_max": 0.0,
+    "locked_speed_max": 0.0,
+    "release_acceleration_over_free": 0.3936116794659177,
+    "min_y": 0.4925619245566454,
+    "final_y": 0.500746707167054,
+    "final_U": [
+      -0.408488146624752,
+      -0.003993296065758961,
+      0.7024104871015452
+    ],
+    "min_Uy": -0.5092589201015173,
+    "first_wall_time": 44.50802539
+  }
+}

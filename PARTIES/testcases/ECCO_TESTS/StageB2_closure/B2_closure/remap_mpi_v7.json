@@ -1,0 +1,14 @@
+{
+  "VOF/C_L": {
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+  },
+  "VOF/C_S": {
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+  },
+  "VOF/C_G": {
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+  }
+}

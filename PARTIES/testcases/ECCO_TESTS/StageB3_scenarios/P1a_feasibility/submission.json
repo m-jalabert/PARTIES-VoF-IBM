@@ -1,0 +1,10 @@
+{
+  "original_job": 20906230,
+  "replacement_job": 20906327,
+  "reason": "User requested ECCO_StageB3 scratch root; original cancelled while pending",
+  "scratch_root": "/anvil/scratch/x-mjalabert/ECCO_StageB3",
+  "submission_directory": "/anvil/scratch/x-mjalabert/ECCO_StageB3/B3_P1_submit_20260925",
+  "partition": "shared",
+  "short_queue_check": "No short partition; debug QoS max wall 02:00:00 < requested 03:00:00",
+  "binary_sha256": "d2d44eb9eaa47c3436a468efd2fe265deba8807a088256d27f97cb92668caa8c"
+}

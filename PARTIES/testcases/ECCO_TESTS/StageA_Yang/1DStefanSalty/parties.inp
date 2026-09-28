@@ -1,0 +1,156 @@
+[geometry]
+# 1D binary (salty) Stefan gate - roadmap section A.3b.
+# Fresh ice melting into warm salty water, quiescent, both phases effectively
+# semi-infinite over the run: liquid (theta=1, s=1) for x < 0.75, ice
+# (theta=0, s=0) for x > 0.75.  Thin strip: the front moves in x; y and z are
+# 4 cubic cells thick (z periodic, y no-flux walls; solution uniform in both).
+xmin = 0.0
+xmax = 1.5
+ymin = 0.0
+ymax = 0.0078125
+zmin = 0.0
+zmax = 0.0078125
+
+[grid]
+# dx = 1/512; the CH band (Cn = 0.75*dx) spans ~3-4 cells; the salt boundary
+# layer 2*sqrt(t/Pe_S) spans 23 cells at t = 0.5 and 69 cells at t = 4.5.
+NXM = 768
+NYM = 4
+NZM = 4
+ImportGridFromFile = 0
+
+[simulation]
+# Analytic front: X(t) = 0.75 + 2*lambda*sqrt(t/Pe_T) with lambda = 0.2555
+# (coupled two-phase Neumann + salt-dilution + liquidus system; the salt-free
+# reference is lambda_0 = 0.2169, so the front law discriminates the salt
+# coupling at the 18% level).  Both far fields stay clean through t ~ 4.5.
+time_max = 4.5
+output_time_interval = 0.15
+output_time_interval_2d = 0.15
+default_dt = 2.0e-4
+max_dt = 2.0e-4
+constant_dt = 1
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+# u = 0 identically (no buoyancy, equal phase densities); Re only scales the
+# quiescent viscous solve.
+Re = 1.0
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+# Water = phase 1 (F = 1), ice = phase 2 (F = 0); Boussinesq-style equal
+# densities.  mu2 is a rigidity backup only - there is no flow here.
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 100.0
+init_type = 27
+vof_slab_x0 = 0.5
+Cn = 0.00146484375
+Pe_CH = 614.4
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-12
+contact_angle_deg = 90.0
+
+[phase_change]
+# St_l = stefan*(theta_inf - theta_i) with theta_i = -liquidus_slope*s_i;
+# the exaggerated liquidus_slope = 0.5 (Yang: 0.014) makes the freezing-point
+# depression an O(1) player in the front law instead of a 1% perturbation.
+stefan = 0.5
+T_melt = 0.0
+liquidus_slope = 0.5
+melt_band_eps = 0.00146484375
+
+[conc]
+# Field 0 = temperature (Pe_T = 100), field 1 = salinity (Pe_S = 1000,
+# Le = 10).  kappa_ice_ratio: heat conducts equally in ice and water; salt
+# flux is masked by F (no salt in ice) - exactly the Yang configuration.
+NConc = 2
+Nbin = 1000
+Pe = {100.0, 1000.0}
+richardson = {0.0, 0.0}
+V_s0 = {0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0}
+conductivity_s = {1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0}
+conc_init_type = {30, 31}
+cbd0 = 1.0
+theta_ice = 0.0
+cbd2 = 1.0
+cbd5 = 1.0
+sig_profile = 0.1
+
+# Scalar BCs use A*dc/dn + B*c = C on each face.  ALL walls no-flux for both
+# fields: melting is driven by the initial liquid superheat, so total enthalpy
+# Int(theta + F/St) and total salt Int(s) are exactly conserved - two
+# machine-precision budget checks.  Front/Back are z-periodic (ignored).
+BC_AW = {1.0, 1.0}
+BC_BW = {0.0, 0.0}
+BC_CW = {0.0, 0.0}
+BC_AE = {1.0, 1.0}
+BC_BE = {0.0, 0.0}
+BC_CE = {0.0, 0.0}
+BC_AN = {1.0, 1.0}
+BC_BN = {0.0, 0.0}
+BC_CN = {0.0, 0.0}
+BC_AS = {1.0, 1.0}
+BC_BS = {0.0, 0.0}
+BC_CS = {0.0, 0.0}
+BC_AF = {1.0, 1.0}
+BC_BF = {0.0, 0.0}
+BC_CF = {0.0, 0.0}
+BC_AB = {1.0, 1.0}
+BC_BB = {0.0, 0.0}
+BC_CB = {0.0, 0.0}
+
+[particle]
+# Particles are compiled out (LAG_PARTICLE_RESOLVED undefined);
+# p_mobile.inp / p_fixed.inp hold zero particles.
+rho_s = 1.0
+rho_prImp = 1.0
+grav = {0.0, -1.0, 0.0}
+N_forcing_loops = 2
+N_heating_loops = 0
+N_impheating_loops = 0
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-12
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0}
+conc_output_Q_int = {0, 0}
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

@@ -1,0 +1,168 @@
+# STEP C (roadmap A.5.5 variant 3): separate INTERFACE WIDTH from MESH.
+#
+# The ladder varied Cn and dx together (Cn = 0.75 dx), so "mesh convergence" and
+# "interface-width convergence" are indistinguishable in it.  This run breaks the
+# tie: mesh fixed at N = 360, but Cn (and melt_band_eps) set to the N = 216 value
+# 0.003472222222222222, i.e. the band widened from 3 to 5 cells --
+# BETTER resolved for the CH operator, not worse.
+#
+#   band width controls  ->  t_half ~ 116.31  (the N216 result)
+#   mesh resolution controls -> t_half ~  94.47  (the standard N360 result)
+#
+# A 23% spread to discriminate against, for ~100 core-h.  This is the cheapest
+# decisive design available: the N216/N360 pair has the largest t_half contrast
+# in the ladder, and N360 is the cheapest grid that brackets it.
+#
+# Why it matters: PARTIES at the Yang-equivalent resolution (N~258) carries a band
+# ~23% of the thermal layer, whereas Yang keeps a SHARP phase field (eps = 1/1440)
+# and coarsens only u and T.  If PARTIES' coarse-grid slowdown turns out to be
+# band-driven, the mechanism behind the t_half agreement with Yang differs from
+# theirs and the A.5.2 conclusion needs re-stating as coincidence-of-number.
+[geometry]
+# A.5.2 freshwater convergence ladder, N = 360.  Identical to the completed
+# Sm=0 run (Yang A.4 geometry, s == 0) except for the grid and the four
+# grid-tied numbers.  Yang 2-D reference for this case: t_half = 107.42,
+# V(200)/V0 = 0.2483 (figure 3(a), dSv = 0 series).
+xmin = 0.0
+xmax = 1.0
+ymin = 0.0
+ymax = 1.0
+zmin = 0.0
+zmax = 0.002777777777777778
+twod_slab_thickness = 0.002777777777777778
+# = 1/360; keep FULL double precision or GRID_UNIFORM aborts at startup.
+
+[grid]
+NXM = 360
+NYM = 360
+NZM = 1
+ImportGridFromFile = 0
+
+[simulation]
+time_max = 130.0
+output_time_interval = 2.0
+output_time_interval_2d = 2.0
+default_dt = 0.0004
+max_dt = 0.002
+constant_dt = 0
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+Re = 1000.0
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 1.0
+init_type = 27
+vof_slab_x0 = 0.9
+Cn = 0.003472222222222222
+# = 0.75*dx, the calibrated PARTIES mapping used by every passed gate
+Pe_CH = 259.20000000000005
+# = 0.9/Cn
+darcy_tau = 1.0e-4
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-11
+contact_angle_deg = 90.0
+
+[phase_change]
+stefan = 0.25
+T_melt = 0.0
+liquidus_slope = 0.014
+melt_band_eps = 0.003472222222222222
+
+[eos]
+eos_q = 2.0
+eos_betaT = 1.0
+eos_betaS = 1.75
+eos_Tmd0 = 0.2
+eos_Tmd_slope = -0.0625
+
+[conc]
+# NConc = 2 with s == 0 is kept (not NConc = 1) so this ladder is exactly
+# comparable to the completed 1440^2 Sm=0 run, which carried the inert
+# salt field.
+NConc = 2
+Nbin = 1000
+Pe = {1.0e4, 1.0e6}
+richardson = {0.0, 0.0}
+V_s0 = {0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0}
+conductivity_s = {1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0}
+conc_init_type = {30, 31}
+cbd0 = 1.0
+cbd1 = 0.0
+theta_ice = 0.0
+cbd2 = 0.0
+cbd5 = 0.0
+# s_top = s_bot = 0: true freshwater, Sm = 0 and dSv = 0
+BC_AW = {1.0, 1.0}
+BC_BW = {0.0, 0.0}
+BC_CW = {0.0, 0.0}
+BC_AE = {1.0, 1.0}
+BC_BE = {0.0, 0.0}
+BC_CE = {0.0, 0.0}
+BC_AN = {1.0, 1.0}
+BC_BN = {0.0, 0.0}
+BC_CN = {0.0, 0.0}
+BC_AS = {1.0, 1.0}
+BC_BS = {0.0, 0.0}
+BC_CS = {0.0, 0.0}
+BC_AF = {1.0, 1.0}
+BC_BF = {0.0, 0.0}
+BC_CF = {0.0, 0.0}
+BC_AB = {1.0, 1.0}
+BC_BB = {0.0, 0.0}
+BC_CB = {0.0, 0.0}
+
+[particle]
+rho_s = 1.0
+rho_prImp = 1.0
+grav = {0.0, -1.0, 0.0}
+N_forcing_loops = 1
+N_heating_loops = 0
+N_impheating_loops = 0
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0}
+conc_output_Q_int = {0, 0}
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

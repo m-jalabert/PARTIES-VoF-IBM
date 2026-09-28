@@ -1,0 +1,244 @@
+{
+  "design_date": "2026-09-28",
+  "decision": "User: Antarctic shelf, fine sand, free grain in the meltwater sublayer, melting ON; baseline CT_M=0 C and u*=0.5 cm/s (2026-09-28).",
+  "physical": {
+    "p_dbar": 700.0,
+    "CT_mixed_layer_C": 0.0,
+    "SA_mixed_layer_g_kg": 34.85,
+    "ustar_m_s": 0.005,
+    "Gamma_T": 0.011,
+    "Gamma_S": 0.00031,
+    "Gamma_source": "Jenkins, Nicholls & Corr (2010) JPO 40, 2298",
+    "T_ice_interior_C": -20.0,
+    "d_m": 0.0002,
+    "rho_p_kg_m3": 2650.0,
+    "nu_m2_s": 1.8e-06,
+    "kappa_T_m2_s": 1.4e-07,
+    "salt_diffusivity_physical_m2_s": 1e-09,
+    "Sc_sim": 70.0,
+    "cp_J_kg_K": 3991.86795711963,
+    "latent_J_kg": 333500.0,
+    "rho0_kg_m3": 1031.1640515895945,
+    "note": "Idealized constants. The three-equation state sets the interface and sublayer thicknesses; the box itself is quiescent (slack-current limit)."
+  },
+  "three_equation": {
+    "SA_interface_g_kg": 21.302533176462155,
+    "CT_interface_C": -1.6701315417756384,
+    "melt_rate_m_s": 1.108452207279636e-06,
+    "melt_rate_m_yr": 34.98275166174531,
+    "delta_T_m": 0.002545454545454546,
+    "delta_S_m": 0.0006451612903225806,
+    "delta_T_d": 12.72727272727273,
+    "delta_S_d": 3.225806451612903,
+    "meltwater_fraction_interface": 0.38873649421916345,
+    "caveat": "S_b depends on Gamma_T/Gamma_S; Keitzl et al. (2016) argue the three-equation form overestimates interface salinity by up to 40%."
+  },
+  "eos": {
+    "choice": "EOS_NONLINEAR q=2, density-maximum locus pinned to GSW at 700 dbar",
+    "gsw_version": "3.6.23",
+    "pressure_dbar": 700.0,
+    "density_routine": "rho_t_exact(SA, t_from_CT(SA,CT,p), p)",
+    "SA_range_g_kg": [
+      10.0,
+      36.0
+    ],
+    "CT_range_C": [
+      -2.2,
+      0.4
+    ],
+    "dimensional_a_b_Tmd0_TmdSlope_h": [
+      1003.297260527151,
+      0.007068549809071385,
+      2.57988883791124,
+      -0.22808829541585543,
+      0.8045546431938326
+    ],
+    "density_error_kg_m3": {
+      "max_absolute": 0.04371174584480286,
+      "rms": 0.018866392699438735
+    },
+    "density_error_over_haline_scale": {
+      "max_absolute": 0.0015589774184574978,
+      "rms": 0.0006728690336598252
+    },
+    "thermal_derivative_error_kg_m3_K": {
+      "max_absolute": 0.0021285478623621623,
+      "rms": 0.0005335094750428705
+    },
+    "density_maximum_locus_error_K": {
+      "max_absolute": 0.07060655917328429,
+      "rms": 0.026716925447581776
+    },
+    "note": "Errors over liquid (above-freezing) states of the fit box. The interface water sits near its density maximum at this pressure, which a linear EOS cannot represent.",
+    "coefficients": {
+      "eos_q": 2.0,
+      "eos_betaT": 0.0007031910764267932,
+      "eos_betaS": 1.0,
+      "eos_Tmd0": 2.5447219415833393,
+      "eos_Tmd_slope": -4.759431755172729
+    }
+  },
+  "liquidus": {
+    "a_f_C": -0.45481657053094815,
+    "m_f_K_per_g_kg": 0.057050256003709936,
+    "T_melt": 0.7276761984583564,
+    "liquidus_slope": 1.1904460049987977,
+    "error_over_SA_10_35_K": {
+      "max_absolute": 0.02814561611792521,
+      "rms": 0.01038608303280971
+    },
+    "note": "Secant through (S_b, T_b) and (S_M, T_f(S_M)) at 700 dbar; theta_L(s_i)=0 exactly."
+  },
+  "scaling": {
+    "T_ref_C": -1.6701315417756384,
+    "DeltaT_K": 1.6701315417756384,
+    "S_ref_g_kg": 34.85,
+    "beta_per_g_kg": 0.0007802392276510888,
+    "U_ref_m_s": 0.007304067589918822,
+    "t_ref_s": 0.02738200290972702,
+    "Re": 0.8115630655465359,
+    "Pr": 12.857142857142856,
+    "Pe_T": 10.434382271312604,
+    "Pe_S": 56.80941458825751,
+    "Le": 5.444444444444445,
+    "St": 0.019990838338197828,
+    "G_star": 36.77641878823406,
+    "rho_s": 2.5699111561490953,
+    "Ga": 6.166582270057638,
+    "Re_p_SchillerNaumann": 1.7332410409094063,
+    "w_s_m_s": 0.015599169368184656,
+    "w_s_over_Uref": 2.1356825051447843,
+    "N_max_s": 12.648953632052077,
+    "Froude_ws_over_Nd": 6.166189639851639
+  },
+  "initial_state": {
+    "theta": "erf(zeta/ell_T)",
+    "s": "F*[s_i+(1-s_i)*erf(zeta/ell_S)]",
+    "tracer": "F*(1-s_i)*(1-erf(zeta/ell_S))",
+    "ell_T_d": 14.361189399397437,
+    "ell_S_d": 3.6399327970822988,
+    "s_interface": 0.6112635057808365,
+    "ell_definition": "ell = 2*delta/sqrt(pi): wall gradient equals the three-equation flux",
+    "profile_z_d": [
+      0.0,
+      0.5,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      15.0,
+      20.0
+    ],
+    "CT_C": [
+      -1.6701315417756384,
+      -1.6045457323944923,
+      -1.5391186991043546,
+      -1.4093691658360812,
+      -1.2821098239408828,
+      -1.1584964455436526,
+      -0.926292042787124,
+      -0.7195180347411958,
+      -0.5423726251845093,
+      -0.23322286494068534,
+      -0.0816634728724368
+    ],
+    "SA_g_kg": [
+      21.302533176462155,
+      23.389257427673353,
+      25.398937698390693,
+      28.928043780924796,
+      31.547352081126842,
+      33.222159521311106,
+      34.58250935817625,
+      34.82450116119524,
+      34.84861525090179,
+      34.849999923964056,
+      34.849999999999895
+    ],
+    "rho_minus_rho_M_kg_m3": [
+      -10.750037185055248,
+      -9.079252326253368,
+      -7.47104878997709,
+      -4.649391070475303,
+      -2.5582971742767313,
+      -1.2245562048949523,
+      -0.15025313297246612,
+      0.029971947964440915,
+      0.03746067154906996,
+      0.01704719720328285,
+      0.006048333868875488
+    ]
+  },
+  "geometry": {
+    "L_d": [
+      8.0,
+      22.0,
+      8.0
+    ],
+    "N": [
+      192,
+      528,
+      192
+    ],
+    "cells": 19464192,
+    "cells_per_d": 24,
+    "y_interface": 20.0,
+    "ice_thickness_d": 2.0,
+    "grain_center": [
+      4.0,
+      19.15,
+      4.0
+    ],
+    "grain_top_gap_d": 0.35,
+    "lateral_period_debris_volume_fraction": 0.008181230868723419,
+    "bottom": "no-slip wall, insulated; top: ice, insulated"
+  },
+  "numerics": {
+    "Cn": 0.03125,
+    "melt_band_eps": 0.0625,
+    "Pe_CH": 28.8,
+    "darcy_tau": 0.001,
+    "max_dt": 0.005,
+    "default_dt": 0.0005,
+    "cfl": 0.3,
+    "T_END": 30.0,
+    "T_END_s": 0.8214600872918105,
+    "field_interval": 0.1,
+    "melt_relaxation_time": 0.08151861149462972,
+    "ch_explicit_dt_limit": 0.020833333333333332,
+    "liquid_referenced_salinity": 1,
+    "yang_salt_transport": 0,
+    "F_release": -1.0
+  },
+  "cost": {
+    "su_per_cell_step_P1a": 1.6420117016430495e-08,
+    "nominal_steps": 6000.0,
+    "nominal_SU": 1917.6258616216219,
+    "SU_with_30pct": 2492.9136201081087,
+    "storage_GB_per_frame": 6.7050914303999996,
+    "frames": 301
+  },
+  "gate": {
+    "reference": {
+      "lambda_": 0.019382309935304383,
+      "s_interface": 0.9221516851568096,
+      "theta_interface": -0.37009559113947654,
+      "front": "X(t) = 2*lambda*sqrt(t/Pe_T), Pe_T=10.434382271312604"
+    },
+    "variants": [
+      "G1_sliq1_n24",
+      "G0_sliq0_n24",
+      "G1_sliq1_n24_halfdt",
+      "G1_sliq1_n32"
+    ],
+    "design": "Quiescent 1-D strip (4 x 20d x 4 cells-wide), ice on top at theta=0 (s=0), water theta=1, s=1, EOS buoyancy off; same Pe_T, Pe_S, St, liquidus, band as P1b."
+  },
+  "references": [
+    "https://journals.ametsoc.org/view/journals/phoc/40/10/2010jpo4317.1.xml",
+    "https://arxiv.org/abs/1606.03004",
+    "https://teos-10.github.io/GSW-Python/density.html"
+  ]
+}

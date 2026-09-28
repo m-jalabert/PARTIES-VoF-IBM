@@ -1,0 +1,172 @@
+[geometry]
+# ICE_PENALIZATION gate (roadmap A.3d): steady Brinkman-Poiseuille flow.
+# Water for x < 0.5, ice slab for x >= 0.5 (init 27), NO melting
+# (stefan = 0 -> F is stationary).  A uniform buoyancy body force acts on
+# the liquid only (b = betaS*s with s = 1 in water, 0 in ice, betaT = 0),
+# along the thin periodic z direction.  The steady unidirectional flow
+# w(x) then satisfies exactly (also discretely, on the MAC grid)
+#     (1/Re) d2w/dx2 - (phi_s(x)/darcy_tau) w + b(x) = 0 ,  phi_s = 1-F,
+#     w(0) = w(Lx) = 0 ,
+# i.e. Poiseuille in the liquid gap matched to a Brinkman boundary layer
+# of thickness delta = sqrt(darcy_tau/Re) inside the ice.  This run:
+# delta = 8 dx (darcy_tau = Re*(8/256)^2, Re = 10).  mu2 = mu1 deliberately -
+# the viscosity-ratio rigidity backup is OFF so the Darcy term is
+# certified in isolation.  x = no-slip walls, y = FREE-SLIP walls,
+# z = periodic.
+xmin = 0.0
+xmax = 1.0
+ymin = 0.0
+ymax = 0.015625
+zmin = 0.0
+zmax = 0.015625
+
+[grid]
+# dx = 1/256; CH band ~3-4 cells; Brinkman layer delta swept over
+# {2, 4, 8} dx by the three sub-runs (slip at the interface ~ 2*delta).
+NXM = 256
+NYM = 4
+NZM = 4
+ImportGridFromFile = 0
+
+[simulation]
+# slowest viscous mode over the liquid gap: Re*(0.5/pi)^2 ~ 0.25; the
+# Brinkman layer relaxes on darcy_tau << that.  t = 4 is ~16 relaxation
+# times -> steady to solver tolerance (gate checks the last two outputs).
+time_max = 6.4
+output_time_interval = 0.2
+output_time_interval_2d = 0.2
+default_dt = 2.0e-3
+max_dt = 2.0e-3
+constant_dt = 1
+cfl = 0.3
+ghost_nodes = 3
+resume = 1
+freeze_velocity = 0
+
+[flow]
+# nu = 1/Re = 0.1: delta = sqrt(nu*darcy_tau), max |w| ~ betaS*X^2/(8 nu) = 0.625
+Re = 10.0
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+# Water = phase 1 (F = 1) for x < 0.5, ice = phase 2 (F = 0) beyond.
+# mu2 = mu1 = 1 ON PURPOSE (see header); rho equal (Boussinesq).
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 1.0
+init_type = 27
+vof_slab_x0 = 0.5
+Cn = 0.0029296875
+Pe_CH = 3072.0
+darcy_tau = 9.765625e-03
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-12
+contact_angle_deg = 90.0
+
+[phase_change]
+# melting disabled at runtime (stefan = 0) -> the ice slab is stationary;
+# PHASE_CHANGE stays compiled in (full Yang flag set).
+stefan = 0.0
+T_melt = 0.0
+liquidus_slope = 0.0
+melt_band_eps = 0.0029296875
+
+[eos]
+# betaT = 0 kills the thermal branch: b = betaS*s exactly, i.e. a uniform
+# force of magnitude 2 in the water (s = 1) and 0 in the ice (s = 0),
+# smoothly blended across the CH band by the s initial profile.
+eos_q = 2.0
+eos_betaT = 0.0
+eos_betaS = 2.0
+eos_Tmd0 = 0.0
+eos_Tmd_slope = 0.0
+
+[conc]
+# field 0 = theta: passive here (betaT = 0); Yang-layout step via init 30.
+# field 1 = s: init 31 with s_top = s_bot = 1 -> s = Fslab(x) (1 in water,
+# 0 in ice, tanh across the band) = the liquid-only force mask.
+# Pe = 1e12: scalars frozen (uniform in z -> advection identically zero).
+NConc = 2
+Nbin = 1000
+Pe = {1.0e12, 1.0e12}
+richardson = {0.0, 0.0}
+V_s0 = {0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0}
+conductivity_s = {1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0}
+conc_init_type = {30, 31}
+cbd0 = 1.0
+cbd1 = 0.0
+theta_ice = 0.0
+cbd2 = 1.0
+cbd5 = 1.0
+sig_profile = 0.1
+
+# Scalar BCs: A*dc/dn + B*c = C.  All walls no-flux for both fields;
+# z periodic.
+BC_AW = {1.0, 1.0}
+BC_BW = {0.0, 0.0}
+BC_CW = {0.0, 0.0}
+BC_AE = {1.0, 1.0}
+BC_BE = {0.0, 0.0}
+BC_CE = {0.0, 0.0}
+BC_AN = {1.0, 1.0}
+BC_BN = {0.0, 0.0}
+BC_CN = {0.0, 0.0}
+BC_AS = {1.0, 1.0}
+BC_BS = {0.0, 0.0}
+BC_CS = {0.0, 0.0}
+BC_AF = {1.0, 1.0}
+BC_BF = {0.0, 0.0}
+BC_CF = {0.0, 0.0}
+BC_AB = {1.0, 1.0}
+BC_BB = {0.0, 0.0}
+BC_CB = {0.0, 0.0}
+
+[particle]
+# gravity along -z: the buoyancy force acts on w; particles compiled out.
+rho_s = 1.0
+rho_prImp = 1.0
+grav = {0.0, 0.0, -1.0}
+N_forcing_loops = 2
+N_heating_loops = 0
+N_impheating_loops = 0
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0}
+conc_output_Q_int = {0, 0}
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

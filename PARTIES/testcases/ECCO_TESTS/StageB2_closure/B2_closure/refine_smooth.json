@@ -1,0 +1,25 @@
+{
+  "runs": [
+    "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_smooth_20500720",
+    "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_smooth_halfdt_20500721"
+  ],
+  "max_dt": [
+    0.01,
+    0.005
+  ],
+  "pairs": [
+    {
+      "release_difference": 0.007038380000004452,
+      "escape_lag": 0.6990494999866073,
+      "escape_arrival_a": 4.69525690512016,
+      "escape_arrival_b": 5.394306405106767,
+      "open_water_Uy_max_relative": 0.0041343674322638704,
+      "open_water_Uy_rms_relative": 0.0015729091826434465,
+      "contact_difference": 0.6985769799999986,
+      "max_dt": [
+        0.01,
+        0.005
+      ]
+    }
+  ]
+}

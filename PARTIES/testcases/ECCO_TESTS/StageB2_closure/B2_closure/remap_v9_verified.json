@@ -1,0 +1,38 @@
+{
+  "field_max_absolute_differences": {
+    "VOF/C_G": 0.0,
+    "VOF/C_L": 0.0,
+    "VOF/C_S": 0.0,
+    "VOF/F": 0.0,
+    "VOF/bulk_S": 0.0,
+    "VOF/ch_rhs_n": 0.0,
+    "VOF/ch_rhs_nm1": 0.0,
+    "VOF/f_ccf_x": 0.0,
+    "VOF/f_ccf_y": 0.0,
+    "VOF/f_ccf_z": 0.0,
+    "VOF/fx_IBM": 0.0,
+    "VOF/fy_IBM": 0.0,
+    "VOF/fz_IBM": 0.0,
+    "VOF/lap_C": 0.0,
+    "VOF/mu": 0.0,
+    "VOF/nx_IBM": 0.0,
+    "VOF/ny_IBM": 0.0,
+    "VOF/nz_IBM": 0.0,
+    "VOF/psi": 0.0,
+    "VOF/psi_LG": 0.0,
+    "VOF/rho": 0.0
+  },
+  "analytic_periodic_CS_max_error": 9.972578318695469e-13,
+  "mass": [
+    {
+      "before": 33.4541436980286,
+      "after": 33.4541436980286,
+      "change": 0.0
+    },
+    {
+      "before": 33.45414369802847,
+      "after": 33.45414369802847,
+      "change": 0.0
+    }
+  ]
+}

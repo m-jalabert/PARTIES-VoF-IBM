@@ -1,0 +1,38 @@
+{
+  "nodarcy": {
+    "max_abs_diff": {
+      "X": 0.0,
+      "U": 0.0,
+      "u": 0.0,
+      "v": 0.0,
+      "w": 0.0,
+      "p": 0.0
+    },
+    "bit_identical": {
+      "X": true,
+      "U": true,
+      "u": true,
+      "v": true,
+      "w": true,
+      "p": true
+    }
+  },
+  "reference": {
+    "max_abs_diff": {
+      "X": 5.218048215738236e-15,
+      "U": 1.5716594692349872e-14,
+      "u": 3.4611202792689255e-14,
+      "v": 3.4139358007223564e-14,
+      "w": 3.569367024169878e-14,
+      "p": 6.247086181687678e-13
+    },
+    "bit_identical": {
+      "X": false,
+      "U": false,
+      "u": false,
+      "v": false,
+      "w": false,
+      "p": false
+    }
+  }
+}

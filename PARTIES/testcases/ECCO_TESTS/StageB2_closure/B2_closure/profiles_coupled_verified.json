@@ -1,0 +1,19 @@
+{
+  "snapshots": 32,
+  "max_scaled_errors": {
+    "liquid_volume": 6.9944050551565574e-15,
+    "ice_volume": 7.778465146194058e-16,
+    "mean_v": 9.915028867379938e-17,
+    "mean_T": 1.0547118733938987e-14,
+    "flux_vT": 1.249000902703301e-16,
+    "T_integral": 6.9944050551565574e-15,
+    "mean_S": 1.1796119636642288e-16,
+    "flux_vS": 1.734723475976807e-18,
+    "S_integral": 2.0816681711721685e-16,
+    "mean_tracer": 2.7755575615628914e-16,
+    "flux_vtracer": 3.7730235602495554e-17,
+    "tracer_integral": 4.440892098500626e-16,
+    "epsilon_integral": 8.326672684688674e-17
+  },
+  "epsilon_scope": "all x,z; interior y rows; wall stencil not checked"
+}

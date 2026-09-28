@@ -1,0 +1,143 @@
+# P1b 1-D kernel gate G1_sliq1_n24_halfdt. See case.json gate block.
+[geometry]
+xmin = 0.0
+xmax = 0.16666666666666666
+ymin = 0.0
+ymax = 20.0
+zmin = 0.0
+zmax = 0.16666666666666666
+
+[grid]
+NXM = 4
+NYM = 480
+NZM = 4
+ImportGridFromFile = 0
+
+[simulation]
+time_max = 80.0
+output_time_interval = 2.0
+output_time_interval_2d = 80.0
+default_dt = 0.00025
+max_dt = 0.0025
+constant_dt = 0
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+Re = 0.8115630655465359
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 1.0
+init_type = 28
+vof_slab_x0 = 0.5
+Cn = 0.03125
+Pe_CH = 28.8
+darcy_tau = 0.001
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-11
+contact_angle_deg = 90.0
+
+[phase_change]
+yang_salt_transport = 0
+liquid_referenced_salinity = 1
+stefan = 0.019990838338197828
+T_melt = 0.7276761984583564
+liquidus_slope = 1.1904460049987977
+melt_band_eps = 0.0625
+meltwater_tracer = 1
+
+[eos]
+eos_q = 2.0
+eos_betaT = 0.0
+eos_betaS = 0.0
+eos_Tmd0 = 2.5447219415833393
+eos_Tmd_slope = -4.759431755172729
+
+[conc]
+NConc = 3
+Nbin = 1000
+Pe = {10.434382271312604, 56.80941458825751, 56.80941458825751}
+richardson = {0.0, 0.0, 0.0}
+V_s0 = {0.0, 0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0, 1.0}
+conductivity_s = {1.0, 1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0, 0.0}
+conc_init_type = {34, 35, 0}
+cbd0 = 1.0
+cbd1 = 0.0
+theta_ice = 0.0
+cbd2 = 1.0
+cbd5 = 1.0
+BC_AW = {1.0, 1.0, 1.0}
+BC_BW = {0.0, 0.0, 0.0}
+BC_CW = {0.0, 0.0, 0.0}
+BC_AE = {1.0, 1.0, 1.0}
+BC_BE = {0.0, 0.0, 0.0}
+BC_CE = {0.0, 0.0, 0.0}
+BC_AN = {1.0, 1.0, 1.0}
+BC_BN = {0.0, 0.0, 0.0}
+BC_CN = {0.0, 0.0, 0.0}
+BC_AS = {1.0, 1.0, 1.0}
+BC_BS = {0.0, 0.0, 0.0}
+BC_CS = {0.0, 0.0, 0.0}
+BC_AF = {1.0, 1.0, 1.0}
+BC_BF = {0.0, 0.0, 0.0}
+BC_CF = {0.0, 0.0, 0.0}
+BC_AB = {1.0, 1.0, 1.0}
+BC_BB = {0.0, 0.0, 0.0}
+BC_CB = {0.0, 0.0, 0.0}
+
+[particle]
+rho_s = 2.5699111561490953
+rho_prImp = 2.5699111561490953
+grav = {0.0, -36.77641878823406, 0.0}
+N_forcing_loops = 1
+N_heating_loops = 0
+N_impheating_loops = 0
+F_release = -1.0
+release_shell_cells = 2.0
+release_ramp_steps = 50
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0, 0}
+conc_output_Q_int = {0, 0, 0}
+output_vfc = 1
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

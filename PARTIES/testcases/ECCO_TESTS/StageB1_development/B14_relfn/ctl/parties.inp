@@ -1,0 +1,190 @@
+[geometry]
+# B.1.3 functional test -- does the interface-triggered release ACTUALLY FIRE?
+#
+# The default-off regression already proved the release code is a no-op when
+# disabled.  This deck turns it ON and asks the opposite question: with a grain
+# frozen into an ice layer that is melting from below, does the grain stay put
+# while embedded, come free at the right moment, and hand off to the flow
+# without an impulse?
+#
+# Geometry is the ECCO configuration in miniature: ice above, ocean below,
+# gravity along -y, warm bottom wall driving the melt.  x = horizontal,
+# y = vertical, z = storage-only periodic slab (TWOD_CARTESIAN).
+xmin = 0.0
+xmax = 1.0
+ymin = 0.0
+ymax = 1.5
+zmin = 0.0
+zmax = 0.00390625
+twod_slab_thickness = 0.00390625
+# = 1/256 = dx exactly; GRID_UNIFORM aborts if dz deviates from dx by >1e-12.
+
+[grid]
+NXM = 256
+NYM = 384
+NZM = 1
+ImportGridFromFile = 0
+
+[simulation]
+# Conductive Stefan estimate at St=10, Pe=3162: front advances ~0.057*sqrt(t),
+# so the ~0.10 of melt needed to expose the grain lands near t ~ 3, and
+# convection only speeds that up.  t_max = 25 leaves ~20 units of settling.
+time_max = 25.0
+output_time_interval = 0.5
+output_time_interval_2d = 0.5
+default_dt = 2.0e-4
+max_dt = 1.0e-3
+constant_dt = 0
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+Re = 3162.2776601683795
+# = sqrt(Ra_T/Pr) = sqrt(1e7/10); free-fall units, as in the validated Stage-A
+# melting decks.
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+# water = phase1 (F=1) below, ice = phase2 (F=0) above.  Boussinesq: rho2 = rho1.
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 1.0
+init_type = 28
+vof_slab_x0 = 0.7
+# ice/ocean interface at y = 0.7*1.5 = 1.05; ocean occupies y < 1.05.
+Cn = 2.9296875e-3
+# = 0.75*dx, the calibrated Stage-A value.
+Pe_CH = 307.2
+# = 0.9/Cn, the tuned partner of Cn (roadmap: these are a pair, not free).
+darcy_tau = 0.0076     # A.1.5 rule Re*dx^2 at Re=500, dx=1/256
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-11
+contact_angle_deg = 90.0
+
+[phase_change]
+stefan = 10.0
+# = cp*dT/L; St_alt = 0.1, the validated Favier melting-RB value.
+T_melt = 0.05
+liquidus_slope = 0.0
+melt_band_eps = 2.9296875e-3
+# = Cn
+
+[eos]
+# Same linear-in-theta reduction used by the validated freshwater Stage-A runs.
+eos_q = 1.0
+eos_betaT = 1.0
+eos_betaS = 0.0
+eos_Tmd0 = 0.0
+eos_Tmd_slope = 0.0
+
+[conc]
+# field 0 = theta (temperature), field 1 = s (salinity, inert here).
+# Salt is carried but set to zero everywhere: this test isolates the release
+# mechanism, so the salt-side residual of Stage A cannot contaminate it.
+NConc = 2
+Nbin = 1000
+Pe = {3162.2776601683795, 31622.776601683792}
+richardson = {0.0, 0.0}
+V_s0 = {0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0}
+conductivity_s = {1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0}
+conc_init_type = {34, 35}
+# 34/35 = the ECCO horizontal-layer inits (B.1.5).
+cbd0 = 1.0
+# ocean temperature theta_water = 1
+cbd1 = 1.0e-4
+theta_ice = 0.0
+# ice at the fresh melting temperature
+cbd2 = 0.0
+cbd5 = 0.0
+# s_top = s_bot = 0: no salt, no stratification.
+# Code convention: A*d(c)/dn + B*c = C.
+# Bottom wall: Dirichlet theta = 1 (sustains the melt).  Top wall: theta = 0.
+# Side walls and all salt boundaries: no-flux.
+BC_AW = {1.0, 1.0}
+BC_BW = {0.0, 0.0}
+BC_CW = {0.0, 0.0}
+BC_AE = {1.0, 1.0}
+BC_BE = {0.0, 0.0}
+BC_CE = {0.0, 0.0}
+BC_AN = {0.0, 1.0}
+BC_BN = {1.0, 0.0}
+BC_CN = {0.0, 0.0}
+BC_AS = {0.0, 1.0}
+BC_BS = {1.0, 0.0}
+BC_CS = {1.0, 0.0}
+BC_AF = {1.0, 1.0}
+BC_BF = {0.0, 0.0}
+BC_CF = {0.0, 0.0}
+BC_AB = {1.0, 1.0}
+BC_BB = {0.0, 0.0}
+BC_CB = {0.0, 0.0}
+
+[particle]
+# One sediment grain, rho_s/rho_f = 2 (rock-like; quartz is 2.65).  With
+# g' = 1 and d = 0.1 the settling scale sqrt(g'*d) ~ 0.32 is comparable to the
+# convective velocity, so the grain neither hangs nor drops ballistically.
+rho_s = 2.0
+rho_prImp = 1.0
+grav = {0.0, -1.0, 0.0}
+N_forcing_loops = 1
+N_heating_loops = 0
+N_impheating_loops = 0
+#
+# --- interface-triggered release (B.1.3) ---
+F_release = 0.9
+# Fraction of the grain's immediate neighbourhood that must be liquid before it
+# is freed.  CALIBRATED by run32b (which used 0.9; its deck copy is preserved in
+# run32b/parties.inp) against how far the melt front has passed the grain --
+# 0 = front at the grain's underside, 1 = grain just fully uncovered:
+#     0.565 -> half uncovered
+#     0.709 -> JUST fully uncovered   <-- used here
+#     0.867 -> clear by half a diameter
+#     0.900 -> clear by 0.67 diameters, i.e. LATE
+# phi_liq saturates at ~0.977 and never reaches 1 (the shell always holds some
+# diffuse band and non-melting sediment shell), so >= 0.98 can never fire and is
+# rejected at startup.
+release_shell_cells = 2.0
+release_ramp_steps = 10
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0}
+conc_output_Q_int = {0, 0}
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

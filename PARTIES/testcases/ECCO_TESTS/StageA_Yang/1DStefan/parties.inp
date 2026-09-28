@@ -1,0 +1,144 @@
+[geometry]
+# 1D Stefan (Neumann) melting gate - roadmap section A.3.
+# Thin strip: the melt front moves in x; y and z are 4 cubic cells thick
+# (z periodic, y no-flux walls; the solution is uniform in both).
+xmin = 0.0
+xmax = 1.0
+ymin = 0.0
+ymax = 0.015625
+zmin = 0.0
+zmax = 0.015625
+
+[grid]
+# dx = 1/256; the CH band (Cn = 0.75*dx) spans ~3-4 cells.
+NXM = 256
+NYM = 4
+NZM = 4
+ImportGridFromFile = 0
+
+[simulation]
+# Analytic front: X(t) = 2*lambda*sqrt(t/Pe_T) with lambda = 0.3400 for
+# St = 0.25, so X reaches ~0.83 by t = 15 (Pe_T = 10).
+time_max = 15.0
+output_time_interval = 0.5
+output_time_interval_2d = 0.5
+default_dt = 2.0e-4
+max_dt = 2.0e-4
+constant_dt = 1
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+# u = 0 identically (no buoyancy, equal phase densities); Re only scales the
+# quiescent viscous solve.
+Re = 1.0
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+# Water = phase 1 (F = 1), ice = phase 2 (F = 0); Boussinesq-style equal
+# densities.  mu2 is a rigidity backup only - there is no flow here.
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 100.0
+init_type = 27
+vof_slab_x0 = 0.05
+Cn = 0.0029296875
+Pe_CH = 307.2
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-12
+contact_angle_deg = 90.0
+
+[phase_change]
+# St = stefan*(theta_w - theta_m) = 0.25  ->  lambda = 0.3400
+stefan = 0.25
+T_melt = 0.0
+liquidus_slope = 0.0
+melt_band_eps = 0.0029296875
+
+[conc]
+# Single scalar: field 0 = temperature.  Pe_T = 10 keeps the run cheap.
+NConc = 1
+Nbin = 1000
+Pe = {10.0}
+richardson = {0.0}
+V_s0 = {0.0}
+vol_heat_cap_s = {1.0}
+conductivity_s = {1.0}
+kappa_ice_ratio = {1.0}
+conc_init_type = {30}
+cbd0 = 1.0
+theta_ice = 0.0
+sig_profile = 0.1
+
+# Scalar BCs use A*dc/dn + B*c = C on each face.
+# West (x=0): Dirichlet theta = 1 (hot wall).  East: no-flux (semi-infinite).
+# North/South (y walls): no-flux.  Front/Back are z-periodic (ignored).
+BC_AW = {0.0}
+BC_BW = {1.0}
+BC_CW = {1.0}
+BC_AE = {1.0}
+BC_BE = {0.0}
+BC_CE = {0.0}
+BC_AN = {1.0}
+BC_BN = {0.0}
+BC_CN = {0.0}
+BC_AS = {1.0}
+BC_BS = {0.0}
+BC_CS = {0.0}
+BC_AF = {1.0}
+BC_BF = {0.0}
+BC_CF = {0.0}
+BC_AB = {1.0}
+BC_BB = {0.0}
+BC_CB = {0.0}
+
+[particle]
+# Particles are compiled out (LAG_PARTICLE_RESOLVED undefined);
+# p_mobile.inp / p_fixed.inp hold zero particles.
+rho_s = 1.0
+rho_prImp = 1.0
+grav = {0.0, -1.0, 0.0}
+N_forcing_loops = 2
+N_heating_loops = 0
+N_impheating_loops = 0
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-12
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0}
+conc_output_Q_int = {0}
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

@@ -1,0 +1,20 @@
+{
+  "branch": "closure",
+  "outputs": 11.0,
+  "final_time": 0.49999999999996136,
+  "finite": 1.0,
+  "lambda_ref": 0.21713826597063368,
+  "lambda_fit": 0.2184495545645199,
+  "lambda_rel_error": 0.00603895673581345,
+  "fit_rms": 6.336974654156517e-06,
+  "s_interface_ref": 0.0011640201641615062,
+  "theta_interface_ref": -0.0005820100820807531,
+  "profile_linf_final": 0.014411848139923189,
+  "profile_linf_max_fit": 0.027812495824320577,
+  "physical_salt_rel_drift": 0.0027638540325809822,
+  "plain_salt_rel_drift": 5.995204332975845e-15,
+  "enthalpy_rel_drift": 4.975384548799866e-10,
+  "max_speed": 0.0,
+  "salt_min": 0.0,
+  "salt_max": 1.0
+}

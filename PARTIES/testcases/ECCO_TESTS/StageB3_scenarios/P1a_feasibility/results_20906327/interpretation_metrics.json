@@ -1,0 +1,13 @@
+{
+  "heat_error_final_absolute": 1.6386435914596265e-07,
+  "heat_error_final_over_boundary_heat": 1.853075016219236e-05,
+  "heat_error_final_over_temperature_change": 5.963528629085302e-07,
+  "cumulative_net_boundary_heat": -0.008842834624163751,
+  "net_ice_gain_monotonic_at_profile_times": true,
+  "remaining_SU": 71516.5,
+  "P2_same_short_window_SU_estimate": 866.39670781893,
+  "one_diameter_conduction_scenario_SU_at_observed_rate": 665627.468512099,
+  "io_wall_fraction_reported": 0.16145590915511351,
+  "pressure_wall_fraction_reported": 0.4995657774324471,
+  "wall_minutes_with_30pct_margin": 111.36666666666667
+}

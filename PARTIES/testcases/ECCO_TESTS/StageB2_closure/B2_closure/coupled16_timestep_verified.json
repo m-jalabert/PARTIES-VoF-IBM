@@ -1,0 +1,12 @@
+{
+  "release_a": 33.72802539,
+  "release_b": 33.71506377,
+  "contact_a": 44.67097119,
+  "contact_b": 45.39006377,
+  "release_relative_difference": 0.00038429821639785817,
+  "fall_duration_relative_difference": 0.06270271520342556,
+  "max_y_difference_over_fall": 0.13505900850700997,
+  "max_Uy_difference_over_peak": 0.19675054057499022,
+  "comparison_ends_before_contact_by": 0.5,
+  "debug_timestep_pass": false
+}

@@ -1,0 +1,96 @@
+[geometry]
+# Fixed-pressure-gradient Poiseuille amplitude diagnostic.
+# Streamwise x and spanwise z are periodic; y has no-slip walls.
+xmin = 0.0
+xmax = 0.015625
+ymin = 0.0
+ymax = 1.0
+zmin = 0.0
+zmax = 0.015625
+
+[grid]
+NXM = 4
+NYM = 256
+NZM = 4
+ImportGridFromFile = 0
+
+[simulation]
+# Starting from the nominal steady parabola makes the test sensitive to
+# whether the solver preserves amplitude 1 or relaxes toward amplitude 0.75.
+time_max = 8.0
+output_time_interval = 0.5
+output_time_interval_2d = 0.5
+default_dt = 1.0e-2
+max_dt = 1.0e-2
+constant_dt = 1
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+# PARTIES applies acceleration -dp_dx in periodic x.  Thus dp_dx=-1 gives
+# f=+1 and the exact continuum solution u=Re*y*(1-y)/2, mean u=Re/12.
+Re = 10.0
+vel_init_type = 3
+vel_init_y0 = 0.0
+dp_dx = -1.0
+ubulk_target = 0.83333333333333333333
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+# Inert all-liquid field retained because the configured HYPRE pressure path
+# is compiled against the VOF data structure.  There is no interface.
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 1.0
+init_type = 27
+vof_slab_x0 = 2.0
+Cn = 0.0029296875
+Pe_CH = 307.2
+darcy_tau = 1.0
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-12
+contact_angle_deg = 90.0
+
+[particle]
+rho_s = 1.0
+rho_prImp = 1.0
+grav = {0.0, 0.0, 0.0}
+N_forcing_loops = 1
+N_heating_loops = 0
+N_impheating_loops = 0
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

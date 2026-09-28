@@ -1,0 +1,171 @@
+[geometry]
+# EOS_NONLINEAR gate (roadmap A.3c), sub-run A: thermal branch.
+# All-liquid box (no ice), frozen erf temperature ramp theta(x), s = 0,
+# gravity along the thin periodic z direction.  The steady unidirectional
+# flow w(x) then satisfies exactly (also discretely, on the MAC grid)
+#     (1/Re) d2w/dx2 = b(theta(x), s(x)) ,   w(0) = w(Lx) = 0 ,
+# so the discrete curvature of the measured w(x) reconstructs the buoyancy
+# b pointwise and certifies the Roquet EOS  b = -betaT*(theta-Tmd0-slope*s)^q
+# + betaS*s  against its inputs.  x = no-slip walls, y = FREE-SLIP walls
+# (thin strip must not drag the flow), z = periodic.
+xmin = 0.0
+xmax = 1.0
+ymin = 0.0
+ymax = 0.015625
+zmin = 0.0
+zmax = 0.015625
+
+[grid]
+# dx = 1/256 (same as the A.3 Stefan gate)
+NXM = 256
+NYM = 4
+NZM = 4
+ImportGridFromFile = 0
+
+[simulation]
+# slowest viscous mode over the full gap: tau_visc = Re*(Lx/pi)^2 ~ 1.0;
+# t = 12 is ~12 relaxation times -> steady to ~1e-5 (the gate
+# checks steadiness by comparing the last two outputs).
+time_max = 12.0
+output_time_interval = 0.5
+output_time_interval_2d = 0.5
+default_dt = 1.0e-3
+max_dt = 1.0e-3
+constant_dt = 1
+cfl = 0.3
+ghost_nodes = 3
+resume = 0
+freeze_velocity = 0
+
+[flow]
+# nu = 1/Re = 0.1: w_max ~ max(b)*Lx^2/(8 nu) ~ 0.4
+Re = 10.0
+vel_init_type = 0
+dp_dx = 0.0
+ubulk_target = 0.0
+startup_time = 0.0
+startup_init = 0
+startup_velocity = {0.0, 0.0, 0.0}
+
+[vof]
+# no ice anywhere: init 27 with the slab interface pushed one full box
+# outside the domain -> F = 1 exactly everywhere (tanh argument < -100).
+# ICE_PENALIZATION is compiled in but inert (phi_s = 1-F = 0) - this run
+# also certifies its non-invasiveness in pure liquid.
+We = 1.0e30
+rho1 = 1.0
+rho2 = 1.0
+mu1 = 1.0
+mu2 = 1.0
+init_type = 27
+vof_slab_x0 = 2.0
+Cn = 0.0029296875
+Pe_CH = 307.2
+darcy_tau = 1.0
+weno_order = 5
+ch_iter_max = 3000
+ch_tol = 1.0e-12
+contact_angle_deg = 90.0
+
+[phase_change]
+# melting disabled at runtime (stefan = 0); PHASE_CHANGE stays compiled in.
+stefan = 0.0
+T_melt = 0.0
+liquidus_slope = 0.0
+melt_band_eps = 0.0029296875
+
+[eos]
+# The SAME EOS parameter set is used by runA and runB (one certification).
+# runA (s=0):  b(x) = -betaT*(theta(x) - Tmd0)^2   -> betaT, q, Tmd0
+# runB (th=1): b(x) = -betaT*(0.6 + 0.5*s)^2 + betaS*s -> slope (sign!), betaS
+eos_q = 2.0
+eos_betaT = 1.0
+eos_betaS = 1.75
+eos_Tmd0 = 0.4
+eos_Tmd_slope = -0.5
+
+[conc]
+# field 0 = theta: erf ramp in x (legacy init 8, Conc_init_erf_x):
+#   theta(x) = cbd0 + (cbd1-cbd0)*0.5*(1 + erf((x - Lx/2)/sqrt(sig_profile)))
+# ramp 0 -> 1 over width sqrt(sig_profile) = 0.15, crossing the density
+# maximum theta = Tmd0 = 0.4 inside the domain.
+# field 1 = s: init 0 -> zero everywhere.
+# Pe = 1e12: scalars frozen (diffusion negligible; advection w*d/dz = 0
+# exactly since the fields are uniform in z) -> b(x) is time-independent.
+NConc = 2
+Nbin = 1000
+Pe = {1.0e12, 1.0e12}
+richardson = {0.0, 0.0}
+V_s0 = {0.0, 0.0}
+vol_heat_cap_s = {1.0, 1.0}
+conductivity_s = {1.0, 1.0}
+kappa_ice_ratio = {1.0, 0.0}
+conc_init_type = {8, 0}
+cbd0 = 0.0
+cbd1 = 1.0
+theta_ice = 0.0
+cbd2 = 0.0
+cbd5 = 0.0
+sig_profile = 0.0225
+
+# Scalar BCs: A*dc/dn + B*c = C.  All walls no-flux for both fields (the
+# erf ramp is saturated at the walls, gradient ~ e^-11); z periodic.
+BC_AW = {1.0, 1.0}
+BC_BW = {0.0, 0.0}
+BC_CW = {0.0, 0.0}
+BC_AE = {1.0, 1.0}
+BC_BE = {0.0, 0.0}
+BC_CE = {0.0, 0.0}
+BC_AN = {1.0, 1.0}
+BC_BN = {0.0, 0.0}
+BC_CN = {0.0, 0.0}
+BC_AS = {1.0, 1.0}
+BC_BS = {0.0, 0.0}
+BC_CS = {0.0, 0.0}
+BC_AF = {1.0, 1.0}
+BC_BF = {0.0, 0.0}
+BC_CF = {0.0, 0.0}
+BC_AB = {1.0, 1.0}
+BC_BB = {0.0, 0.0}
+BC_CB = {0.0, 0.0}
+
+[particle]
+# gravity along -z: the buoyancy force b acts on w and the periodic z
+# direction carries the unidirectional flow.  Particles compiled out.
+rho_s = 1.0
+rho_prImp = 1.0
+grav = {0.0, 0.0, -1.0}
+N_forcing_loops = 2
+N_heating_loops = 0
+N_impheating_loops = 0
+
+[lsolve]
+P_CG_ETOL = 1.0e-10
+P_CG_MAXIT = 2500
+CG_ETOL = 1.0e-7
+CG_MAXIT = 2500
+
+[output]
+ave_height_output = 0
+front_location_output = 0
+front_speed_output = 0
+susp_mass_output = 0
+sedim_rate_output = 0
+energies_output = 0
+shear_stress_output = 0
+conc_output_integral = {0, 0}
+conc_output_Q_int = {0, 0}
+output_vfc = 0
+output_vfu = 0
+output_vfv = 0
+output_vfw = 0
+avg_dir = 1
+nusselt_switch = 0
+turbulent_terms_switch = 0
+post_processing_switch = 0
+near_wall_slice_switch = 0
+slice_axis = 2
+slice_half = 1
+slice_pos = 1
+slice_p = 0
+center_two_particles = 0

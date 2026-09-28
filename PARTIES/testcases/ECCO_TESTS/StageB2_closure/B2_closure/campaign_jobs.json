@@ -1,0 +1,912 @@
+{
+  "recorded_utc": "2026-09-09T02:47:04.824136+00:00",
+  "actual_cpu_hours": 1183.7644444444445,
+  "jobs": [
+    {
+      "JobID": "20459961",
+      "JobName": "B2tiny_refill",
+      "State": "COMPLETED",
+      "ElapsedRaw": "147",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T22:52:51",
+      "Start": "2026-09-06T22:53:41",
+      "End": "2026-09-06T22:56:08",
+      "cpu_hours": 0.6533333333333333,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_tiny_refill_20459961"
+      ],
+      "binary_sha256": [
+        "06ccf19ecad8eebb00ec9a08e2ccfc43535e4bc87eaff69722152cc781f74730"
+      ]
+    },
+    {
+      "JobID": "20459965",
+      "JobName": "B2tiny_control",
+      "State": "COMPLETED",
+      "ElapsedRaw": "292",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T22:52:55",
+      "Start": "2026-09-06T22:53:41",
+      "End": "2026-09-06T22:58:33",
+      "cpu_hours": 1.2977777777777777,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_tiny_control_20459965"
+      ],
+      "binary_sha256": [
+        "81e73ffe6db87aa07c73e9b5d88c25ee95afe6a4c732d0f79dbbda99cf04f241"
+      ]
+    },
+    {
+      "JobID": "20460325",
+      "JobName": "B2tiny_ice",
+      "State": "CANCELLED by 7960068",
+      "ElapsedRaw": "142",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T22:59:48",
+      "Start": "2026-09-06T23:00:35",
+      "End": "2026-09-06T23:02:57",
+      "cpu_hours": 0.6311111111111111,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_tiny_ice_20460325"
+      ],
+      "binary_sha256": [
+        "799cca9f203deb15826cb55bb02857624b46f2feaeb809fcd597a77e2b5ffd9b"
+      ]
+    },
+    {
+      "JobID": "20460418",
+      "JobName": "B2melt_closed",
+      "State": "COMPLETED",
+      "ElapsedRaw": "81",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:02:20",
+      "Start": "2026-09-06T23:02:54",
+      "End": "2026-09-06T23:04:15",
+      "cpu_hours": 0.36,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_melt_closed_20460418"
+      ],
+      "binary_sha256": [
+        "0bae4b2eb45a77e8658342c3be226e30f2f9d4f8d2f611b7b52ca8d0567b858d"
+      ]
+    },
+    {
+      "JobID": "20460492",
+      "JobName": "B2tiny_ice",
+      "State": "COMPLETED",
+      "ElapsedRaw": "1128",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:03:04",
+      "Start": "2026-09-06T23:05:11",
+      "End": "2026-09-06T23:23:59",
+      "cpu_hours": 5.013333333333334,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_tiny_ice_20460492"
+      ],
+      "binary_sha256": [
+        "0bae4b2eb45a77e8658342c3be226e30f2f9d4f8d2f611b7b52ca8d0567b858d"
+      ]
+    },
+    {
+      "JobID": "20460573",
+      "JobName": "B2melt_closed",
+      "State": "COMPLETED",
+      "ElapsedRaw": "84",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:07:16",
+      "Start": "2026-09-06T23:09:37",
+      "End": "2026-09-06T23:11:01",
+      "cpu_hours": 0.37333333333333335,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_melt_closed_20460573"
+      ],
+      "binary_sha256": [
+        "fccd281af1d1e80536043ad019145deaf1ef513dd8764568cb2dd9c90a726002"
+      ]
+    },
+    {
+      "JobID": "20460632",
+      "JobName": "B2settle16",
+      "State": "TIMEOUT",
+      "ElapsedRaw": "7205",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:07:56",
+      "Start": "2026-09-06T23:09:48",
+      "End": "2026-09-07T01:09:53",
+      "cpu_hours": 128.0888888888889,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_settle16_20460632"
+      ],
+      "binary_sha256": [
+        "fccd281af1d1e80536043ad019145deaf1ef513dd8764568cb2dd9c90a726002"
+      ]
+    },
+    {
+      "JobID": "20460634",
+      "JobName": "B2settle16_nodarcy",
+      "State": "TIMEOUT",
+      "ElapsedRaw": "7205",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:08:01",
+      "Start": "2026-09-06T23:09:48",
+      "End": "2026-09-07T01:09:53",
+      "cpu_hours": 128.0888888888889,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_settle16_nodarcy_20460634"
+      ],
+      "binary_sha256": [
+        "fccd281af1d1e80536043ad019145deaf1ef513dd8764568cb2dd9c90a726002"
+      ]
+    },
+    {
+      "JobID": "20460707",
+      "JobName": "B2stagea",
+      "State": "COMPLETED",
+      "ElapsedRaw": "45",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:10:51",
+      "Start": "2026-09-06T23:12:05",
+      "End": "2026-09-06T23:12:50",
+      "cpu_hours": 0.2,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_stagea_20460707"
+      ],
+      "binary_sha256": [
+        "12503f78a6f97aad378d2c564272dce291ab43e81db2010b9857071a0db8d96d"
+      ]
+    },
+    {
+      "JobID": "20460708",
+      "JobName": "B2settle16_reference",
+      "State": "TIMEOUT",
+      "ElapsedRaw": "7218",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:10:56",
+      "Start": "2026-09-06T23:12:05",
+      "End": "2026-09-07T01:12:23",
+      "cpu_hours": 128.32,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_settle16_reference_20460708"
+      ],
+      "binary_sha256": [
+        "7d230a253ffaac71f7d1567bbb1d845acfce39b394e3c75c8fa1bf2d10d4956e"
+      ]
+    },
+    {
+      "JobID": "20460710",
+      "JobName": "B2coupled",
+      "State": "COMPLETED",
+      "ElapsedRaw": "1305",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-06T23:11:33",
+      "Start": "2026-09-06T23:12:05",
+      "End": "2026-09-06T23:33:50",
+      "cpu_hours": 5.8,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled_20460710"
+      ],
+      "binary_sha256": [
+        "fccd281af1d1e80536043ad019145deaf1ef513dd8764568cb2dd9c90a726002"
+      ]
+    },
+    {
+      "JobID": "20477117",
+      "JobName": "B2profile_seed",
+      "State": "COMPLETED",
+      "ElapsedRaw": "12",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T13:48:09",
+      "Start": "2026-09-07T13:49:50",
+      "End": "2026-09-07T13:50:02",
+      "cpu_hours": 0.05333333333333334,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_profile_seed_20477117"
+      ],
+      "binary_sha256": [
+        "b7bd3ad7f5568d644cae4ce67a3580062f9844347a31e473f4e912996c191f3c"
+      ]
+    },
+    {
+      "JobID": "20477118",
+      "JobName": "B2coupled_v6",
+      "State": "FAILED",
+      "ElapsedRaw": "471",
+      "AllocCPUS": "16",
+      "ExitCode": "137:0",
+      "Submit": "2026-09-07T13:48:14",
+      "Start": "2026-09-07T13:49:50",
+      "End": "2026-09-07T13:57:41",
+      "cpu_hours": 2.0933333333333333,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled_v6_20477118"
+      ],
+      "binary_sha256": [
+        "b7bd3ad7f5568d644cae4ce67a3580062f9844347a31e473f4e912996c191f3c"
+      ]
+    },
+    {
+      "JobID": "20477406",
+      "JobName": "B2settle24",
+      "State": "COMPLETED",
+      "ElapsedRaw": "1253",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T13:56:42",
+      "Start": "2026-09-07T13:58:39",
+      "End": "2026-09-07T14:19:32",
+      "cpu_hours": 22.275555555555556,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_settle24_20477406"
+      ],
+      "binary_sha256": [
+        "3111a336bdb54cd1072e39cb2dd7658e3e42b63a89be4fbe586c475673eb2847"
+      ]
+    },
+    {
+      "JobID": "20477407",
+      "JobName": "B2settle32",
+      "State": "COMPLETED",
+      "ElapsedRaw": "6985",
+      "AllocCPUS": "128",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T13:56:47",
+      "Start": "2026-09-07T14:14:16",
+      "End": "2026-09-07T16:10:41",
+      "cpu_hours": 248.35555555555555,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_settle32_20477407"
+      ],
+      "binary_sha256": [
+        "3111a336bdb54cd1072e39cb2dd7658e3e42b63a89be4fbe586c475673eb2847"
+      ]
+    },
+    {
+      "JobID": "20477411",
+      "JobName": "B2restart_continuous",
+      "State": "COMPLETED",
+      "ElapsedRaw": "21",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T13:57:22",
+      "Start": "2026-09-07T13:58:47",
+      "End": "2026-09-07T13:59:08",
+      "cpu_hours": 0.09333333333333334,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_continuous_20477411"
+      ],
+      "binary_sha256": [
+        "3111a336bdb54cd1072e39cb2dd7658e3e42b63a89be4fbe586c475673eb2847"
+      ]
+    },
+    {
+      "JobID": "20477415",
+      "JobName": "B2restart_resume",
+      "State": "COMPLETED",
+      "ElapsedRaw": "11",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T13:57:32",
+      "Start": "2026-09-07T13:58:48",
+      "End": "2026-09-07T13:58:59",
+      "cpu_hours": 0.04888888888888889,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_resume_20477415"
+      ],
+      "binary_sha256": [
+        "3111a336bdb54cd1072e39cb2dd7658e3e42b63a89be4fbe586c475673eb2847"
+      ]
+    },
+    {
+      "JobID": "20477540",
+      "JobName": "B2remap8",
+      "State": "COMPLETED",
+      "ElapsedRaw": "7",
+      "AllocCPUS": "8",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:01:27",
+      "Start": "2026-09-07T14:03:06",
+      "End": "2026-09-07T14:03:13",
+      "cpu_hours": 0.015555555555555555,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_remap8_20477540"
+      ],
+      "binary_sha256": [
+        "018f5a5876f7ce169ffbf882c02a9cba4afd8e5cf3b13409406bb24919342d67"
+      ]
+    },
+    {
+      "JobID": "20477544",
+      "JobName": "B2remap16",
+      "State": "COMPLETED",
+      "ElapsedRaw": "7",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:01:32",
+      "Start": "2026-09-07T14:03:06",
+      "End": "2026-09-07T14:03:13",
+      "cpu_hours": 0.03111111111111111,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_remap16_20477544"
+      ],
+      "binary_sha256": [
+        "018f5a5876f7ce169ffbf882c02a9cba4afd8e5cf3b13409406bb24919342d67"
+      ]
+    },
+    {
+      "JobID": "20477576",
+      "JobName": "B2remap_replay",
+      "State": "FAILED",
+      "ElapsedRaw": "37",
+      "AllocCPUS": "16",
+      "ExitCode": "98:0",
+      "Submit": "2026-09-07T14:02:39",
+      "Start": "2026-09-07T14:03:14",
+      "End": "2026-09-07T14:03:51",
+      "cpu_hours": 0.16444444444444445,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_remap_replay_20477576"
+      ],
+      "binary_sha256": [
+        "c439546e498c0ee312c2628f3101bb232390a299b081dafc48cec34166dbb893"
+      ]
+    },
+    {
+      "JobID": "20477868",
+      "JobName": "B2coupled_v9",
+      "State": "COMPLETED",
+      "ElapsedRaw": "657",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:11:49",
+      "Start": "2026-09-07T14:12:14",
+      "End": "2026-09-07T14:23:11",
+      "cpu_hours": 2.92,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled_v9_20477868"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20477869",
+      "JobName": "B2seed_v9",
+      "State": "COMPLETED",
+      "ElapsedRaw": "12",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:11:53",
+      "Start": "2026-09-07T14:12:14",
+      "End": "2026-09-07T14:12:26",
+      "cpu_hours": 0.05333333333333334,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_seed_v9_20477869"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20477870",
+      "JobName": "B2hot_water",
+      "State": "COMPLETED",
+      "ElapsedRaw": "16",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:11:57",
+      "Start": "2026-09-07T14:12:14",
+      "End": "2026-09-07T14:12:30",
+      "cpu_hours": 0.07111111111111111,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_hot_water_20477870"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20478095",
+      "JobName": "B2remap8",
+      "State": "FAILED",
+      "ElapsedRaw": "4",
+      "AllocCPUS": "8",
+      "ExitCode": "1:0",
+      "Submit": "2026-09-07T14:17:58",
+      "Start": "2026-09-07T14:18:52",
+      "End": "2026-09-07T14:18:56",
+      "cpu_hours": 0.008888888888888889,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_remap8_20478095"
+      ],
+      "binary_sha256": []
+    },
+    {
+      "JobID": "20478096",
+      "JobName": "B2remap16",
+      "State": "FAILED",
+      "ElapsedRaw": "4",
+      "AllocCPUS": "16",
+      "ExitCode": "1:0",
+      "Submit": "2026-09-07T14:17:58",
+      "Start": "2026-09-07T14:18:52",
+      "End": "2026-09-07T14:18:56",
+      "cpu_hours": 0.017777777777777778,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_remap16_20478096"
+      ],
+      "binary_sha256": []
+    },
+    {
+      "JobID": "20478108",
+      "JobName": "B2restart_v9_continuous",
+      "State": "FAILED",
+      "ElapsedRaw": "4",
+      "AllocCPUS": "16",
+      "ExitCode": "1:0",
+      "Submit": "2026-09-07T14:18:30",
+      "Start": "2026-09-07T14:18:52",
+      "End": "2026-09-07T14:18:56",
+      "cpu_hours": 0.017777777777777778,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_v9_continuous_20478108"
+      ],
+      "binary_sha256": []
+    },
+    {
+      "JobID": "20478109",
+      "JobName": "B2restart_v9_resume",
+      "State": "FAILED",
+      "ElapsedRaw": "5",
+      "AllocCPUS": "16",
+      "ExitCode": "1:0",
+      "Submit": "2026-09-07T14:18:30",
+      "Start": "2026-09-07T14:18:52",
+      "End": "2026-09-07T14:18:57",
+      "cpu_hours": 0.022222222222222223,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_v9_resume_20478109"
+      ],
+      "binary_sha256": []
+    },
+    {
+      "JobID": "20478180",
+      "JobName": "B2remap8",
+      "State": "COMPLETED",
+      "ElapsedRaw": "9",
+      "AllocCPUS": "8",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:19:33",
+      "Start": "2026-09-07T14:21:03",
+      "End": "2026-09-07T14:21:12",
+      "cpu_hours": 0.02,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_remap8_20478180"
+      ],
+      "binary_sha256": [
+        "35a6c963bf0e3434450695f5b074296d98349b763af489627e564b955772f89e"
+      ]
+    },
+    {
+      "JobID": "20478181",
+      "JobName": "B2remap16",
+      "State": "COMPLETED",
+      "ElapsedRaw": "8",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:19:39",
+      "Start": "2026-09-07T14:21:03",
+      "End": "2026-09-07T14:21:11",
+      "cpu_hours": 0.035555555555555556,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_remap16_20478181"
+      ],
+      "binary_sha256": [
+        "35a6c963bf0e3434450695f5b074296d98349b763af489627e564b955772f89e"
+      ]
+    },
+    {
+      "JobID": "20478188",
+      "JobName": "B2restart_v9_continuous",
+      "State": "COMPLETED",
+      "ElapsedRaw": "21",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:19:44",
+      "Start": "2026-09-07T14:21:03",
+      "End": "2026-09-07T14:21:24",
+      "cpu_hours": 0.09333333333333334,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_v9_continuous_20478188"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20478192",
+      "JobName": "B2restart_v9_resume",
+      "State": "COMPLETED",
+      "ElapsedRaw": "13",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:19:48",
+      "Start": "2026-09-07T14:21:04",
+      "End": "2026-09-07T14:21:17",
+      "cpu_hours": 0.057777777777777775,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_v9_resume_20478192"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20478206",
+      "JobName": "B2coupled16",
+      "State": "COMPLETED",
+      "ElapsedRaw": "1522",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:20:42",
+      "Start": "2026-09-07T14:24:38",
+      "End": "2026-09-07T14:50:00",
+      "cpu_hours": 27.057777777777776,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_20478206"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20478207",
+      "JobName": "B2coupled_v9_mpi8",
+      "State": "COMPLETED",
+      "ElapsedRaw": "793",
+      "AllocCPUS": "8",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:20:47",
+      "Start": "2026-09-07T14:21:05",
+      "End": "2026-09-07T14:34:18",
+      "cpu_hours": 1.7622222222222221,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled_v9_mpi8_20478207"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20478208",
+      "JobName": "B2coupled_v9_halfdt",
+      "State": "COMPLETED",
+      "ElapsedRaw": "925",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T14:20:52",
+      "Start": "2026-09-07T14:21:05",
+      "End": "2026-09-07T14:36:30",
+      "cpu_hours": 4.111111111111111,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled_v9_halfdt_20478208"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20487521",
+      "JobName": "B2coupled16_halfdt",
+      "State": "CANCELLED by 7960068",
+      "ElapsedRaw": "0",
+      "AllocCPUS": "0",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T19:26:49",
+      "Start": "None",
+      "End": "2026-09-07T19:32:17",
+      "cpu_hours": 0.0,
+      "scratch_runs": [],
+      "binary_sha256": []
+    },
+    {
+      "JobID": "20487583",
+      "JobName": "B2restart_guards",
+      "State": "FAILED",
+      "ElapsedRaw": "9",
+      "AllocCPUS": "16",
+      "ExitCode": "1:0",
+      "Submit": "2026-09-07T19:28:44",
+      "Start": "2026-09-07T19:29:29",
+      "End": "2026-09-07T19:29:38",
+      "cpu_hours": 0.04,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_guards_20487583"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20487628",
+      "JobName": "B2stagea_final",
+      "State": "COMPLETED",
+      "ElapsedRaw": "50",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T19:29:26",
+      "Start": "2026-09-07T19:31:54",
+      "End": "2026-09-07T19:32:44",
+      "cpu_hours": 0.2222222222222222,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_stagea_final_20487628"
+      ],
+      "binary_sha256": [
+        "76605fa2b07f969be6db0f501fa221f84c66dd7c55c8a9a81b286b984d2184fd"
+      ]
+    },
+    {
+      "JobID": "20487662",
+      "JobName": "B2restart_guards",
+      "State": "COMPLETED",
+      "ElapsedRaw": "8",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T19:31:10",
+      "Start": "2026-09-07T19:31:55",
+      "End": "2026-09-07T19:32:03",
+      "cpu_hours": 0.035555555555555556,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_restart_guards_20487662"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20487690",
+      "JobName": "B2coupled16_halfdt",
+      "State": "COMPLETED",
+      "ElapsedRaw": "2190",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T19:32:23",
+      "Start": "2026-09-07T19:36:39",
+      "End": "2026-09-07T20:13:09",
+      "cpu_hours": 38.93333333333333,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_halfdt_20487690"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20487694",
+      "JobName": "B2seed_final",
+      "State": "COMPLETED",
+      "ElapsedRaw": "12",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T19:33:41",
+      "Start": "2026-09-07T19:34:19",
+      "End": "2026-09-07T19:34:31",
+      "cpu_hours": 0.05333333333333334,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_seed_final_20487694"
+      ],
+      "binary_sha256": [
+        "4ca2ea1ea54c112536c2ef3672952f91b98f2d080537dc57d2317f32a11b56b1"
+      ]
+    },
+    {
+      "JobID": "20492786",
+      "JobName": "B2coupled16_quarterdt",
+      "State": "COMPLETED",
+      "ElapsedRaw": "4099",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T23:57:58",
+      "Start": "2026-09-08T00:00:30",
+      "End": "2026-09-08T01:08:49",
+      "cpu_hours": 72.8711111111111,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_quarterdt_20492786"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20492787",
+      "JobName": "B2coupled16_mpi32",
+      "State": "COMPLETED",
+      "ElapsedRaw": "1847",
+      "AllocCPUS": "32",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-07T23:57:58",
+      "Start": "2026-09-08T00:00:30",
+      "End": "2026-09-08T00:31:17",
+      "cpu_hours": 16.41777777777778,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_mpi32_20492787"
+      ],
+      "binary_sha256": [
+        "4bcf5ede8490c7156ae34475c1967a39b3cc3d40c6080bba1137764e5062229e"
+      ]
+    },
+    {
+      "JobID": "20492853",
+      "JobName": "B2coupled16_rampfix",
+      "State": "COMPLETED",
+      "ElapsedRaw": "1650",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T00:03:38",
+      "Start": "2026-09-08T00:05:03",
+      "End": "2026-09-08T00:32:33",
+      "cpu_hours": 29.333333333333332,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_rampfix_20492853"
+      ],
+      "binary_sha256": [
+        "65988620c29202d6dab2e2104ba90df1953a3a6eaa95d19d9ab5653e9f494f10"
+      ]
+    },
+    {
+      "JobID": "20492854",
+      "JobName": "B2coupled16_rampfix_halfdt",
+      "State": "COMPLETED",
+      "ElapsedRaw": "2539",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T00:03:38",
+      "Start": "2026-09-08T00:05:03",
+      "End": "2026-09-08T00:47:22",
+      "cpu_hours": 45.13777777777778,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_rampfix_halfdt_20492854"
+      ],
+      "binary_sha256": [
+        "65988620c29202d6dab2e2104ba90df1953a3a6eaa95d19d9ab5653e9f494f10"
+      ]
+    },
+    {
+      "JobID": "20492876",
+      "JobName": "B2coupled16_rampfix_quarterdt",
+      "State": "COMPLETED",
+      "ElapsedRaw": "4461",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T00:05:31",
+      "Start": "2026-09-08T00:07:20",
+      "End": "2026-09-08T01:21:41",
+      "cpu_hours": 79.30666666666667,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_rampfix_quarterdt_20492876"
+      ],
+      "binary_sha256": [
+        "65988620c29202d6dab2e2104ba90df1953a3a6eaa95d19d9ab5653e9f494f10"
+      ]
+    },
+    {
+      "JobID": "20492915",
+      "JobName": "B2coupled_v9_rampfix",
+      "State": "COMPLETED",
+      "ElapsedRaw": "689",
+      "AllocCPUS": "16",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T00:08:03",
+      "Start": "2026-09-08T00:09:40",
+      "End": "2026-09-08T00:21:09",
+      "cpu_hours": 3.062222222222222,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled_v9_rampfix_20492915"
+      ],
+      "binary_sha256": [
+        "65988620c29202d6dab2e2104ba90df1953a3a6eaa95d19d9ab5653e9f494f10"
+      ]
+    },
+    {
+      "JobID": "20492916",
+      "JobName": "B2coupled_v9_rampfix_mpi8",
+      "State": "COMPLETED",
+      "ElapsedRaw": "741",
+      "AllocCPUS": "8",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T00:08:03",
+      "Start": "2026-09-08T00:09:40",
+      "End": "2026-09-08T00:22:01",
+      "cpu_hours": 1.6466666666666667,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled_v9_rampfix_mpi8_20492916"
+      ],
+      "binary_sha256": [
+        "65988620c29202d6dab2e2104ba90df1953a3a6eaa95d19d9ab5653e9f494f10"
+      ]
+    },
+    {
+      "JobID": "20500720",
+      "JobName": "B2coupled16_smooth",
+      "State": "COMPLETED",
+      "ElapsedRaw": "1461",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T12:15:28",
+      "Start": "2026-09-08T12:18:24",
+      "End": "2026-09-08T12:42:45",
+      "cpu_hours": 25.973333333333333,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_smooth_20500720"
+      ],
+      "binary_sha256": [
+        "637dfdd1336c048e09302bb9596b170bc8325d7f2306fa94c0dad209f4f3b1f7"
+      ]
+    },
+    {
+      "JobID": "20500721",
+      "JobName": "B2coupled16_smooth_halfdt",
+      "State": "COMPLETED",
+      "ElapsedRaw": "2108",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T12:15:28",
+      "Start": "2026-09-08T12:18:24",
+      "End": "2026-09-08T12:53:32",
+      "cpu_hours": 37.47555555555556,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_coupled16_smooth_halfdt_20500721"
+      ],
+      "binary_sha256": [
+        "637dfdd1336c048e09302bb9596b170bc8325d7f2306fa94c0dad209f4f3b1f7"
+      ]
+    },
+    {
+      "JobID": "20500848",
+      "JobName": "B2settle24_dt10",
+      "State": "COMPLETED",
+      "ElapsedRaw": "4828",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T12:21:29",
+      "Start": "2026-09-08T12:23:18",
+      "End": "2026-09-08T13:43:46",
+      "cpu_hours": 85.83111111111111,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_settle24_dt10_20500848"
+      ],
+      "binary_sha256": [
+        "65988620c29202d6dab2e2104ba90df1953a3a6eaa95d19d9ab5653e9f494f10"
+      ]
+    },
+    {
+      "JobID": "20500849",
+      "JobName": "B2settle24_dt05",
+      "State": "COMPLETED",
+      "ElapsedRaw": "2206",
+      "AllocCPUS": "64",
+      "ExitCode": "0:0",
+      "Submit": "2026-09-08T12:21:29",
+      "Start": "2026-09-08T12:23:18",
+      "End": "2026-09-08T13:00:04",
+      "cpu_hours": 39.217777777777776,
+      "scratch_runs": [
+        "/anvil/scratch/x-mjalabert/ECCO_StageB/B2closure_settle24_dt05_20500849"
+      ],
+      "binary_sha256": [
+        "65988620c29202d6dab2e2104ba90df1953a3a6eaa95d19d9ab5653e9f494f10"
+      ]
+    }
+  ]
+}
