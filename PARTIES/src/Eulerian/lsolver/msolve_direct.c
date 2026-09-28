@@ -202,6 +202,21 @@ int Velocity_solve_explicit(Velocity *vel, Cart3d_bag *data_bag) {
 	#ifdef VOF
 		VolumeFraction *vof = data_bag->vof;
 		double ***rho       = vof->rho;   // cell-centered current density (rho^k)
+		#ifdef ICE_PENALIZATION
+			/*
+			 * The explicit predictor must see the same implicit Darcy damping
+			 * as the stage solve:  u_hat = RHS / (rho/(beta dt) + 2 rho phi/tau),
+			 * so IBM forcing (Stage B) is estimated against the damped state.
+			 */
+			#ifdef VOF_DIFFUSE
+			double ***fliq_pen = vof->C_L;
+			double ***fsol_pen = vof->C_S;   /* resolved solid is NOT ice (B.2) */
+			#else
+			double ***fliq_pen = vof->F;
+			double ***fsol_pen = NULL;
+			#endif
+			const double drag_2tau = 2.0 / params->darcy_tau;
+		#endif
 	#endif
 
 	for (k = Ks; k < Ke; k++) {
@@ -249,7 +264,34 @@ int Velocity_solve_explicit(Velocity *vel, Cart3d_bag *data_bag) {
 									rho_face = 1.0;
 								}
 
+				#ifdef ICE_PENALIZATION
+								{
+									int iL = (vel->component == 'u') ? i-1 : i;
+									int jL = (vel->component == 'v') ? j-1 : j;
+									int kL = (vel->component == 'w') ? k-1 : k;
+
+									double cs_face_pen = (fsol_pen != NULL)
+									    ? 0.5 * (fsol_pen[k][j][i] + fsol_pen[kL][jL][iL]) : 0.0;
+									double phi_face = 1.0 - 0.5 * (fliq_pen[k][j][i]
+									                             + fliq_pen[kL][jL][iL])
+									                      - cs_face_pen;
+									/* IBM governs inside the resolved solid (see msolve_cg.c) */
+									if (cs_face_pen >= DIFFUSE_SOLID_MASS_CUTOFF) phi_face = 0.0;
+									else if (cs_face_pen > DIFFUSE_SOLID_HALO_CUTOFF &&
+									         phi_face < DIFFUSE_SOLID_HALO_ICE_TRUST) phi_face = 0.0;
+									if (phi_face < 0.0) phi_face = 0.0;
+									if (phi_face > 1.0) phi_face = 1.0;
+#ifdef VOF_DIFFUSE_ICE_PENAL_THRESHOLD
+									phi_face = (phi_face > DIFFUSE_ICE_PENAL_THRESHOLD_VAL) ? 1.0 : 0.0;
+#endif
+
+									vel_data[k][j][i] = rhs[k][j][i]
+									    / (rho_face / dtimeb
+									       + rho_face * drag_2tau * phi_face);
+								}
+				#else
 								vel_data[k][j][i] = (rhs[k][j][i] * dtimeb) / rho_face;
+				#endif
 				#endif
 			}
 		}

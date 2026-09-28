@@ -586,6 +586,15 @@ void Particle_initialize_volume_fraction(Cart3d_bag *data_bag, Debug_trace *dtra
 /******************************************************************************/
 void Particle_initialize_nonessential_data(Particle *p) {
 
+	/* Roadmap B.1.3 release state.  Safe default: LOCKED.  The resume path
+	 * overwrites t_released from the restart file when that file carries it;
+	 * restart files written before B.1.3 do not, and defaulting to locked is
+	 * the conservative choice -- a grain wrongly held is visible immediately,
+	 * whereas a grain wrongly freed silently corrupts the trajectory. */
+	p->phi_liq = 0.0;
+	p->t_released = -1.0;
+	p->release_ramp = 0;
+
 	memcpy(p->X_old, p->X, 3 * sizeof(double));
 	memcpy(p->U_old, p->U, 3 * sizeof(double));
 	memcpy(p->Omega_old, p->Omega, 3 * sizeof(double));
@@ -898,6 +907,219 @@ void Particle_release_to_mobile(Particle_list *p_list_release, Particle_list *p_
 	}
 
 }
+
+#if defined(LAG_PARTICLE_RESOLVED) && defined(VOF_IBM)
+/******************************************************************************/
+/*
+ * Particle_update_shell_liquid_fraction        (roadmap B.1.3)
+ *
+ * Computes, for every particle in p_list, the liquid fraction averaged over the
+ * shell immediately outside the grain, and stores it on every copy of that
+ * particle as p->phi_liq.
+ *
+ * [MPI] This is the whole reason the release criterion is globally safe.  The
+ * shell straddles rank boundaries, so no single rank can evaluate it.  Each
+ * rank integrates only the cells it owns (Interpolate_integrate_shell_liquid_
+ * fraction clips to G_Is..G_Ie), a single Allreduce sums numerator and
+ * denominator over all ranks, and every rank then divides the SAME two numbers.
+ * The release decision is therefore bit-identical on every rank by
+ * construction -- there is no broadcast to get wrong, and no possibility of one
+ * rank freeing a grain that another still considers locked.
+ *
+ * It is also decomposition-independent: the integrand is a pointwise function
+ * of geometry and C_L, and each cell is visited exactly once regardless of how
+ * the domain is split, so the result does not depend on the rank count.
+ *
+ * Must be called with p_list in LIST_STATE_BOTH, i.e. alongside
+ * Interpolate_integrate_momentum, so that every rank overlapping the grain
+ * holds a copy and contributes its cells.  A rank owning shell cells but no
+ * copy of the particle would silently drop those cells; with the default
+ * shell of 2 cells against a ghost buffer of order R this cannot occur, and
+ * the failure mode degrades gracefully in any case (numerator and denominator
+ * lose the same cells, so the ratio stays a valid average over the cells that
+ * were visited).
+ */
+/******************************************************************************/
+void Particle_update_shell_liquid_fraction(Particle_list *p_list,
+                                           Cart3d_bag   *data_bag,
+                                           Debug_trace  *dtrace)
+{
+	Parameters *params = data_bag->params;
+
+	if (params->F_release <= 0.0) return;
+	if (data_bag->vof == NULL || data_bag->vof->C_L == NULL) return;
+
+	const int Np = p_list->Np;
+	if (Np <= 0) return;
+
+	double *loc = (double *)calloc(2 * Np, sizeof(double));
+	double *glb = (double *)calloc(2 * Np, sizeof(double));
+	Memory_check_allocation(loc);
+	Memory_check_allocation(glb);
+
+	Interpolate_integrate_shell_liquid_fraction(p_list, data_bag,
+	                                           loc, loc + Np, dtrace);
+
+	MPI_Allreduce(loc, glb, 2 * Np, MPI_DOUBLE, MPI_SUM, PCW);
+
+	Particle *p = p_list->start;
+	while (p != NULL) {
+		const int n = p->ID - p_list->ID_start;
+		if (n >= 0 && n < Np)
+			p->phi_liq = (glb[Np + n] > 0.0) ? glb[n] / glb[Np + n] : 0.0;
+		p = p->next;
+	}
+
+	free(loc);
+	free(glb);
+}
+
+/******************************************************************************/
+/*
+ * Particle_release_by_interface                (roadmap B.1.3)
+ *
+ * Frees any grain whose surroundings have melted, and advances the ramp
+ * counter of grains freed recently.  Call ONCE PER STEP (which_stage == 0):
+ * flipping the lock between RK stages would leave the particle's force history
+ * inconsistent with its state.
+ *
+ * The grain is not moved between linked lists.  An earlier design transferred
+ * it fixed -> mobile, but p_list->Np is the HDF5 dataset dimension for particle
+ * output (ParticleOutput.c:422), so a transfer would either write a short
+ * dataset or change its dimension between snapshots.  Keeping the grain in the
+ * mobile list and locking its motion is physically identical -- both paint a
+ * stationary rigid body into the flow -- while leaving Np, the output layout
+ * and the MPI list bookkeeping untouched.
+ *
+ * Because the grain is in the mobile list from t = 0 it accumulates a
+ * converged hydrodynamic force history while still locked, so at the instant
+ * of release there is no cold-start transient of the kind the STARTUP block
+ * exists to patch for time-triggered release.
+ */
+/******************************************************************************/
+void Particle_release_by_interface(Particle_list *p_list, Parameters *params,
+                                   Debug_trace *dtrace)
+{
+	if (params->F_release <= 0.0) return;
+
+	Particle *p = p_list->start;
+	while (p != NULL) {
+
+		if (p->t_released < 0.0) {
+			if (p->phi_liq >= params->F_release) {
+				p->t_released  = params->time;
+				p->release_ramp = params->release_ramp_steps;
+				/* NB: the announcement is NOT made here.  Rank 0 usually
+				 * holds no copy of the grain, so a `rank == 0` print inside
+				 * this loop never executes and the release leaves no trace
+				 * in the log whatsoever.  It is emitted from the reduced
+				 * data below, where rank 0 always has the values. */
+			}
+		}
+		else if (p->release_ramp > 0) {
+			p->release_ramp--;
+		}
+
+		p = p->next;
+	}
+
+	/*
+	 * Trajectory of the criterion itself, one line per particle per step.
+	 *
+	 * The stdout notice above fires once and reports only the threshold
+	 * crossing, which is not enough to calibrate F_release: that needs
+	 * phi_liq(t) through the crossing, so the threshold can be mapped onto
+	 * the instant the grain actually loses mechanical contact with the ice.
+	 * It is also what shows an impulse-free handoff -- U(t) across release,
+	 * against the ramp counter that is supposed to be smoothing it.
+	 *
+	 * Written by rank 0, and only when the mechanism is enabled, so this file
+	 * does not exist in any Stage-A run and no existing output format changes.
+	 * One line per step is negligible next to the field output.
+	 *
+	 * [MPI] Rank 0 generally holds NO copy of the grain -- the domain is split
+	 * and the grain sits wherever it sits -- so its local list is empty and a
+	 * naive rank-0 walk writes nothing at all.  Every rank that DOES hold a
+	 * copy carries identical values (phi_liq comes from the Allreduce above;
+	 * t_released and the ramp are decided identically on every rank from that
+	 * same number; X and U are kept consistent across copies), so summing over
+	 * copies and dividing by the copy count recovers the value.  The division
+	 * is exact for the quantities the tests read as exact: a sum of zeros over
+	 * any count is still exactly zero, which is what the "locked" check needs.
+	 */
+	{
+		const int NPR = p_list->Np;
+		if (NPR > 0) {
+			const int NF = 8;  /* count, phi, t_rel, ramp, X1, U0, U1, U2 */
+			double *loc = (double *)calloc(NF * NPR, sizeof(double));
+			double *glb = (double *)calloc(NF * NPR, sizeof(double));
+			Memory_check_allocation(loc);
+			Memory_check_allocation(glb);
+
+			for (p = p_list->start; p != NULL; p = p->next) {
+				const int n = p->ID - p_list->ID_start;
+				if (n < 0 || n >= NPR) continue;
+				loc[0 * NPR + n] += 1.0;
+				loc[1 * NPR + n] += p->phi_liq;
+				loc[2 * NPR + n] += p->t_released;
+				loc[3 * NPR + n] += (double)p->release_ramp;
+				loc[4 * NPR + n] += p->X[1];
+				loc[5 * NPR + n] += p->U[0];
+				loc[6 * NPR + n] += p->U[1];
+				loc[7 * NPR + n] += p->U[2];
+			}
+
+			MPI_Reduce(loc, glb, NF * NPR, MPI_DOUBLE, MPI_SUM, 0, PCW);
+
+			if (params->rank == 0) {
+				static int header_written = 0;
+				/* On resume, append: truncating would discard the
+				 * pre-restart trajectory, which is exactly what the
+				 * restart test compares. */
+				const int append = header_written || params->resume;
+				FILE *fp = fopen("release.dat", append ? "a" : "w");
+				if (fp != NULL) {
+					if (!header_written) {
+						if (params->resume)
+							fprintf(fp, "# --- resumed at t = %.10g ---\n",
+							        params->time);
+						else
+							fprintf(fp, "# time,ID,phi_liq,t_released,"
+							            "release_ramp,X1,U0,U1,U2\n");
+						header_written = 1;
+					}
+					for (int n = 0; n < NPR; n++) {
+						const double cnt = glb[0 * NPR + n];
+						if (cnt <= 0.0) continue;  /* nobody owns it */
+						/* Announce the crossing from the reduced values --
+						 * see the note at the trigger above. */
+						if (glb[2 * NPR + n] / cnt == params->time)
+							printf("  [release] particle %d freed at "
+							       "t = %.6f (shell liquid fraction %.4f "
+							       ">= %.4f)\n",
+							       p_list->ID_start + n, params->time,
+							       glb[1 * NPR + n] / cnt,
+							       params->F_release);
+						fprintf(fp, "%.10g,%d,%.17g,%.10g,%d,"
+						            "%.17g,%.17g,%.17g,%.17g\n",
+						        params->time, p_list->ID_start + n,
+						        glb[1 * NPR + n] / cnt,
+						        glb[2 * NPR + n] / cnt,
+						        (int)(glb[3 * NPR + n] / cnt + 0.5),
+						        glb[4 * NPR + n] / cnt,
+						        glb[5 * NPR + n] / cnt,
+						        glb[6 * NPR + n] / cnt,
+						        glb[7 * NPR + n] / cnt);
+					}
+					fclose(fp);
+				}
+			}
+			free(loc);
+			free(glb);
+		}
+	}
+}
+#endif /* LAG_PARTICLE_RESOLVED && VOF_IBM */
 
 /******************************************************************************/
 /*
@@ -1694,12 +1916,12 @@ static int Particle_overlaps_rank(const Particle *p, MAC_grid *grid,
 	                                    NULL);
 }
 
-Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
+static Particle *Particle_collect_owned_overlaps_impl(Particle_list *p_list,
                                           Cart3d_bag *data_bag,
                                           double extra_range,
                                           double min_radius,
                                           int include_self,
-                                          int *n_recv)
+                                          int *n_recv, int shift_images)
 {
 	MAC_grid *grid = data_bag->grid;
 	Parameters *params = data_bag->params;
@@ -1758,7 +1980,7 @@ Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
 				continue;
 
 			send_buf[offset[rank]] = *p;
-			for (int d = 0; d < 3; d++) {
+			for (int d = 0; shift_images && d < 3; d++) {
 				send_buf[offset[rank]].X[d] += shift[d];
 				send_buf[offset[rank]].X_old[d] += shift[d];
 			}
@@ -1784,6 +2006,26 @@ Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
 	}
 	return recv_buf;
 }
+
+Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
+        Cart3d_bag *data_bag,double extra_range,double min_radius,
+        int include_self,int *n_recv)
+{
+    return Particle_collect_owned_overlaps_impl(p_list,data_bag,extra_range,
+        min_radius,include_self,n_recv,1);
+}
+
+#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
+/* Preserve the owner's exact coordinates. Each Eulerian cell will choose its
+ * own minimum periodic distance; a single image cannot cover a broad support
+ * or both ends of a periodic rank. */
+Particle *Particle_collect_owned_centers(Particle_list *p_list,
+        Cart3d_bag *data_bag,double extra_range,int *n_recv)
+{
+    return Particle_collect_owned_overlaps_impl(p_list,data_bag,extra_range,
+        -1.0,1,n_recv,0);
+}
+#endif
 
 static double Particle_min_width_for_rank(MAC_grid *grid, Parameters *params,
                                           int rank)

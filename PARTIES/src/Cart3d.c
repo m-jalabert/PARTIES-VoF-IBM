@@ -139,16 +139,29 @@ static void Cart3d_run_twod_pretests(Cart3d_bag *data_bag)
 	if (params->npxminus != MPI_PROC_NULL) {
 		for (j = grid->G_Js; j < grid->G_Je && local_ok; j++) {
 			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
+				int expected_i = grid->G_Is - 1;
+#ifdef XPERIODIC
+				if (expected_i < 0)
+					expected_i = grid->NX - 2;
+#endif
 				local_ok = fabs(probe[k][j][grid->G_Is - 1] -
-				                Cart3d_twod_exchange_value(grid->G_Is - 1, j, k)) < 1.0e-12;
+				                Cart3d_twod_exchange_value(expected_i, j, k)) < 1.0e-12;
 			}
 		}
 	}
 	if (params->npxplus != MPI_PROC_NULL) {
 		for (j = grid->G_Js; j < grid->G_Je && local_ok; j++) {
 			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
-				local_ok = fabs(probe[k][j][grid->G_Ie] -
-				                Cart3d_twod_exchange_value(grid->G_Ie, j, k)) < 1.0e-12;
+				int recv_i = grid->G_Ie;
+				int expected_i = grid->G_Ie;
+#ifdef XPERIODIC
+				if (expected_i >= grid->NX) {
+					recv_i = grid->NX - 1;
+					expected_i = 0;
+				}
+#endif
+				local_ok = fabs(probe[k][j][recv_i] -
+				                Cart3d_twod_exchange_value(expected_i, j, k)) < 1.0e-12;
 			}
 		}
 	}
@@ -161,16 +174,39 @@ static void Cart3d_run_twod_pretests(Cart3d_bag *data_bag)
 	if (params->npyminus != MPI_PROC_NULL) {
 		for (i = grid->G_Is; i < grid->G_Ie && local_ok; i++) {
 			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
+				int expected_i = i;
+				int expected_j = grid->G_Js - 1;
+#ifdef XPERIODIC
+				if (expected_i == grid->NX - 1)
+					expected_i = 0;
+#endif
+#ifdef YPERIODIC
+				if (expected_j < 0)
+					expected_j = grid->NY - 2;
+#endif
 				local_ok = fabs(probe[k][grid->G_Js - 1][i] -
-				                Cart3d_twod_exchange_value(i, grid->G_Js - 1, k)) < 1.0e-12;
+				                Cart3d_twod_exchange_value(expected_i, expected_j, k)) < 1.0e-12;
 			}
 		}
 	}
 	if (params->npyplus != MPI_PROC_NULL) {
 		for (i = grid->G_Is; i < grid->G_Ie && local_ok; i++) {
 			for (k = grid->G_Ks; k < grid->G_Ke && local_ok; k++) {
-				local_ok = fabs(probe[k][grid->G_Je][i] -
-				                Cart3d_twod_exchange_value(i, grid->G_Je, k)) < 1.0e-12;
+				int expected_i = i;
+				int recv_j = grid->G_Je;
+				int expected_j = grid->G_Je;
+#ifdef XPERIODIC
+				if (expected_i == grid->NX - 1)
+					expected_i = 0;
+#endif
+#ifdef YPERIODIC
+				if (expected_j >= grid->NY) {
+					recv_j = grid->NY - 1;
+					expected_j = 0;
+				}
+#endif
+				local_ok = fabs(probe[k][recv_j][i] -
+				                Cart3d_twod_exchange_value(expected_i, expected_j, k)) < 1.0e-12;
 			}
 		}
 	}
@@ -931,6 +967,45 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 
 		break;
 
+		case(30): // temperature step across the vertical ice slab (VOF init 27)
+
+				Conc_init_ice_slab_T(c[iconc], data_bag);
+
+		break;
+
+		case(31): // salinity: linear in y in the water, zero in the ice
+
+				Conc_init_ice_slab_S_ylinear(c[iconc], data_bag);
+
+		break;
+
+		case(33): // melting-RB temperature (Favier 2019 eq. 4.2; VOF init 28)
+
+				Conc_init_favier_rb_T(c[iconc], data_bag);
+
+		break;
+
+		case(34): // ECCO: temperature across the horizontal ice layer (VOF init 28)
+
+				Conc_init_ice_layer_T(c[iconc], data_bag);
+
+		break;
+
+		case(35): // ECCO: salinity below the horizontal ice layer, zero in the ice
+
+				Conc_init_ice_layer_S_ylinear(c[iconc], data_bag);
+
+		break;
+
+		case(36): // ECCO B.3 P1b: sub-ice thermal sublayer (VOF init 28)
+		case(37): // ECCO B.3 P1b: sub-ice salt sublayer, liquid-masked
+		case(38): // ECCO B.3 P1b: meltwater fraction of the salt sublayer
+
+				Conc_init_ice_sublayer(data_bag->params->conc_init_type[iconc],
+				                       c[iconc], data_bag);
+
+		break;
+
 		default:
 				Conc_init_zero(c[iconc], data_bag); // conc is set to zero
 
@@ -1087,6 +1162,14 @@ void Cart3d_initialize_primitive_data(Cart3d_bag *data_bag, Debug_trace *dtrace)
 				CART3D_TWOD_ABORT(params,
 					"init_type = 26 requires TWOD_CARTESIAN.");
 			VoF_init_liu17_self_assembly_floating_cylinders_2d(data_bag);
+			break;
+
+			case 27: // vertical ice slab (Yang melting / 1D Stefan gate)
+				VoF_init_vertical_ice_slab(data_bag);
+			break;
+
+			case 28: // horizontal solid layer above liquid (melting RB, Favier 2019)
+				VoF_init_horizontal_ice_layer(data_bag);
 			break;
 
 

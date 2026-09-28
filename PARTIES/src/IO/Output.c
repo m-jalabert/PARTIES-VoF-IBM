@@ -28,6 +28,8 @@
  #include "Immersed.h"
  #include "Memory.h"
  #include "Output.h"
+ #include "VOF_DIFFUSE.h"
+ #include "post_processing.h"
  #include "Particle.h"
  #include "Velocity.h"
  #include "post_processing.h"
@@ -74,6 +76,14 @@
      Display_progress(params, "Write Resume H5\n");
      sprintf(h5_resume_filename, "Resume_%d.h5", abs(params->noutput));
      file_id = Output_h5_open(h5_resume_filename, params, DTRACE("Output_h5_open"));
+#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
+     {
+         int version=VOF_DIFFUSE_SEDIMENT_TRANSPORT_VERSION;
+         hsize_t one[1]={1};
+         Output_h5_dataset(&version,H5T_NATIVE_INT,1,one,file_id,
+             "/sediment_ice_transport_version",params,DTRACE("Output_h5_dataset"));
+     }
+#endif
  
      sprintf(groupname, "/Resume");
      Output_h5_create_group(file_id, groupname, params, DTRACE("Output_h5_create_group"));
@@ -311,6 +321,9 @@
      //--------------------------------------------------------------------------
      Parameters *params = data_bag -> params;
      MAC_grid   *grid   = data_bag -> grid;
+#ifdef ECCO_PROFILES
+     ECCO_write_profiles(data_bag);
+#endif
  
      // Flow data
      Velocity *u = data_bag -> u;
@@ -350,6 +363,14 @@
      /*------------------------------------------------------------------------*/
      sprintf(h5filename, "Data_%d.h5", abs(params->noutput));
      file_id = Output_h5_open(h5filename, params, DTRACE("Output_h5_open"));
+#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
+     {
+         int version=VOF_DIFFUSE_SEDIMENT_TRANSPORT_VERSION;
+         hsize_t one[1]={1};
+         Output_h5_dataset(&version,H5T_NATIVE_INT,1,one,file_id,
+             "/sediment_ice_transport_version",params,DTRACE("Output_h5_dataset"));
+     }
+#endif
  
  
      /*------------------------------------------------------------------------*/

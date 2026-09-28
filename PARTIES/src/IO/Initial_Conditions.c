@@ -1451,3 +1451,352 @@ void Conc_init_erf_y(Concentration *c, Cart3d_bag *data_bag){
 					return;
 
 				}
+
+
+
+/******************************************************************************/
+/*
+ Conc init 30 - temperature step across the vertical ice slab (init 27).
+ theta = cbd0 in the water (F = 1) and theta_ice in the ice (F = 0), blended
+ with the same tanh profile as VoF_init_vertical_ice_slab so the temperature
+ field is consistent with the phase field:
+
+     theta(x) = theta_ice + (cbd0 - theta_ice) * Fslab(x) ,
+     Fslab(x) = 0.5*(1 - tanh((x - x_int)/(2*sqrt(2)*Cn))) ,
+     x_int    = xmin + vof_slab_x0*Lx .
+
+ cbd0 defaults to 1 (hot water); theta_ice defaults to 0 (one-phase Stefan)
+ and can be set negative for the subcooled two-phase Neumann variant.
+ The profile is computed analytically from the inputs, not from F, so it does
+ not depend on the VOF/Conc initialization order.
+ */
+/******************************************************************************/
+void Conc_init_ice_slab_T(Concentration *c, Cart3d_bag *data_bag) {
+
+	int i, j, k;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+
+	double ***conc = c -> data;
+	double *xc = grid -> xc;
+
+	const double theta_water = params -> cbd0;
+	const double theta_ice   = params -> theta_ice;
+	const double x_int = params -> xmin + params -> vof_slab_x0 * params -> Lx;
+	const double denom = 2.0 * sqrt(2.0) * params -> Cn;
+
+	int Is = grid -> G_Is, Ie = grid -> G_Ie;
+	int Js = grid -> G_Js, Je = grid -> G_Je;
+	int Ks = grid -> G_Ks, Ke = grid -> G_Ke;
+
+	for (k = Ks; k < Ke; k++) {
+		for (j = Js; j < Je; j++) {
+			for (i = Is; i < Ie; i++) {
+
+				double fslab = 0.5 * (1.0 - tanh((xc[i] - x_int)
+				                                 / (denom + 1.0e-30)));
+
+				conc[k][j][i] = theta_ice + (theta_water - theta_ice) * fslab;
+			}
+		}
+	}
+}
+
+
+/******************************************************************************/
+/*
+ Conc init 31 - salinity for the Yang benchmark: linear-in-y profile in the
+ water, zero in the ice, masked by the same tanh slab profile as init 27/30:
+
+     s(x,y) = [ s_bot + (s_top - s_bot)*(y - ymin)/Ly ] * Fslab(x) ,
+
+ with s_top = cbd2 and s_bot = cbd5.
+ */
+/******************************************************************************/
+void Conc_init_ice_slab_S_ylinear(Concentration *c, Cart3d_bag *data_bag) {
+
+	int i, j, k;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+
+	double ***conc = c -> data;
+	double *xc = grid -> xc;
+	double *yc = grid -> yc;
+
+	const double s_top = params -> cbd2;
+	const double s_bot = params -> cbd5;
+	const double x_int = params -> xmin + params -> vof_slab_x0 * params -> Lx;
+	const double denom = 2.0 * sqrt(2.0) * params -> Cn;
+
+	int Is = grid -> G_Is, Ie = grid -> G_Ie;
+	int Js = grid -> G_Js, Je = grid -> G_Je;
+	int Ks = grid -> G_Ks, Ke = grid -> G_Ke;
+
+	for (k = Ks; k < Ke; k++) {
+		for (j = Js; j < Je; j++) {
+
+			double s_water = s_bot + (s_top - s_bot)
+			               * (yc[j] - params->ymin) / params->Ly;
+
+			for (i = Is; i < Ie; i++) {
+
+				double fslab = 0.5 * (1.0 - tanh((xc[i] - x_int)
+				                                 / (denom + 1.0e-30)));
+
+				conc[k][j][i] = s_water * fslab;
+			}
+		}
+	}
+}
+
+
+/******************************************************************************/
+/*
+ Conc init 34 - temperature across the HORIZONTAL ice layer (VOF init 28),
+ for the ECCO sediment-from-ice study (roadmap B.1.5).
+
+ The y-oriented analogue of init 30.  Ice occupies the upper part of the
+ domain and ocean the lower, blended with the same tanh profile that
+ VoF_init_horizontal_ice_layer uses, so the temperature field is consistent
+ with the phase field at t = 0:
+
+     theta(y) = theta_ice + (cbd0 - theta_ice) * Flayer(y) ,
+     Flayer(y) = 0.5*(1 - tanh((y - y_int)/(2*sqrt(2)*Cn))) ,
+     y_int     = ymin + vof_slab_x0*Ly .
+
+ cbd0 is the ocean temperature and theta_ice the ice temperature (negative
+ for subcooled ice).  Computed analytically from the inputs rather than from
+ F, so it does not depend on the VOF/Conc initialization order.
+
+ Unlike init 33 (Favier melting-RB) this imposes no conductive profile and no
+ perturbation: the ECCO ambient is a stratified ocean, not an RB cell, and the
+ convection is driven by the melt itself.
+ */
+/******************************************************************************/
+void Conc_init_ice_layer_T(Concentration *c, Cart3d_bag *data_bag) {
+
+	int i, j, k;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+
+	double ***conc = c -> data;
+	double *yc = grid -> yc;
+
+	const double theta_water = params -> cbd0;
+	const double theta_ice   = params -> theta_ice;
+	const double y_int = params -> ymin + params -> vof_slab_x0 * params -> Ly;
+	const double denom = 2.0 * sqrt(2.0) * params -> Cn;
+
+	int Is = grid -> G_Is, Ie = grid -> G_Ie;
+	int Js = grid -> G_Js, Je = grid -> G_Je;
+	int Ks = grid -> G_Ks, Ke = grid -> G_Ke;
+
+	for (k = Ks; k < Ke; k++) {
+		for (j = Js; j < Je; j++) {
+
+			double flayer = 0.5 * (1.0 - tanh((yc[j] - y_int)
+			                                  / (denom + 1.0e-30)));
+			double val = theta_ice + (theta_water - theta_ice) * flayer;
+
+			for (i = Is; i < Ie; i++)
+				conc[k][j][i] = val;
+		}
+	}
+}
+
+
+/******************************************************************************/
+/*
+ Conc init 35 - salinity across the HORIZONTAL ice layer (VOF init 28), for
+ the ECCO sediment-from-ice study (roadmap B.1.5).
+
+ The y-oriented analogue of init 31: salt lives only in the ocean below the
+ ice, stratified linearly in y, and is masked to zero inside the ice by the
+ same tanh layer profile:
+
+     s(y) = [ s_bot + (s_top - s_bot)*(y - ymin)/Ly ] * Flayer(y) ,
+
+ with s_top = cbd2, s_bot = cbd5 (same convention as init 31), and Flayer as
+ in init 34.  s_bot > s_top gives the stable stratification of the polar
+ water column.
+ */
+/******************************************************************************/
+void Conc_init_ice_layer_S_ylinear(Concentration *c, Cart3d_bag *data_bag) {
+
+	int i, j, k;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+
+	double ***conc = c -> data;
+	double *yc = grid -> yc;
+
+	const double s_top = params -> cbd2;
+	const double s_bot = params -> cbd5;
+	const double y_int = params -> ymin + params -> vof_slab_x0 * params -> Ly;
+	const double denom = 2.0 * sqrt(2.0) * params -> Cn;
+
+	int Is = grid -> G_Is, Ie = grid -> G_Ie;
+	int Js = grid -> G_Js, Je = grid -> G_Je;
+	int Ks = grid -> G_Ks, Ke = grid -> G_Ke;
+
+	for (k = Ks; k < Ke; k++) {
+		for (j = Js; j < Je; j++) {
+
+			double s_water = s_bot + (s_top - s_bot)
+			               * (yc[j] - params->ymin) / params->Ly;
+			double flayer  = 0.5 * (1.0 - tanh((yc[j] - y_int)
+			                                   / (denom + 1.0e-30)));
+			double val = s_water * flayer;
+
+			for (i = Is; i < Ie; i++)
+				conc[k][j][i] = val;
+		}
+	}
+}
+
+
+/******************************************************************************/
+/*
+ Conc init 36/37/38 - diffusive sublayer under the HORIZONTAL ice layer of VOF
+ init 28, for the ECCO B.3 P1b scenario (released grain beneath an Antarctic
+ ice-shelf base).
+
+ Below a melting ice base the turbulent boundary layer ends in molecular
+ sublayers whose interface state and thickness follow from the three-equation
+ melt model.  With zeta = y_int - y the distance below the interface (clipped
+ to 0 inside the ice) and Flayer the same tanh liquid fraction as init 34/35:
+
+   kind 36 (T):      theta = theta_ice + (cbd0 - theta_ice)*erf(zeta/ell_T)
+   kind 37 (S):      s     = Flayer*s_liq,
+                     s_liq = s_i + (cbd5 - s_i)*erf(zeta/ell_S)
+   kind 38 (tracer): c     = Flayer*(1 - s_liq/cbd5)
+
+ theta_ice is the interface (and ice) temperature, cbd0/cbd5 the far-water
+ temperature/salinity, s_i = sublayer_s_interface.  Salt is volume-averaged
+ (salt lives in the liquid), so s_liq is the liquid salinity everywhere,
+ including the ice side of the band.  The tracer is the meltwater fraction of
+ the liquid relative to the far water: with equal salt/tracer diffusivity,
+ c + Flayer*s_liq/cbd5 = Flayer holds initially and c stays non-negative.
+ */
+/******************************************************************************/
+void Conc_init_ice_sublayer(int kind, Concentration *c, Cart3d_bag *data_bag) {
+
+	int i, j, k;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+
+	double ***conc = c -> data;
+	double *yc = grid -> yc;
+
+	const double y_int = params -> ymin + params -> vof_slab_x0 * params -> Ly;
+	const double denom = 2.0 * sqrt(2.0) * params -> Cn;
+	const double ell = (kind == 36) ? params -> sublayer_ell_T
+	                                : params -> sublayer_ell_S;
+	const double s_i = params -> sublayer_s_interface;
+	const double s_far = params -> cbd5;
+
+	if (!(ell > 0.0) || (kind != 36 && !(s_far > 0.0)))
+		Display_error("Conc init 36/37/38 needs sublayer_ell_T/S > 0 and cbd5 > 0");
+
+	int Is = grid -> G_Is, Ie = grid -> G_Ie;
+	int Js = grid -> G_Js, Je = grid -> G_Je;
+	int Ks = grid -> G_Ks, Ke = grid -> G_Ke;
+
+	for (k = Ks; k < Ke; k++) {
+		for (j = Js; j < Je; j++) {
+
+			double zeta = fmax(y_int - yc[j], 0.0);
+			double profile = erf(zeta / ell);
+			double flayer = 0.5 * (1.0 - tanh((yc[j] - y_int)
+			                                  / (denom + 1.0e-30)));
+			double val;
+
+			if (kind == 36) {
+				val = params -> theta_ice
+				    + (params -> cbd0 - params -> theta_ice) * profile;
+			} else {
+				double s_liq = s_i + (s_far - s_i) * profile;
+				val = (kind == 37) ? flayer * s_liq
+				                   : flayer * (1.0 - s_liq / s_far);
+			}
+
+			for (i = Is; i < Ie; i++)
+				conc[k][j][i] = val;
+		}
+	}
+}
+
+
+/******************************************************************************/
+/*
+ Conc init 33 - melting Rayleigh-Benard temperature (Favier, Purseed &
+ Duchemin JFM 858, 2019, eq. 4.2), for the horizontal solid layer of VOF
+ init 28.  Piecewise-linear conductive profile in the wall-normal direction y:
+
+     theta(y') = 1 + (thetaM - 1) * y'/h0          for y' <= h0   (liquid)
+     theta(y') = thetaM * (y' - 1) / (h0 - 1)      for y' >  h0   (solid)
+
+ with y' = (y - ymin)/Ly, h0 = vof_slab_x0 (initial fluid height fraction)
+ and thetaM = T_melt (the dimensionless melting temperature).  A small
+ deterministic multi-mode perturbation of amplitude cbd1 is added in the
+ liquid layer only (Favier: "infinitesimal temperature perturbations in the
+ liquid layer only"), with an envelope vanishing at the bottom wall and at
+ the interface.  Deterministic phases keep the field rank-count independent.
+ */
+/******************************************************************************/
+void Conc_init_favier_rb_T(Concentration *c, Cart3d_bag *data_bag) {
+
+	int i, j, k, m;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+
+	double ***conc = c -> data;
+	double *xc = grid -> xc;
+	double *yc = grid -> yc;
+
+	const double thetaM = params -> T_melt;
+	const double h0     = params -> vof_slab_x0;
+	const double amp    = params -> cbd1;
+	const int    nmodes = 8;
+
+	int Is = grid -> G_Is, Ie = grid -> G_Ie;
+	int Js = grid -> G_Js, Je = grid -> G_Je;
+	int Ks = grid -> G_Ks, Ke = grid -> G_Ke;
+
+	for (k = Ks; k < Ke; k++) {
+		for (j = Js; j < Je; j++) {
+
+			const double yr = (yc[j] - params->ymin) / params->Ly;
+			double base, env;
+
+			if (yr <= h0) {
+				base = 1.0 + (thetaM - 1.0) * yr / h0;
+				env  = sin(PI * yr / h0);          /* 0 at wall and interface */
+			} else {
+				base = thetaM * (yr - 1.0) / (h0 - 1.0);
+				env  = 0.0;                        /* perturbation in liquid only */
+			}
+
+			for (i = Is; i < Ie; i++) {
+
+				double pert = 0.0;
+				if (env != 0.0 && amp != 0.0) {
+					const double xr = (xc[i] - params->xmin) / params->Lx;
+					for (m = 1; m <= nmodes; m++) {
+						const double phase = 2.0 * PI * (0.37 * m * m + 0.11 * m);
+						pert += sin(2.0 * PI * m * xr + phase);
+					}
+					pert *= amp * env / (double) nmodes;
+				}
+
+				conc[k][j][i] = base + pert;
+			}
+		}
+	}
+}

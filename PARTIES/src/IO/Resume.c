@@ -23,6 +23,38 @@ static int Resume_h5_field_exists(hid_t file_id, const char *fieldname) {
 	return H5Lexists(file_id, fieldname, H5P_DEFAULT) > 0;
 }
 
+/* The CH history is liquid in legacy files and ice in the sediment scheme.
+ * Reject a cross-scheme restart instead of silently mixing their state. */
+static void Resume_check_phase_transport(hid_t file_id, const char *filename,
+                                         Parameters *params, Debug_trace *dtrace)
+{
+    if (file_id < 0) {
+        char msg[240];
+        snprintf(msg,sizeof(msg),"Cannot open restart file %s\n",filename);
+        Display_progress(params,msg);
+        MPI_Abort(PCW,92);
+    }
+#ifdef VOF_DIFFUSE
+    int version=0;
+    if (Resume_h5_field_exists(file_id,"/sediment_ice_transport_version")) {
+        hsize_t one[1]={1};
+        Resume_h5_dataset(&version,H5T_NATIVE_INT,1,one,file_id,
+            "/sediment_ice_transport_version",params,DTRACE("Resume_h5_dataset"));
+    }
+#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
+    const int expected=VOF_DIFFUSE_SEDIMENT_TRANSPORT_VERSION;
+#else
+    const int expected=0;
+#endif
+    if (version != expected) {
+        char msg[240];
+        snprintf(msg,sizeof(msg),"Restart phase transport mismatch in %s: file=%d build=%d. Use a matching binary or a fresh run.\n",filename,version,expected);
+        Display_progress(params,msg);
+        MPI_Abort(PCW,93);
+    }
+#endif
+}
+
 /******************************************************************************/
 /*
  * Reads data from Resume_XX.h5
@@ -66,6 +98,7 @@ void Resume_h5_resume(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Display_progress(params, "Read in Resume.h5\n");
 	sprintf(h5_resume_filename, "Resume.h5");
 	file_id = H5Fopen(h5_resume_filename, H5F_ACC_RDONLY, H5P_DEFAULT);
+    Resume_check_phase_transport(file_id,h5_resume_filename,params,dtrace);
 
 	sprintf(groupname, "/Resume");
 
@@ -383,6 +416,7 @@ void Resume_h5_data(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	sprintf(message, "Read from File: %s\n", h5_resume_filename);
 	Display_progress(params, message);
 	file_id = H5Fopen(h5_resume_filename, H5F_ACC_RDONLY, H5P_DEFAULT);
+    Resume_check_phase_transport(file_id,h5_resume_filename,params,dtrace);
 
 	Resume_h5_flow_variable(u->data, file_id, "/u", grid, params, DTRACE("Resume_h5_flow_variable"));
 	Resume_h5_flow_variable(v->data, file_id, "/v", grid, params, DTRACE("Resume_h5_flow_variable"));

@@ -16,6 +16,12 @@ void Conc_set_conv_outofbounds(int iconc, Cart3d_bag *data_bag);
 void Conc_set_RHS(Concentration *c, MAC_grid *grid, Parameters *params);
 void Conc_set_RHS_IBM_implicit(Concentration *c, double ***temp_f ,MAC_grid *grid, Parameters *params);
 void Conc_add_source_RHS(int iconc, Cart3d_bag *data_bag);
+#if defined(PHASE_CHANGE) && defined(VOF_DIFFUSE)
+void Conc_add_latent_heat_RHS(Cart3d_bag *data_bag);
+void Conc_add_meltwater_RHS(Cart3d_bag *data_bag);
+void Conc_compute_yang_salt_source(Cart3d_bag *data_bag);
+void Conc_add_yang_salt_RHS(Cart3d_bag *data_bag);
+#endif
 void Conc_store_old_data(Concentration *c, MAC_grid *grid, Parameters *params) ;
 void Conc_set_boundary_values(double ***data , int iconc ,int type, MAC_grid *grid , Parameters *params);
 void Conc_set_boundary_values_fortemp(Concentration *c, MAC_grid *grid, Parameters *params);

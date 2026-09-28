@@ -94,6 +94,16 @@ VolumeFraction *VoF_create(MAC_grid *grid, Parameters *params) {
     vof->ch_aux2 = Memory_allocate_flow_variable(grid, params);
     vof->ch_res = Memory_allocate_flow_variable(grid, params);
     vof->ch_dir = Memory_allocate_flow_variable(grid, params);
+
+    #ifdef PHASE_CHANGE
+    vof->melt_src     = Memory_allocate_flow_variable(grid, params);
+    vof->melt_src_old = Memory_allocate_flow_variable(grid, params);
+    vof->yang_salt_src     = Memory_allocate_flow_variable(grid, params);
+    vof->yang_salt_src_old = Memory_allocate_flow_variable(grid, params);
+
+    Array_set_withghost(vof->yang_salt_src, 0.0, grid, params);
+    Array_set_withghost(vof->yang_salt_src_old, 0.0, grid, params);
+    #endif
     #endif
 
     vof->f_sigma_old_x = Memory_allocate_noghost_variable(grid, params);
@@ -209,6 +219,13 @@ void VOF_destroy(VolumeFraction *vof, MAC_grid *grid, Parameters *params) {
     Memory_free_flow_variable(grid, params, vof->ch_aux2);
     Memory_free_flow_variable(grid, params, vof->ch_res);
     Memory_free_flow_variable(grid, params, vof->ch_dir);
+
+    #ifdef PHASE_CHANGE
+    Memory_free_flow_variable(grid, params, vof->melt_src);
+    Memory_free_flow_variable(grid, params, vof->melt_src_old);
+    Memory_free_flow_variable(grid, params, vof->yang_salt_src);
+    Memory_free_flow_variable(grid, params, vof->yang_salt_src_old);
+    #endif
 
     #endif
 

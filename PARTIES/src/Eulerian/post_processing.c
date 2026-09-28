@@ -918,3 +918,77 @@ free(recv_buffer);
 
 
 
+
+#ifdef ECCO_PROFILES
+#include "VOF_DIFFUSE.h"
+/* Face velocities interpolated to cell centres, only for cross derivatives. */
+static double ecco_uc(double ***u,int k,int j,int i) { return .5*(u[k][j][i]+u[k][j][i+1]); }
+static double ecco_vc(double ***v,int k,int j,int i) { return .5*(v[k][j][i]+v[k][j+1][i]); }
+static double ecco_wc(double ***w,int k,int j,int i) { return .5*(w[k][j][i]+w[k+1][j][i]); }
+
+/* O(NY) distributed reductions; no 3-D gather.  Raw profiles support offline
+ * EOS-specific budgets/BPE and time-integrated dissipation. No mixing-efficiency
+ * formula is assumed for an open, melting domain. */
+void ECCO_write_profiles(Cart3d_bag *db)
+{
+    static double last_time=-INFINITY;
+    if(db->params->time==last_time) return;
+    last_time=db->params->time;
+    MAC_grid *g=db->grid;
+    Parameters *p=db->params;
+    if(p->NConc<3) { Display_progress(p,"ECCO_PROFILES requires T,S,tracer\n"); MPI_Abort(PCW,94); }
+    enum {M=13};
+    const int ny=g->NY-1;
+    double *local=calloc((size_t)ny*M,sizeof(double));
+    double *sum=calloc((size_t)ny*M,sizeof(double));
+    if(!local || !sum) MPI_Abort(PCW,95);
+    double ***u=db->u->data,***v=db->v->data,***w=db->w->data;
+    Communication_update_ghost_nodes_flow_variable(u,'u',p->ghost_nodes,db);
+    Communication_update_ghost_nodes_flow_variable(v,'v',p->ghost_nodes,db);
+    Communication_update_ghost_nodes_flow_variable(w,'w',p->ghost_nodes,db);
+    for(int k=g->G_Ks;k<min(g->G_Ke,g->NZ-1);++k)
+    for(int j=g->G_Js;j<min(g->G_Je,g->NY-1);++j)
+    for(int i=g->G_Is;i<min(g->G_Ie,g->NX-1);++i) {
+        const double dv=g->dx_u[i]*g->dy_v[j]*g->dz_w[k];
+        const double cs=db->vof->C_S[k][j][i];
+        const int fluid=cs<DIFFUSE_SOLID_MASS_CUTOFF;
+        const double liquid=fluid ? db->vof->C_L[k][j][i] : 0.0;
+        const double ice=fluid ? fmax(0.0,1.0-cs-liquid) : 0.0;
+        const double weight=liquid*dv;
+        const double vv=ecco_vc(v,k,j,i);
+        const double T=db->c[0]->data[k][j][i],S=db->c[1]->data[k][j][i],tr=db->c[2]->data[k][j][i];
+        const double ux=(u[k][j][i+1]-u[k][j][i])/g->dx_u[i];
+        const double vy=(v[k][j+1][i]-v[k][j][i])/g->dy_v[j];
+        const double wz=(w[k+1][j][i]-w[k][j][i])/g->dz_w[k];
+        const double uy=(ecco_uc(u,k,j+1,i)-ecco_uc(u,k,j-1,i))/(g->yc[j+1]-g->yc[j-1]);
+        const double uz=(ecco_uc(u,k+1,j,i)-ecco_uc(u,k-1,j,i))/(g->zc[k+1]-g->zc[k-1]);
+        const double vx=(ecco_vc(v,k,j,i+1)-ecco_vc(v,k,j,i-1))/(g->xc[i+1]-g->xc[i-1]);
+        const double vz=(ecco_vc(v,k+1,j,i)-ecco_vc(v,k-1,j,i))/(g->zc[k+1]-g->zc[k-1]);
+        const double wx=(ecco_wc(w,k,j,i+1)-ecco_wc(w,k,j,i-1))/(g->xc[i+1]-g->xc[i-1]);
+        const double wy=(ecco_wc(w,k,j+1,i)-ecco_wc(w,k,j-1,i))/(g->yc[j+1]-g->yc[j-1]);
+        const double eps=2.0/p->Re*(ux*ux+vy*vy+wz*wz+.5*((uy+vx)*(uy+vx)+(uz+wx)*(uz+wx)+(vz+wy)*(vz+wy)));
+        double *a=local+j*M;
+        a[0]+=weight; a[1]+=weight*vv;
+        a[2]+=weight*T; a[3]+=weight*S; a[4]+=weight*tr;
+        a[5]+=weight*vv*T; a[6]+=weight*vv*S; a[7]+=weight*vv*tr;
+        a[8]+=weight*eps; a[9]+=ice*dv;
+        a[10]+=T*dv; a[11]+=S*dv; a[12]+=tr*dv;
+    }
+    MPI_Allreduce(local,sum,ny*M,MPI_DOUBLE,MPI_SUM,PCW);
+    if(p->rank==0) {
+        FILE *f=fopen("ecco_profiles.csv",(!p->resume && p->time==0.0) ? "w" : "a");
+        if(!f) MPI_Abort(PCW,96);
+        if(ftell(f)==0) fprintf(f,"time,step,y,liquid_volume,mean_v,mean_T,mean_S,mean_tracer,flux_vT,flux_vS,flux_vtracer,epsilon_integral,ice_volume,T_integral,S_integral,tracer_integral\n");
+        for(int j=0;j<ny;++j) {
+            double *a=sum+j*M,den=a[0];
+            double mv=den>0?a[1]/den:NAN,mT=den>0?a[2]/den:NAN,mS=den>0?a[3]/den:NAN,mt=den>0?a[4]/den:NAN;
+            fprintf(f,"%.17g,%d,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g\n",
+                p->time,p->ntime,g->yc[j],den,mv,mT,mS,mt,
+                den>0?a[5]/den-mv*mT:NAN,den>0?a[6]/den-mv*mS:NAN,den>0?a[7]/den-mv*mt:NAN,
+                a[8],a[9],a[10],a[11],a[12]);
+        }
+        if(fclose(f)!=0) MPI_Abort(PCW,97);
+    }
+    free(local);free(sum);
+}
+#endif

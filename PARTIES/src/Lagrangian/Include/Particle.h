@@ -18,6 +18,12 @@ Particle_list *Particle_list_foreign_create(Particle_list *p_list, Cart3d_bag *d
 		Debug_trace *dtrace);
 void Particle_list_copy(Particle_list *p_list_src, Particle_list *p_list_new);
 void Particle_release_to_mobile(Particle_list *p_list_release, Particle_list *p_list_mobile, Parameters *params, Debug_trace *dtrace);
+#if defined(LAG_PARTICLE_RESOLVED) && defined(VOF_IBM)
+void Particle_update_shell_liquid_fraction(Particle_list *p_list,
+		Cart3d_bag *data_bag, Debug_trace *dtrace);
+void Particle_release_by_interface(Particle_list *p_list, Parameters *params,
+		Debug_trace *dtrace);
+#endif
 void Particle_list_add_array(Particle_list *p_list, Particle *p_array, int p_size,
 		Collision *pc_array, int *Nc, MAC_grid *grid);
 void Particle_list_remove(Particle_list *p_list, int rm_type, MAC_grid *grid,
@@ -41,6 +47,10 @@ int Particle_center_owner_rank(const Particle *p, MAC_grid *grid,
 Particle *Particle_collect_owned_overlaps(Particle_list *p_list,
 		Cart3d_bag *data_bag, double extra_range, double min_radius,
 		int include_self, int *n_recv);
+#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
+Particle *Particle_collect_owned_centers(Particle_list *p_list,
+        Cart3d_bag *data_bag,double extra_range,int *n_recv);
+#endif
 void Particle_reduce_oversized_forces_to_owner(Particle_list *p_list,
 		Cart3d_bag *data_bag);
 #endif

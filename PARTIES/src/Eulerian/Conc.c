@@ -22,7 +22,47 @@
 
 
 
-static double Conc_innerProd(double ***vec1, double ***vec2,  MAC_grid *grid, Parameters *params) {
+#ifdef CONC_VOF_PHASEWEIGHTED
+/*
+ * Face diffusivity for the phase-weighted scalars:
+ *
+ *   kappa(F)/kappa_liq = F + (1 - F)*kr = kr + (1 - kr)*F
+ *
+ * with F the liquid fraction averaged to the face and kr the per-field
+ * solid(ice)/liquid diffusivity ratio (kappa_ice_ratio).  kr = 0 masks the
+ * flux entirely in the solid (salt); kr = 1 recovers a uniform diffusivity.
+ */
+static inline double Conc_phase_kappa(double Fa, double Fb, double kr) {
+
+	double f = 0.5 * (Fa + Fb);
+
+	if (f < 0.0) f = 0.0;
+	if (f > 1.0) f = 1.0;
+
+	return kr + (1.0 - kr) * f;
+}
+
+static inline double Conc_phase_kappa_ratio(Parameters *params, int iconc) {
+	return params->kappa_ice_ratio[iconc];
+}
+
+static inline double Conc_clamped_liquid(double f) {
+	if (f < 0.0) return 0.0;
+	if (f > 1.0) return 1.0;
+	return f;
+}
+
+/* Face capacity in the stable flux form of Yang's salt operator:
+ * (F+delta)^-1 div[(F+delta) grad(S)]. */
+static inline double Conc_yang_salt_face_capacity(double f1, double f2,
+		double delta) {
+	return delta + 0.5 * (Conc_clamped_liquid(f1) + Conc_clamped_liquid(f2));
+}
+#endif
+
+
+static double Conc_innerProd(double ***vec1, double ***vec2, double ***fliq,
+		int iconc, MAC_grid *grid, Parameters *params) {
 
 	int i, j, k;
 
@@ -48,7 +88,19 @@ static double Conc_innerProd(double ***vec1, double ***vec2,  MAC_grid *grid, Pa
 		for (j = Js; j < Je; j++) {
 			for (i = Is; i < Ie; i++) {
 
-				partialSum += vec1[k][j][i] * vec2[k][j][i];
+				double weight = 1.0;
+#ifdef CONC_VOF_PHASEWEIGHTED
+				/* The Yang flux-form matrix is self-adjoint in the
+				 * (F+delta)-weighted inner product. */
+				if (params->yang_salt_transport && iconc == 1)
+					weight = Conc_clamped_liquid(fliq[k][j][i])
+					       + params->yang_salt_delta;
+#else
+				(void)fliq;
+				(void)iconc;
+#endif
+
+				partialSum += weight * vec1[k][j][i] * vec2[k][j][i];
 
 			}
 		}
@@ -66,7 +118,8 @@ static double Conc_innerProd(double ***vec1, double ***vec2,  MAC_grid *grid, Pa
  Completes matrix-vector multiplication between 'A' matrix and input vector 'x'
  */
 /******************************************************************************/
-static void Conc_laplacian(double ***Ax, double ***x,  MAC_grid *grid, Parameters *params, int iconc) {
+static void Conc_laplacian(double ***Ax, double ***x, double ***fliq,
+		MAC_grid *grid, Parameters *params, int iconc) {
 
 	int i, j, k;
 
@@ -99,6 +152,55 @@ static void Conc_laplacian(double ***Ax, double ***x,  MAC_grid *grid, Parameter
 	const double BET[] = {BETA};
 	double idtimeb = 1.0 / (BET[params -> which_stage] * params -> dt);
 
+#ifdef CONC_VOF_PHASEWEIGHTED
+	/*
+	 * Variable-coefficient operator: same face weighting as the explicit
+	 * half in Conc_set_conv_viscous, so the Crank-Nicolson split stays
+	 * discretely consistent.  fliq is the liquid fraction C_L with fresh
+	 * halos (maintained by the VOF_DIFFUSE step).
+	 */
+	const double kr = Conc_phase_kappa_ratio(params, iconc);
+	const int yang_salt = params->yang_salt_transport && iconc == 1;
+	const double delta = params->yang_salt_delta;
+
+	for (k = Ks; k < Ke; k++) {
+		for (j = Js; j < Je; j++) {
+			for (i = Is; i < Ie; i++) {
+
+				double lamE, lamW, lamN, lamS, lamF, lamB;
+				if (yang_salt) {
+					lamE = Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j][i+1], delta);
+					lamW = Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j][i-1], delta);
+					lamN = Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j+1][i], delta);
+					lamS = Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j-1][i], delta);
+					lamF = Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k+1][j][i], delta);
+					lamB = Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k-1][j][i], delta);
+				} else {
+					lamE = Conc_phase_kappa(fliq[k][j][i], fliq[k][j][i+1], kr);
+					lamW = Conc_phase_kappa(fliq[k][j][i], fliq[k][j][i-1], kr);
+					lamN = Conc_phase_kappa(fliq[k][j][i], fliq[k][j+1][i], kr);
+					lamS = Conc_phase_kappa(fliq[k][j][i], fliq[k][j-1][i], kr);
+					lamF = Conc_phase_kappa(fliq[k][j][i], fliq[k+1][j][i], kr);
+					lamB = Conc_phase_kappa(fliq[k][j][i], fliq[k-1][j][i], kr);
+				}
+
+				double inv_capacity = yang_salt
+					? 1.0 / (Conc_clamped_liquid(fliq[k][j][i]) + delta)
+					: 1.0;
+
+				Ax[k][j][i] = idtimeb * x[k][j][i]
+				  - iPe * inv_capacity * iddx * ( lamE * (x[k][j][i+1] - x[k][j][i])
+				                 - lamW * (x[k][j][i] - x[k][j][i-1]) )
+				  - iPe * inv_capacity * iddy * ( lamN * (x[k][j+1][i] - x[k][j][i])
+				                 - lamS * (x[k][j][i] - x[k][j-1][i]) )
+				  - iPe * inv_capacity * iddz * ( lamF * (x[k+1][j][i] - x[k][j][i])
+				                 - lamB * (x[k][j][i] - x[k-1][j][i]) );
+			}
+		}
+	}
+#else
+	(void)fliq;
+
 	double ac = idtimeb + 2.0 * iPe * (iddx + iddy + iddz);
 	double ax = -iPe * iddx;
 	double ay = -iPe * iddy;
@@ -114,6 +216,7 @@ static void Conc_laplacian(double ***Ax, double ***x,  MAC_grid *grid, Parameter
 			}
 		}
 	}
+#endif // CONC_VOF_PHASEWEIGHTED
 }
 /******************************************************************************/
 /*
@@ -515,6 +618,11 @@ for (iconc=0; iconc<NConc; iconc++) {
 
 	Conc_set_conv_viscous(iconc, data_bag);
 
+#if defined(PHASE_CHANGE) && defined(VOF_DIFFUSE)
+	if (iconc == 1 && params->yang_salt_transport)
+		Conc_compute_yang_salt_source(data_bag);
+#endif
+
 	T2 = MPI_Wtime();
 	timer->Wtime_c_convective += T2 - T1;
 
@@ -524,10 +632,25 @@ for (iconc=0; iconc<NConc; iconc++) {
 	T1 = MPI_Wtime();
 	Conc_set_RHS(c[iconc], grid, params);
 
+#if defined(PHASE_CHANGE) && defined(VOF_DIFFUSE)
+	if (iconc == 1 && params->yang_salt_transport)
+		Conc_add_yang_salt_RHS(data_bag);
+#endif
+
 
 
 #ifdef THERMAL_KADER
 		Conc_add_source_RHS(iconc, data_bag);
+#endif
+
+#if defined(PHASE_CHANGE) && defined(VOF_DIFFUSE)
+	// Latent sink -(1/St)*V_G|grad F| on the temperature field only
+	if (iconc == 0)
+		Conc_add_latent_heat_RHS(data_bag);
+
+	// Meltwater tracer: injected at the local melt rate (roadmap B.1.4)
+	if (iconc == 2 && params->meltwater_tracer)
+		Conc_add_meltwater_RHS(data_bag);
 #endif
 	T2 = MPI_Wtime();
 	timer->Wtime_c_rhs += T2 - T1;
@@ -545,6 +668,7 @@ for (iconc=0; iconc<NConc; iconc++) {
 	#elif defined CONC_SOLVE_CG
 		Conc_solve_cg(iconc, data_bag);
 #endif
+
 
 
 #ifdef IBM_SCALAR
@@ -2106,6 +2230,209 @@ void Conc_add_source_RHS(int iconc, Cart3d_bag *data_bag) {
 
 
 
+#if defined(PHASE_CHANGE) && defined(VOF_DIFFUSE)
+/******************************************************************************/
+/*
+ Latent-heat sink of the melting model (roadmap G.4): the Stefan source
+ m = V_G*|grad F| computed by VOF_DIFFUSE_compute_melt_rate enters the
+ temperature equation (field 0) as
+
+     S = -(1/St) * m,
+
+ combined with the same GAMMA/ZETA RK3 weights as the other explicit terms so
+ the discrete enthalpy  theta + F/St  changes only through boundary fluxes.
+ */
+/******************************************************************************/
+void Conc_add_latent_heat_RHS(Cart3d_bag *data_bag) {
+
+	int i, j, k;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+	VolumeFraction *vof = data_bag -> vof;
+
+	if (params->stefan == 0.0)
+		return;
+
+	const double GAMB[] = {GAMBETA};
+	const double ZETB[] = {ZETBETA};
+	const int which_stage = params -> which_stage;
+	const double iSt = 1.0 / params -> stefan;
+
+	double ***rhs_vec  = data_bag -> c[0] -> ng_rhs;
+	double ***melt     = vof -> melt_src;
+	double ***melt_old = vof -> melt_src_old;
+
+	int i_end = min(grid->NX-1, grid->G_Ie);
+	int j_end = min(grid->NY-1, grid->G_Je);
+	int k_end = min(grid->NZ-1, grid->G_Ke);
+
+	for (k = grid->G_Ks; k < k_end; k++) {
+		for (j = grid->G_Js; j < j_end; j++) {
+			for (i = grid->G_Is; i < i_end; i++) {
+				rhs_vec[k][j][i] -= iSt * ( GAMB[which_stage] * melt[k][j][i]
+				                          + ZETB[which_stage] * melt_old[k][j][i] );
+			}
+		}
+	}
+}
+
+
+/******************************************************************************/
+/*
+ * Conc_add_meltwater_RHS                       (roadmap B.1.4)
+ *
+ * Injects the meltwater tracer (concentration field 2) at the local melt rate:
+ *
+ *     dC_mw/dt + u.grad(C_mw) = Pe_mw^-1 div(grad C_mw) + m ,
+ *
+ * with m = vof->melt_src, the SAME discrete field that drives the phase change
+ * and pays the latent heat.  Using the identical field is what makes the
+ * tracer a conservation check rather than just a visualization: with no sink
+ * and no-flux walls,
+ *
+ *     d/dt integral(C_mw) = integral(m) = d/dt integral(F) ,
+ *
+ * so the tracer's total must track the ice volume lost, cell for cell.  Any
+ * drift between the two is a transport error in one of the operators, which
+ * is exactly the diagnostic wanted before trusting entrainment numbers.
+ *
+ * m < 0 (refreezing) correctly withdraws tracer, so the balance holds through
+ * refreezing episodes too.
+ *
+ * The tracer carries no buoyancy (Ri = 0 for field 2): it measures where the
+ * fresh meltwater goes, while the actual freshening is already carried by the
+ * salinity field.  Setting Ri != 0 for field 2 would double-count it.
+ *
+ * [MPI] pointwise, no stencil -- no halo refresh needed, rank-count independent.
+ */
+/******************************************************************************/
+void Conc_add_meltwater_RHS(Cart3d_bag *data_bag) {
+
+	int i, j, k;
+
+	MAC_grid *grid = data_bag -> grid;
+	Parameters *params = data_bag -> params;
+	VolumeFraction *vof = data_bag -> vof;
+
+	if (params->stefan == 0.0 || params->NConc < 3)
+		return;
+
+	const double GAMB[] = {GAMBETA};
+	const double ZETB[] = {ZETBETA};
+	const int which_stage = params -> which_stage;
+
+	double ***rhs_vec  = data_bag -> c[2] -> ng_rhs;
+	double ***melt     = vof -> melt_src;
+	double ***melt_old = vof -> melt_src_old;
+
+	int i_end = min(grid->NX-1, grid->G_Ie);
+	int j_end = min(grid->NY-1, grid->G_Je);
+	int k_end = min(grid->NZ-1, grid->G_Ke);
+
+	for (k = grid->G_Ks; k < k_end; k++) {
+		for (j = grid->G_Js; j < j_end; j++) {
+			for (i = grid->G_Is; i < i_end; i++) {
+				rhs_vec[k][j][i] += GAMB[which_stage] * melt[k][j][i]
+				                  + ZETB[which_stage] * melt_old[k][j][i];
+			}
+		}
+	}
+}
+
+
+/******************************************************************************/
+/*
+ * Yang et al. (JFM 969, 2023), equation (2.3), with liquid fraction
+ * F = 1-phi:
+ *
+ *   dS/dt + u.grad(S) = Pe_S^-1/(F+delta)
+ *     div[(F+delta) grad(S)] - S dF/dt/(F+delta).
+ *
+ * This flux form is algebraically identical to Yang's molecular Laplacian plus
+ * phase-gradient correction, but keeps the combined parabolic operator in the
+ * implicit solve.  Splitting off grad(F).grad(S)/(F+delta) explicitly creates
+ * a severe, nonphysical interface mode on a clipped CH field.  In PARTIES,
+ * only melt_src is physical phase change: CH relaxation and the conservative
+ * admissibility projection do not consume latent heat and must not reject
+ * salt.  Thus d(phi)/dt maps to -melt_src, exactly matching the phase
+ * contribution already used by the enthalpy equation.
+ */
+/******************************************************************************/
+void Conc_compute_yang_salt_source(Cart3d_bag *data_bag) {
+
+	MAC_grid *grid = data_bag->grid;
+	Parameters *params = data_bag->params;
+	VolumeFraction *vof = data_bag->vof;
+
+	if (!params->yang_salt_transport || params->NConc < 2)
+		return;
+
+	const double delta = params->yang_salt_delta;
+
+	double ***S = data_bag->c[1]->data;
+	double ***F = vof->C_L;
+	double ***melt = vof->melt_src;
+	double ***src = vof->yang_salt_src;
+	double ***src_old = vof->yang_salt_src_old;
+
+	Array_copy_withghost(src, src_old, grid, params);
+	Array_set_withghost(src, 0.0, grid, params);
+
+	const int i_end = min(grid->NX - 1, grid->G_Ie);
+	const int j_end = min(grid->NY - 1, grid->G_Je);
+	const int k_end = min(grid->NZ - 1, grid->G_Ke);
+
+	for (int k = grid->G_Ks; k < k_end; ++k) {
+		for (int j = grid->G_Js; j < j_end; ++j) {
+			for (int i = grid->G_Is; i < i_end; ++i) {
+
+				double inv_liquid = 1.0
+					/ (Conc_clamped_liquid(F[k][j][i]) + delta);
+				src[k][j][i] = -S[k][j][i] * inv_liquid
+					* melt[k][j][i];
+			}
+		}
+	}
+}
+
+
+/******************************************************************************/
+/* Add the Yang salinity source with the same low-storage RK3 history weights
+ * as the other explicit terms. */
+/******************************************************************************/
+void Conc_add_yang_salt_RHS(Cart3d_bag *data_bag) {
+
+	MAC_grid *grid = data_bag->grid;
+	Parameters *params = data_bag->params;
+	VolumeFraction *vof = data_bag->vof;
+
+	if (!params->yang_salt_transport || params->NConc < 2)
+		return;
+
+	const double GAMB[] = {GAMBETA};
+	const double ZETB[] = {ZETBETA};
+	const int stage = params->which_stage;
+
+	double ***rhs = data_bag->c[1]->ng_rhs;
+	double ***src = vof->yang_salt_src;
+	double ***src_old = vof->yang_salt_src_old;
+
+	const int i_end = min(grid->NX - 1, grid->G_Ie);
+	const int j_end = min(grid->NY - 1, grid->G_Je);
+	const int k_end = min(grid->NZ - 1, grid->G_Ke);
+
+	for (int k = grid->G_Ks; k < k_end; ++k)
+		for (int j = grid->G_Js; j < j_end; ++j)
+			for (int i = grid->G_Is; i < i_end; ++i)
+				rhs[k][j][i] += GAMB[stage] * src[k][j][i]
+				              + ZETB[stage] * src_old[k][j][i];
+}
+
+
+#endif // PHASE_CHANGE && VOF_DIFFUSE
+
+
 /******************************************************************************/
 /*
  This function copies the value of c->data into c->data_old. This is done for
@@ -3492,6 +3819,12 @@ int Conc_solve_cg(int iconc, Cart3d_bag *data_bag) {
 	double ***ng_vfc = data_bag->lag->ng_vfc;
 #endif
 
+#ifdef CONC_VOF_PHASEWEIGHTED
+	double ***fliq = data_bag->vof->C_L;
+#else
+	double ***fliq = NULL;
+#endif
+
 	// Inner products
 	double rr, rr_old, rr0, dAd, RMS, in_tot;
 
@@ -3513,7 +3846,7 @@ int Conc_solve_cg(int iconc, Cart3d_bag *data_bag) {
 #ifdef VOF_SCALAR
 	Conc_laplacian_vof(Ad, data, vfu, vfv, vfw, ng_vfc,grid, params, iconc);
 #else
-	Conc_laplacian(Ad, data, grid, params, iconc);
+	Conc_laplacian(Ad, data, fliq, grid, params, iconc);
 #endif
 
 	for (k = Ks; k < Ke; k++) {
@@ -3534,7 +3867,7 @@ int Conc_solve_cg(int iconc, Cart3d_bag *data_bag) {
 	 */
 	/*------------------------------------------------------------------------*/
 
-	rr = Conc_innerProd(r, r, grid, params);
+	rr = Conc_innerProd(r, r, fliq, iconc, grid, params);
 	rr0 = rr + EPS;
 	iters  = 0;
 
@@ -3555,10 +3888,10 @@ int Conc_solve_cg(int iconc, Cart3d_bag *data_bag) {
 #ifdef VOF_SCALAR
 		Conc_laplacian_vof(Ad, d , vfu, vfv, vfw, ng_vfc, grid, params, iconc);
 #else
-		Conc_laplacian(Ad, d ,grid, params, iconc);
+		Conc_laplacian(Ad, d, fliq, grid, params, iconc);
 #endif
 
-		dAd = Conc_innerProd(d, Ad, grid, params);
+		dAd = Conc_innerProd(d, Ad, fliq, iconc, grid, params);
 
 		alpha = rr / (dAd + EPS);
 
@@ -3574,7 +3907,7 @@ int Conc_solve_cg(int iconc, Cart3d_bag *data_bag) {
 		}
 
 		rr_old = rr;
-		rr = Conc_innerProd(r, r, grid, params);
+		rr = Conc_innerProd(r, r, fliq, iconc, grid, params);
  		RMS = sqrt(in_tot * rr);
 		if (RMS < params -> CG_ETOL)
 			break;
@@ -4156,6 +4489,15 @@ void Conc_set_conv_viscous_central_mixed(int iconc, Cart3d_bag *data_bag) {
 	double nuF = iPe;
 	double nuB = iPe;
 
+#ifdef CONC_VOF_PHASEWEIGHTED
+	// Liquid fraction (fresh halos from the VOF_DIFFUSE step) and the
+	// per-field ice/liquid diffusivity ratio for the face-weighted kappa(F).
+	double ***fliq = data_bag->vof->C_L;
+	const double kr_phase = Conc_phase_kappa_ratio(params, iconc);
+	const int yang_salt = params->yang_salt_transport && iconc == 1;
+	const double yang_delta = params->yang_salt_delta;
+#endif
+
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
@@ -4165,6 +4507,29 @@ void Conc_set_conv_viscous_central_mixed(int iconc, Cart3d_bag *data_bag) {
 				 Calculate viscosity
 				 */
 				/*------------------------------------------------------------*/
+#ifdef CONC_VOF_PHASEWEIGHTED
+				//--------------------------------------------------------------
+				// Legacy: kappa(F) = F + (1-F)*kr on faces.
+				// Yang: use the combined, stable flux-form capacity F+delta.
+				// Both paths mirror Conc_laplacian exactly so the implicit and
+				// old-time diffusion operators stay discretely consistent.
+				//--------------------------------------------------------------
+				if (yang_salt) {
+					nuE = iPe * Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j][i+1], yang_delta);
+					nuW = iPe * Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j][i-1], yang_delta);
+					nuN = iPe * Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j+1][i], yang_delta);
+					nuS = iPe * Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k][j-1][i], yang_delta);
+					nuF = iPe * Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k+1][j][i], yang_delta);
+					nuB = iPe * Conc_yang_salt_face_capacity(fliq[k][j][i], fliq[k-1][j][i], yang_delta);
+				} else {
+					nuE = iPe * Conc_phase_kappa(fliq[k][j][i], fliq[k][j][i+1], kr_phase);
+					nuW = iPe * Conc_phase_kappa(fliq[k][j][i], fliq[k][j][i-1], kr_phase);
+					nuN = iPe * Conc_phase_kappa(fliq[k][j][i], fliq[k][j+1][i], kr_phase);
+					nuS = iPe * Conc_phase_kappa(fliq[k][j][i], fliq[k][j-1][i], kr_phase);
+					nuF = iPe * Conc_phase_kappa(fliq[k][j][i], fliq[k+1][j][i], kr_phase);
+					nuB = iPe * Conc_phase_kappa(fliq[k][j][i], fliq[k-1][j][i], kr_phase);
+				}
+#endif
 #ifdef VAR_VISC
 				//--------------------------------------------------------------
 				// Variable viscosity - eddy viscosity for LES and RANS
@@ -4271,6 +4636,16 @@ void Conc_set_conv_viscous_central_mixed(int iconc, Cart3d_bag *data_bag) {
 
 
 
+#endif
+
+#ifdef CONC_VOF_PHASEWEIGHTED
+				if (yang_salt) {
+					double inv_capacity = 1.0
+						/ (Conc_clamped_liquid(fliq[k][j][i]) + yang_delta);
+					d2cdx2 *= inv_capacity;
+					d2cdy2 *= inv_capacity;
+					d2cdz2 *= inv_capacity;
+				}
 #endif
 				/*------------------------------------------------------------*/
 				/*

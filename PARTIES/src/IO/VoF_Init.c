@@ -828,6 +828,93 @@ void VoF_init_vertical_bilayer_Z (Cart3d_bag *data_bag)
 
 /******************************************************************************/
 /*
+ * VoF_init_vertical_ice_slab  (init_type = 27)
+ * --------------------------------------------
+ * Vertical ice slab against the east wall: water (F = 1) for
+ * x < vof_slab_x0*Lx, ice (F = 0) beyond, with the interface tanh-smoothed
+ * over the Cahn-Hilliard band:
+ *
+ *     F(x) = 0.5 * ( 1 - tanh( (x - x_int) / (2*sqrt(2)*Cn) ) ) ,
+ *     x_int = xmin + vof_slab_x0 * Lx .
+ *
+ * vof_slab_x0 defaults to 0.9 (Yang benchmark); the 1D Stefan gate uses 0.05
+ * (thin water film at the hot west wall).  The profile is independent of y,z.
+ */
+/******************************************************************************/
+void VoF_init_vertical_ice_slab(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+    double       ***F      = vof->F;
+
+    const double x_int = params->xmin + params->vof_slab_x0 * params->Lx;
+    const double denom = 2.0 * sqrt(2.0) * params->Cn;
+
+    const int Is = grid->G_Is, Ie = grid->G_Ie;
+    const int Js = grid->G_Js, Je = grid->G_Je;
+    const int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    for (int k = Ks; k < Ke; ++k) {
+        for (int j = Js; j < Je; ++j) {
+            for (int i = Is; i < Ie; ++i) {
+                double f = 0.5 * (1.0 - tanh((grid->xc[i] - x_int)
+                                             / (denom + 1.0e-30)));
+                F[k][j][i] = f;
+#ifdef VOF_DIFFUSE
+                vof->C_L[k][j][i] = f;
+#endif
+            }
+        }
+    }
+}
+
+/******************************************************************************/
+/*
+ * VoF_init_horizontal_ice_layer  (init_type = 28)
+ * -----------------------------------------------
+ * Horizontal solid layer above a liquid layer (melting Rayleigh-Benard,
+ * Favier, Purseed & Duchemin JFM 858, 2019): liquid (F = 1) for
+ * y < vof_slab_x0*Ly, solid (F = 0) above, with the interface tanh-smoothed
+ * over the Cahn-Hilliard band:
+ *
+ *     F(y) = 0.5 * ( 1 - tanh( (y - y_int) / (2*sqrt(2)*Cn) ) ) ,
+ *     y_int = ymin + vof_slab_x0 * Ly .
+ *
+ * vof_slab_x0 is reused as the initial fluid-layer height fraction h0
+ * (Favier case D uses h0 = 0.05).  The profile is independent of x,z.
+ */
+/******************************************************************************/
+void VoF_init_horizontal_ice_layer(Cart3d_bag *data_bag)
+{
+    MAC_grid       *grid   = data_bag->grid;
+    Parameters     *params = data_bag->params;
+    VolumeFraction *vof    = data_bag->vof;
+    double       ***F      = vof->F;
+
+    const double y_int = params->ymin + params->vof_slab_x0 * params->Ly;
+    const double denom = 2.0 * sqrt(2.0) * params->Cn;
+
+    const int Is = grid->G_Is, Ie = grid->G_Ie;
+    const int Js = grid->G_Js, Je = grid->G_Je;
+    const int Ks = grid->G_Ks, Ke = grid->G_Ke;
+
+    for (int k = Ks; k < Ke; ++k) {
+        for (int j = Js; j < Je; ++j) {
+            double f = 0.5 * (1.0 - tanh((grid->yc[j] - y_int)
+                                         / (denom + 1.0e-30)));
+            for (int i = Is; i < Ie; ++i) {
+                F[k][j][i] = f;
+#ifdef VOF_DIFFUSE
+                vof->C_L[k][j][i] = f;
+#endif
+            }
+        }
+    }
+}
+
+/******************************************************************************/
+/*
  * VoF_init_uniform_light_Z
  * ------------------------
  * Initialise the entire computational domain with the light fluid:
@@ -2908,13 +2995,6 @@ void VoF_init_axisymmetric_capillary_bridge_two_spheres(Cart3d_bag *data_bag)
 /*******************************************************************************
  * VoF_init_liu17_two_sinking_cylinders_2d
  *
- * Full-domain planar 2D variant of the Liu17 section 6.3 sinking-cylinder
- * setup.  The two mobile cylinders are supplied by p_mobile.inp; this
- * initializer only builds the initially flat water pool:
- *
- *   domain        0 <= x <= 12.8, 0 <= y <= 9.6
- *   water surface y = 8.6
- *   liquid        y < 8.6
  ******************************************************************************/
 void VoF_init_liu17_two_sinking_cylinders_2d(Cart3d_bag *data_bag)
 {
@@ -2923,7 +3003,7 @@ void VoF_init_liu17_two_sinking_cylinders_2d(Cart3d_bag *data_bag)
     VolumeFraction *vof    = data_bag->vof;
     double       ***F      = vof->F;
 
-    const double y_interface = 8.6;
+    const double y_interface = params->ymax - 2.4;
 
     const double dx = grid->dx_c[0];
     const double dy = grid->dy_c[0];
@@ -2999,7 +3079,7 @@ static void VoF_init_liu17_full_domain_sinking_cylinders_2d(
     VolumeFraction *vof    = data_bag->vof;
     double       ***F      = vof->F;
 
-    const double y_interface = 8.6;
+    const double y_interface = params->ymax - 2.4;
 
     const double dx = grid->dx_c[0];
     const double dy = grid->dy_c[0];

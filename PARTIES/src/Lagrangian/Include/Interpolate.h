@@ -18,6 +18,10 @@ void Interpolate_add_to_volume_fraction_vof_prime(char component, Particle_list 
 void mat_vec(int m, int n, double **A, double *B, double *C);
 
 void Interpolate_bound_to_one( double ***vf, Cart3d_bag *data_bag);
+#if defined(LAG_PARTICLE_RESOLVED) && defined(VOF_IBM)
+void Interpolate_integrate_shell_liquid_fraction(Particle_list *p_list,
+		Cart3d_bag *data_bag, double *num, double *den, Debug_trace *dtrace);
+#endif
 
 // Add to the existing declarations
 

@@ -54,9 +54,48 @@ void ParticleInput_inp(Particle_list *p_list, MAC_grid *grid, Parameters *params
 	char filename[50];
 	int count;
 
+
 	// Variables for error statements
 	char message[500] = "";
 	int ierr = 0;
+
+#if defined(LAG_PARTICLE_RESOLVED) && defined(VOF_IBM)
+	/*
+	 * Range-check the interface-triggered release threshold (roadmap B.1.3).
+	 *
+	 * Unreachable unless the ECCO mechanism is explicitly switched on
+	 * (F_release > 0; the default is -1 = off), so no pre-ECCO deck can trip
+	 * it.
+	 *
+	 * Why an upper bound exists at all: phi_liq is the liquid fraction of a
+	 * shell a few cells thick around the grain, and that shell ALWAYS contains
+	 * part of the diffuse Cahn-Hilliard band plus the non-melting sediment
+	 * shell of B.1.2 (cells >= DIFFUSE_SOLID_MASS_CUTOFF sediment cannot melt).
+	 * So phi_liq saturates strictly below 1 -- measured at 0.977 in the
+	 * calibration run of B.1.3-fn.  A threshold at or above that saturation
+	 * NEVER fires, and the failure is silent: the grain simply stays frozen
+	 * for the whole run with no error and no warning.  Fail loudly at startup
+	 * instead of burning the allocation.
+	 */
+	if (params->F_release >= F_RELEASE_MAX) {
+		sprintf(message,
+		        "F_release = %.4f is at or above the achievable maximum "
+		        "(%.2f).\n"
+		        "phi_liq saturates below 1 because the measurement shell "
+		        "always contains\n"
+		        "diffuse-interface band and non-melting sediment shell; it "
+		        "reached only 0.977\n"
+		        "in the B.1.3-fn calibration.  This threshold would never "
+		        "fire and the grain\n"
+		        "would stay locked for the entire run, silently.\n"
+		        "Calibrated values (B.1.3-fn): 0.565 = half uncovered, "
+		        "0.709 = just fully\n"
+		        "uncovered (recommended), 0.867 = clear by half a diameter.",
+		        params->F_release, F_RELEASE_MAX);
+		Display_assert_error(-6, message, params,
+		                     DTRACE("Display_assert_error"));
+	}
+#endif
 
 	//--------------------------------------------------------------------------
 	// Open input file
@@ -258,6 +297,19 @@ int N_read_data = 4;
 			DSET_ZERO(p->Fc, 3);
 			DSET_ZERO(p->Tc, 3);
 
+			/*
+			 * Interface-triggered release (roadmap B.1.3).  With
+			 * F_release > 0 every MOBILE particle starts locked in the ice and
+			 * is freed individually once the melt front has cleared the shell
+			 * around it; t_released < 0 marks "still locked".  With
+			 * F_release <= 0 the mechanism is off and every particle is free
+			 * from t = 0, which reproduces the previous behaviour exactly.
+			 * Fixed particles are never locked -- they are already stationary.
+			 */
+			p -> phi_liq     = 0.0;
+			p -> release_ramp = 0;
+			p -> t_released  = (params->F_release > 0.0 &&
+			                    p_list->type == MOBILE) ? -1.0 : 0.0;
 
 #ifdef PARTICLE_RELEASE
 			p -> t_part_release = t_part_release[i];
@@ -422,6 +474,25 @@ void ParticleInput_h5_data(Particle_list *p_list, hid_t file_id, char *groupname
 	RESUME_ELEMENT(&Int_Omega_old_data, "Int_Omega_old", 3);
 	RESUME_ELEMENT(&Fc_data, "Fc", 3);
 	RESUME_ELEMENT(&Tc_data, "Tc", 3);
+
+	/*
+	 * Roadmap B.1.3 release state.  Read only if the restart file carries it:
+	 * files written before B.1.3 do not, and this must stay resumable from
+	 * them.  When absent every grain defaults to LOCKED (set in
+	 * Particle_initialize_nonessential_data), which is the conservative
+	 * choice -- a grain wrongly held shows up immediately, whereas a grain
+	 * wrongly freed silently corrupts the trajectory.
+	 */
+	double **t_rel_data = NULL;
+	{
+		char probe[128];
+		sprintf(probe, "%s/t_released", groupname);
+		if (H5Lexists(file_id, probe, H5P_DEFAULT) > 0)
+			RESUME_ELEMENT(&t_rel_data, "t_released", 1);
+		else if (params->rank == 0 && params->F_release > 0.0)
+			printf("  [release] restart file has no t_released; every grain "
+			       "starts LOCKED and will be re-released by the criterion\n");
+	}
 #undef RESUME_ELEMENT
 
 	p_list->start = (Particle *)malloc(sizeof(Particle));
@@ -458,6 +529,11 @@ void ParticleInput_h5_data(Particle_list *p_list, hid_t file_id, char *groupname
 
 			// Initialize non-essential particle data
 			Particle_initialize_nonessential_data(p);
+
+			// Restore the B.1.3 release state, if the file carried it.  This
+			// runs AFTER the nonessential init, which sets the locked default.
+			if (t_rel_data != NULL)
+				p -> t_released = t_rel_data[j][0];
 
 			// Initialize derivative particle data
 			Particle_calc_derived_data(p, grid, params);

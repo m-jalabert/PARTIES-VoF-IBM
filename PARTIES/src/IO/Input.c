@@ -124,6 +124,12 @@ void Input_set_parameters(Parameters *params, char *infile)
 
 		if (params->Pe_CH <= 0.0 && params->Cn > 0.0)
 			params->Pe_CH = 0.9 / params->Cn;
+
+		if (params->melt_band_eps <= 0.0)
+			params->melt_band_eps = params->Cn;
+
+		if (params->yang_salt_delta <= 0.0)
+			params->yang_salt_delta = 1.0e-6;
 	}
 
 	if (params->front_location_output == 1 && params->ave_height_output == 0) {

@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include "VOF_DIFFUSE.h"   /* DIFFUSE_SOLID_MASS_CUTOFF for the ICE_PENALIZATION mask */
 
 
 /******************************************************************************/
@@ -2156,6 +2157,26 @@ void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag) {
 	int j_end = min(NY-1, Je);
 	int k_end = min(NZ-1, Ke);
 
+	/* Face velocities carry one additional physical face in their periodic
+	 * component direction.  Match the component RHS loop bounds so body
+	 * forcing is applied to every periodic face (including the wrap face). */
+	int i_end_u = i_end;
+	int j_end_v = j_end;
+	int k_end_w = k_end;
+
+#ifdef XPERIODIC
+	if (i_end_u == NX-1)
+		i_end_u = NX;
+#endif
+#ifdef YPERIODIC
+	if (j_end_v == NY-1)
+		j_end_v = NY;
+#endif
+#ifdef ZPERIODIC
+	if (k_end_w == NZ-1)
+		k_end_w = NZ;
+#endif
+
 	int iconc;
 
 #ifndef GRID_UNIFORM
@@ -2212,6 +2233,71 @@ void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag) {
 		unit_gravity_z= 0;
 	}
 
+#ifdef EOS_NONLINEAR
+	/*
+	 * Roquet (2015) quadratic EOS: the nondimensional density anomaly
+	 *
+	 *   b(theta,s) = -betaT*(theta - Tmd0 - Tmd_slope*s)^q + betaS*s
+	 *
+	 * replaces the linear b = sum Ri*c_i.  Field 0 = theta, field 1 = s.
+	 * The anomaly is symmetric about the (salinity-shifted) density maximum,
+	 * so the exponent acts on |theta - theta_md(s)|.
+	 */
+	if (NConc < 2) {
+		if (params->rank == 0)
+			Display_error("EOS_NONLINEAR requires NConc >= 2 (theta, s)");
+		MPI_Abort(PCW, EXIT_FAILURE);
+	}
+
+	{
+		const double q     = params->eos_q;
+		const double betaT = params->eos_betaT;
+		const double betaS = params->eos_betaS;
+		const double Tmd0  = params->eos_Tmd0;
+		const double slope = params->eos_Tmd_slope;
+
+		conc_total = c[0]->c_total;
+
+		/*
+		 * Roadmap A.5.5 variant 1: with liquid_referenced_salinity the EOS is
+		 * evaluated on the LIQUID salinity s/(F+delta) rather than the
+		 * volume-averaged s.  Identity in the bulk (F=1); acts only in the
+		 * diffuse band, and only when salt is present.  betaS = 1.75 makes
+		 * this the dynamically significant half of the variant -- the liquidus
+		 * half is small because Lambda* = 0.014.
+		 */
+#ifdef VOF_DIFFUSE
+		/* Defensive: never dereference vof/C_L unless the variant is actually
+		 * requested AND the fields exist.  This routine can be reached before
+		 * the VOF arrays are populated. */
+		const int use_sliq = params->liquid_referenced_salinity
+		                   && data_bag->vof != NULL
+		                   && data_bag->vof->C_L != NULL;
+		double ***fliq_eos = use_sliq ? data_bag->vof->C_L : NULL;
+		const double sdelta = params->yang_salt_delta;
+#else
+		const int use_sliq = 0;
+		double ***fliq_eos = NULL;
+		const double sdelta = 0.0;
+#endif
+		(void)fliq_eos; (void)sdelta;
+
+		for (k = k_start; k < k_end; k++) {
+			for (j = j_start; j < j_end; j++) {
+				for (i = i_start; i < i_end; i++) {
+					double theta = c[0]->data[k][j][i];
+					double s     = c[1]->data[k][j][i];
+#ifdef VOF_DIFFUSE
+					if (use_sliq && s != 0.0)
+						s /= (fliq_eos[k][j][i] + sdelta);
+#endif
+					double dth   = theta - Tmd0 - slope * s;
+					double anom  = (q == 2.0) ? dth * dth : pow(fabs(dth), q);
+
+					conc_total[k][j][i] = -betaT * anom + betaS * s;
+		}}}
+	}
+#else
 	// Only one concentration field. Use c[0]->conc in v-momentum equation
 	if (NConc < 2) {
 
@@ -2246,6 +2332,7 @@ void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag) {
 
 
 	}
+#endif // EOS_NONLINEAR
 	Communication_update_ghost_nodes_flow_variable(conc_total, 'c', 1, data_bag);
 
 
@@ -2256,7 +2343,7 @@ void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag) {
 
 	for (k = k_start; k < k_end; k++) {
 		for (j = j_start; j < j_end; j++) {
-			for (i = i_start_u; i < i_end; i++) {
+			for (i = i_start_u; i < i_end_u; i++) {
 
 
 				// Just linear interpolation for face centered nodes
@@ -2300,7 +2387,7 @@ void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag) {
 
 
 	for (k = k_start; k < k_end; k++) {
-		for (j = j_start_v; j < j_end; j++) {
+		for (j = j_start_v; j < j_end_v; j++) {
 			for (i = i_start; i < i_end; i++) {
 
 
@@ -2337,7 +2424,7 @@ void Velocity_add_buoyancy_2_RHS(Cart3d_bag *data_bag) {
 
 
 
-	for (k = k_start_w; k < k_end; k++) {
+	for (k = k_start_w; k < k_end_w; k++) {
 		for (j = j_start; j < j_end; j++) {
 			for (i = i_start; i < i_end; i++) {
 

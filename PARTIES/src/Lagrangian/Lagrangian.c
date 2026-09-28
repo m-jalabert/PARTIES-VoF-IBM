@@ -1115,6 +1115,62 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 		}
 #endif
 
+#if defined(LAG_PARTICLE_RESOLVED) && defined(VOF_IBM)
+		/*
+		 * Interface-triggered release (roadmap B.1.3).
+		 *
+		 * Locked: the grain is still frozen into the ice, so it does not move.
+		 * Zeroing U_old as well as U keeps the discrete acceleration
+		 * (U - U_old)/dt at exactly zero, so the grain contributes no spurious
+		 * rigid-body acceleration while held -- the same reasoning as the
+		 * cold-start fix at Particle.c:401.
+		 *
+		 * Ramping: on release the grain has a converged force history but has
+		 * been held against it, so an unramped release would apply that
+		 * accumulated force as a single impulse.  The ramp opens the response
+		 * linearly over release_ramp_steps steps instead.
+		 */
+		if (params->F_release > 0.0) {
+			if (p->t_released < 0.0) {
+				DSET_ZERO(U, 3);
+				DSET_ZERO(U_old, 3);
+				DSET_ZERO(Omega, 3);
+				DSET_ZERO(Omega_old, 3);
+			}
+			else if (p->release_ramp > 0 && params->release_ramp_steps > 0) {
+				const double a = 1.0 - (double)p->release_ramp
+				                     / (double)params->release_ramp_steps;
+				/* Ramp the STEP'S INCREMENT, not the accumulated velocity.
+				 *
+				 * `U[i] *= a` re-damped everything already accumulated, and it
+				 * did so once per RK stage: release_ramp is decremented by
+				 * Particle_release_by_interface at stage 0 only, while this
+				 * integrator runs every stage and the corrector rebuilds U from
+				 * an unchanged U_old.  The post-ramp velocity was therefore
+				 *     sum_k dt A_k prod_{j>=k} a_j  ~  dt A sqrt(pi N / 2)
+				 * with N = release_ramp_steps.  Holding the ramp DURATION fixed
+				 * means N ~ 1/dt, so that is U ~ A sqrt(dt T_ramp): the release
+				 * transient vanished as sqrt(dt) and had no convergent limit.
+				 * Measured at d/dx = 16 with the ramp duration matched at 0.1
+				 * (20478206 at max_dt = 0.01 and 10 steps, 20487690 at 0.005 and
+				 * 20 steps): post-ramp U_y differed by a factor 1.28.  Constant-
+				 * force models of the sequence give 1.23 (three stages per step)
+				 * to 1.24 (one), bracketing it; the force is not constant over
+				 * the ramp, so they fix the mechanism, not the constant.  The
+				 * grain leaves the ice by creeping, so that factor set the whole
+				 * break-out and left a permanent 0.874 time-unit offset -- 13.5%
+				 * of the fall distance, far outside the 2% debugging bar.
+				 *
+				 * Scaling only (U - U_old) = dt * A instead integrates a ramped
+				 * acceleration, so the post-ramp velocity tends to A * T_ramp / 2
+				 * independently of dt, first order.  It opens the response over
+				 * the same steps and so still suppresses the release impulse. */
+				FORI3 U[i]     = U_old[i]     + a * (U[i]     - U_old[i]);
+				FORI3 Omega[i] = Omega_old[i] + a * (Omega[i] - Omega_old[i]);
+			}
+		}
+#endif
+
 		X[0] = X_old[0] + dt * bet * ( U[0] + U_old[0] );
 		X[1] = X_old[1] + dt * bet * ( U[1] + U_old[1] );
 		X[2] = X_old[2] + dt * bet * ( U[2] + U_old[2] );
@@ -1418,6 +1474,59 @@ void Lagrangian_integrate_particle_motion(Cart3d_bag *data_bag, Debug_trace *dtr
 //			U[1] = 0.192 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=10
 //			U[1] = 0.096 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=5
 //			U[1] = 0.020 * ( exp(-40 * params->time) - 1 );  // Gondret10d: St=1
+		}
+#endif
+
+#if defined(LAG_PARTICLE_RESOLVED) && defined(VOF_IBM)
+		/*
+		 * Interface-triggered release (roadmap B.1.3) -- CORRECTOR half.
+		 *
+		 * Lagrangian_integrate_particle_motion is predictor/corrector, and this
+		 * second loop recomputes U from U_old and the hydrodynamic + collision
+		 * forces.  Locking only the predictor is therefore NOT enough: the
+		 * corrector rebuilds a non-zero U from the force it still feels, and the
+		 * grain creeps downward while nominally frozen in the ice (observed as a
+		 * -4.2e-4 settling velocity with t_released = -1).  Both halves must
+		 * apply the same lock and the same ramp.
+		 */
+		if (params->F_release > 0.0) {
+			if (p->t_released < 0.0) {
+				DSET_ZERO(U, 3);
+				DSET_ZERO(U_old, 3);
+				DSET_ZERO(Omega, 3);
+				DSET_ZERO(Omega_old, 3);
+			}
+			else if (p->release_ramp > 0 && params->release_ramp_steps > 0) {
+				const double a = 1.0 - (double)p->release_ramp
+				                     / (double)params->release_ramp_steps;
+				/* Ramp the STEP'S INCREMENT, not the accumulated velocity.
+				 *
+				 * `U[i] *= a` re-damped everything already accumulated, and it
+				 * did so once per RK stage: release_ramp is decremented by
+				 * Particle_release_by_interface at stage 0 only, while this
+				 * integrator runs every stage and the corrector rebuilds U from
+				 * an unchanged U_old.  The post-ramp velocity was therefore
+				 *     sum_k dt A_k prod_{j>=k} a_j  ~  dt A sqrt(pi N / 2)
+				 * with N = release_ramp_steps.  Holding the ramp DURATION fixed
+				 * means N ~ 1/dt, so that is U ~ A sqrt(dt T_ramp): the release
+				 * transient vanished as sqrt(dt) and had no convergent limit.
+				 * Measured at d/dx = 16 with the ramp duration matched at 0.1
+				 * (20478206 at max_dt = 0.01 and 10 steps, 20487690 at 0.005 and
+				 * 20 steps): post-ramp U_y differed by a factor 1.28.  Constant-
+				 * force models of the sequence give 1.23 (three stages per step)
+				 * to 1.24 (one), bracketing it; the force is not constant over
+				 * the ramp, so they fix the mechanism, not the constant.  The
+				 * grain leaves the ice by creeping, so that factor set the whole
+				 * break-out and left a permanent 0.874 time-unit offset -- 13.5%
+				 * of the fall distance, far outside the 2% debugging bar.
+				 *
+				 * Scaling only (U - U_old) = dt * A instead integrates a ramped
+				 * acceleration, so the post-ramp velocity tends to A * T_ramp / 2
+				 * independently of dt, first order.  It opens the response over
+				 * the same steps and so still suppresses the release impulse. */
+				FORI3 U[i]     = U_old[i]     + a * (U[i]     - U_old[i]);
+				FORI3 Omega[i] = Omega_old[i] + a * (Omega[i] - Omega_old[i]);
+			}
 		}
 #endif
 
@@ -1932,9 +2041,9 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 	double ***w_data = w -> data;
 
 	#ifdef VOF_IBM
-	double ***fx_IBM = data_bag->vof->fx_IBM;;
-	double ***fy_IBM = data_bag->vof->fy_IBM;
-	double ***fz_IBM = data_bag->vof->fz_IBM;
+	double ***vof_fx_IBM = data_bag->vof->fx_IBM;
+	double ***vof_fy_IBM = data_bag->vof->fy_IBM;
+	double ***vof_fz_IBM = data_bag->vof->fz_IBM;
 	#endif
 
 
@@ -1961,8 +2070,8 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 	double *Temp_U_L = lag -> Temp_L;
 	double *Temp_F_L = lag -> Temp_L;
 	#ifdef POST_PROCESS
-		double ***fx_IBM = lag -> ng_fx_IBM;
-		double ***fy_IBM = lag -> ng_fy_IBM;
+		double ***post_fx_IBM = lag -> ng_fx_IBM;
+		double ***post_fy_IBM = lag -> ng_fy_IBM;
 	#endif
 
 	#ifdef SQUIRMER_SWIMMER
@@ -2181,8 +2290,8 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			for (i = i_start; i < i_end; i++) {
 				#ifdef VOF_IBM
 				double rho_face = 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k][j][i-1]);
-				fx_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
-				u_rhs[k][j][i] += fx_IBM[k][j][i];
+				vof_fx_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
+				u_rhs[k][j][i] += vof_fx_IBM[k][j][i];
 				#else
 				u_rhs[k][j][i] += 2.0 * temp_f[k][j][i];
 				#endif
@@ -2196,7 +2305,7 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			for (k = k_start; k < k_end; k++) {
 				for (j = j_start; j < j_end; j++) {
 					for (i = i_start; i < i_end; i++) {
-						fx_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+						post_fx_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
 					}
 				}
 			}			
@@ -2205,7 +2314,7 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		for (k = k_start; k < k_end; k++) {
 			for (j = j_start; j < j_end; j++) {
 				for (i = i_start; i < i_end; i++) {
-					fx_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+					post_fx_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
 				}
 			}
 		}
@@ -2342,8 +2451,8 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			for (i = i_start; i < i_end; i++) {
 				#ifdef VOF_IBM
 				double rho_face = 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k][j-1][i]);
-				fy_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
-				v_rhs[k][j][i] += fy_IBM[k][j][i];
+				vof_fy_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
+				v_rhs[k][j][i] += vof_fy_IBM[k][j][i];
 				#else
 				v_rhs[k][j][i] += 2.0 * temp_f[k][j][i];
 				#endif
@@ -2357,7 +2466,7 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			for (k = k_start; k < k_end; k++) {
 				for (j = j_start; j < j_end; j++) {
 					for (i = i_start; i < i_end; i++) {
-						fy_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+						post_fy_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
 					}
 				}
 			}			
@@ -2366,7 +2475,7 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 		for (k = k_start; k < k_end; k++) {
 			for (j = j_start; j < j_end; j++) {
 				for (i = i_start; i < i_end; i++) {
-					fy_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
+					post_fy_IBM[k][j][i] += 2.0 * BET[params->which_stage] * temp_f[k][j][i];
 				}
 			}
 		}
@@ -2493,8 +2602,8 @@ void Lagrangian_force_individual(int p_type, Particle *p, int corrector, Cart3d_
 			for (i = i_start; i < i_end; i++) {
 				#ifdef VOF_IBM
 				double rho_face = 0.5 * (data_bag->vof->rho[k][j][i] + data_bag->vof->rho[k-1][j][i]);
-				fz_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
-				w_rhs[k][j][i] += fz_IBM[k][j][i];
+				vof_fz_IBM[k][j][i] = 2.0 * rho_face * temp_f[k][j][i];
+				w_rhs[k][j][i] += vof_fz_IBM[k][j][i];
 				#else
 				w_rhs[k][j][i] += 2.0 * temp_f[k][j][i];
 				#endif

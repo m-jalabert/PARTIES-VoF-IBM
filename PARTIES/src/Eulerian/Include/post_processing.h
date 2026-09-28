@@ -12,3 +12,7 @@ void Conc_update_world_stokes_dissipation_rate( Concentration **c, MAC_grid *gri
 void Conc_compute_active_potential_energy(Concentration *c, MAC_grid *grid, Parameters *params);
 void Conc_compute_passive_potential_energy(Concentration *c, MAC_grid *grid, Parameters *params) ;
 void Conc_update_world_potential_energies(Concentration **c, MAC_grid *grid, Parameters *params) ;
+
+#ifdef ECCO_PROFILES
+void ECCO_write_profiles(Cart3d_bag *data_bag);
+#endif

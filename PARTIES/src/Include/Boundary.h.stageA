@@ -288,52 +288,6 @@
 #define PHASE_CHANGE           // Stefan source in CH + latent sink in T ([phase_change])
 #define ICE_PENALIZATION       // Darcy/Brinkman ice damping ([vof] darcy_tau)
 
-/*
- * Roadmap B.1.4 -- conservative clip in the ice/sediment overlap.
- * Requires VOF_IBM; a no-op without it (C_S == 0 => nothing is ever trimmed
- * in a sediment cell), so a Stage-A build is unaffected whether or not this
- * is defined.  ECCO decks with a resolved grain MUST define it: without it
- * the admissibility trim silently destroys liquid inside the grain and biases
- * the ice-volume budget that every melt number rests on.
- */
-#undef VOF_DIFFUSE_SEDIMENT_CLIP_RESTORE
-
-/*
- * Roadmap B.1.4 instrumentation.  Define to a positive integer N to print the
- * running sediment-trim budget (SED_CLIP_AUDIT lines) every N timesteps.
- * Log-only; also requires VOF_IBM to do anything at all.
- */
-#undef VOF_DIFFUSE_SEDIMENT_CLIP_AUDIT
-
-/*
- * Roadmap B.1.4-fix ROUND 3.  The round-2 A/B showed post-hoc bookkeeping on
- * the clipped mass cannot work (destroy it => the grain is a liquid sink that
- * keeps its own release shell dry; give it back => the shell saturates and the
- * grain releases spuriously).  These two remove the causes instead.
- *
- *   ..._CH_MASK              identity rows for sediment cells in the
- *                            Cahn-Hilliard biharmonic solve, so C_L == 0
- *                            inside a resolved grain by construction and no
- *                            liquid is ever transported in.  Requires VOF_IBM;
- *                            inert without it (C_S == 0).
- *
- *   ..._SHELL_FRACTION_...   normalise the B.1.3 release criterion by the
- *                            NON-SOLID shell volume, so the grain's own
- *                            diffuse C_S halo is divided out rather than being
- *                            charged against the melt state.
- *                            !! REQUIRES RECALIBRATING F_release !!
- */
-#undef VOF_DIFFUSE_SEDIMENT_CH_MASK
-#undef VOF_DIFFUSE_SHELL_FRACTION_NONSOLID
-
-/*
- * Roadmap B.2 -- hard ice threshold for ICE_PENALIZATION (Yang G.8 style,
- * "hard u = 0 for phi_s > 0.9").  Needed once a MOVING resolved grain is
- * present: its unrefilled wake reads as ice and brakes it at ANY darcy_tau.
- * Undefined by default so Stage A / Yang / melting-RB are untouched.
- */
-#undef VOF_DIFFUSE_ICE_PENAL_THRESHOLD
-
 
 /******************************************************************************/
 /*                               Concentration                                */
@@ -968,20 +922,6 @@
 #endif
 #if defined ICE_PENALIZATION && !defined VOF
 	#error 'ICE_PENALIZATION requires a VOF method to define the ice fraction 1-F'
-#endif
-
-/* B.2 validated opt-in sediment phase transport. Legacy/Yang builds remain off. */
-//#define VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
-//#define ECCO_PROFILES
-
-#if defined(VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT) && !(defined(VOF_IBM) && defined(LAG_PARTICLE_RESOLVED) && defined(PHASE_CHANGE) && defined(CONC) && defined(VOF_DIFFUSE_SEDIMENT_CH_MASK) && defined(GRID_UNIFORM))
-#error "Sediment ice transport requires resolved VOF_IBM, PHASE_CHANGE, CONC, sediment CH mask, and a uniform grid"
-#endif
-#if defined(VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT) && (defined(AXISYM_RZ) || defined(TWOD_CARTESIAN))
-#error "Sediment ice transport is currently validated for 3-D Cartesian grids"
-#endif
-#if defined(ECCO_PROFILES) && !defined(VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT)
-#error "ECCO_PROFILES requires sediment ice transport for its phase accounting"
 #endif
 
 #endif

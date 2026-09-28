@@ -27,6 +27,7 @@
  ******************************************************************************/
 
 #include <math.h>   /* fabs, sqrt */
+#include "VOF_DIFFUSE.h"   /* DIFFUSE_SOLID_MASS_CUTOFF */
 
 /******************************************************************************/
 /*  innerProd — unchanged from original                                       */
@@ -104,7 +105,7 @@ static inline double vel_jacobi_diag(
     int i, int j, int k, char component,
     const MAC_grid *grid,
     const Parameters *params,
-    double ***rho, double ***mu,
+    double ***rho, double ***mu, double ***fliq, double ***fsol,
     double Re, double alpha_k, double dt)
 {
     const int collapsed_z = TwodOps_collapsed_component_is_inactive(params);
@@ -116,6 +117,30 @@ static inline double vel_jacobi_diag(
 
     double rho_face = 0.5 * (rho[k][j][i] + rho[kL][jL][iL]);
     double d_time   = rho_face / (alpha_k * dt);
+
+#ifdef ICE_PENALIZATION
+    /* Same fully implicit Darcy diagonal as in matVec. */
+    {
+        /* Ice fraction is 1 - C_L - C_S: the resolved solid is NOT ice (see the
+         * note in matVec).  fsol == NULL reproduces the pre-B.2 mask exactly. */
+        double cs_face = (fsol != NULL)
+                       ? 0.5 * (fsol[k][j][i] + fsol[kL][jL][iL]) : 0.0;
+        double phi_face = 1.0 - 0.5 * (fliq[k][j][i] + fliq[kL][jL][iL]) - cs_face;
+        if (cs_face >= DIFFUSE_SOLID_MASS_CUTOFF) phi_face = 0.0;
+        else if (cs_face > DIFFUSE_SOLID_HALO_CUTOFF &&
+                 phi_face < DIFFUSE_SOLID_HALO_ICE_TRUST) phi_face = 0.0;
+        if (phi_face < 0.0) phi_face = 0.0;
+        if (phi_face > 1.0) phi_face = 1.0;
+#ifdef VOF_DIFFUSE_ICE_PENAL_THRESHOLD
+        /* Yang-style hard mask: rigid where genuinely ice, free elsewhere. */
+        phi_face = (phi_face > DIFFUSE_ICE_PENAL_THRESHOLD_VAL) ? 1.0 : 0.0;
+#endif
+        d_time += rho_face * 2.0 * phi_face / params->darcy_tau;
+    }
+#else
+    (void)fliq;
+    (void)fsol;
+#endif
 
     double diag_x = 0.0;
     double diag_y = 0.0;
@@ -218,6 +243,7 @@ static inline double vel_jacobi_diag(
 
     (void)rho;
     (void)mu;
+    (void)fliq;
 
     if (component == 'u') {
         diag_x = iRe * TwodOps_u_cv_x_diag_coeff(
@@ -300,6 +326,23 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
     double ***rho = data_bag->vof->rho;
     double ***mu  = data_bag->vof->mu;
 
+#ifdef ICE_PENALIZATION
+    /*
+     * Darcy/Brinkman ice damping: -(phi_s/darcy_tau) u enters the stage solve
+     * fully implicitly as a positive local diagonal (factor 2 from the code's
+     * Crank-Nicolson convention, cf. the 2x on explicit sources).  The
+     * operator stays SPD, so CG and the Jacobi preconditioner are unchanged.
+     */
+    #ifdef VOF_DIFFUSE
+    double ***fliq = data_bag->vof->C_L;
+    double ***fsol = data_bag->vof->C_S;
+    #else
+    double ***fliq = data_bag->vof->F;
+    double ***fsol = NULL;
+    #endif
+    const double drag_2tau = 2.0 / params->darcy_tau;
+#endif
+
     for (k = Ks; k < Ke; k++) {
         for (j = Js; j < Je; j++) {
             for (i = Is; i < Ie; i++) {
@@ -310,6 +353,38 @@ void matVec(double ***Ax, double ***x, char component, Cart3d_bag *data_bag)
 
                 double rho_face    = 0.5*(rho[k][j][i] + rho[kL][jL][iL]);
                 double factor_time = rho_face / (alpha_k * dt);
+
+#ifdef ICE_PENALIZATION
+                /* Roadmap B.2 -- the Brinkman ice mask must exclude the RESOLVED solid.
+                 * phi_s = 1 - C_L counts a sediment grain (where C_L = 0) as ice and
+                 * Darcy-damps it at tau = 1e-4, on top of the IBM forcing that already
+                 * represents it -- the grain is pinned and creeps instead of settling
+                 * (measured U_y = 5.7e-3 against an O(1) terminal velocity at Ga = 122,
+                 * job 20253930).  The ice fraction is 1 - C_L - C_S.
+                 * Identical in Stage A, where C_S == 0. */
+                /* No Brinkman damping INSIDE the resolved solid: the IBM already
+                 * governs there, and the ternary deficit (C_L + C_S < 1 in the
+                 * grain's diffuse rim) would otherwise be charged to the ice
+                 * phase.  Measured in an ICE-FREE settling deck: phi_s = 0.77
+                 * over 0.5R-R, giving a Darcy rate of 15,467 against an inertial
+                 * scale of 227 -- the particle was clamped 200-500x too slow
+                 * (jobs 20269208/20269209).  The round-4 CH mask makes this worse
+                 * by construction, since it pins C_L = 0 wherever C_S >= cutoff. */
+                double cs_face = (fsol != NULL)
+                               ? 0.5*(fsol[k][j][i] + fsol[kL][jL][iL]) : 0.0;
+                double phi_face = 1.0 - 0.5*(fliq[k][j][i] + fliq[kL][jL][iL]) - cs_face;
+                if (cs_face >= DIFFUSE_SOLID_MASS_CUTOFF) phi_face = 0.0;
+                else if (cs_face > DIFFUSE_SOLID_HALO_CUTOFF &&
+                         phi_face < DIFFUSE_SOLID_HALO_ICE_TRUST) phi_face = 0.0;
+                if (phi_face < 0.0) phi_face = 0.0;
+                if (phi_face > 1.0) phi_face = 1.0;
+#ifdef VOF_DIFFUSE_ICE_PENAL_THRESHOLD
+                /* Yang-style hard mask: rigid where genuinely ice, free elsewhere. */
+                phi_face = (phi_face > DIFFUSE_ICE_PENAL_THRESHOLD_VAL) ? 1.0 : 0.0;
+#endif
+                factor_time += rho_face * drag_2tau * phi_face;
+#endif
+
                 double Ax_val      = factor_time * x[k][j][i];
                 double op_val      = 0.0;
 
@@ -585,9 +660,18 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
 #ifdef VOF
     double ***rho = data_bag->vof->rho;
     double ***mu  = data_bag->vof->mu;
+    #ifdef VOF_DIFFUSE
+    double ***fliq = data_bag->vof->C_L;   /* liquid fraction for ICE_PENALIZATION */
+    double ***fsol = data_bag->vof->C_S;   /* resolved solid: NOT ice (B.2 fix)   */
+    #else
+    double ***fliq = data_bag->vof->F;
+    double ***fsol = NULL;                 /* no resolved-solid field without VOF_DIFFUSE */
+    #endif
 #else
     double ***rho = NULL;  /* unused in constant-coefficient path */
     double ***mu  = NULL;
+    double ***fliq = NULL;
+    double ***fsol = NULL;
 #endif
 
     /* ------------------------------------------------------------------ *
@@ -633,7 +717,7 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
 
                 /* d = M^{-1} r: divide initial residual by diagonal */
                 double diag = vel_jacobi_diag(i, j, k, component, grid, params,
-                                              rho, mu,
+                                              rho, mu, fliq, fsol,
                                               Re, alpha_k, dt);
                 d[k][j][i] = r[k][j][i] / (diag + EPS);
             }
@@ -678,7 +762,7 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
 
                     double ri   = r[k][j][i];
                     double diag = vel_jacobi_diag(i, j, k, component, grid, params,
-                                                  rho, mu,
+                                                  rho, mu, fliq, fsol,
                                                   Re, alpha_k, dt);
                     local_vals[0] += ri * ri / (diag + EPS);  /* rz_new */
                     local_vals[1] += ri * ri;                  /* rr     */
@@ -705,7 +789,7 @@ int Velocity_solve_cg(Velocity *vel, Cart3d_bag *data_bag)
             for (j = Js; j < Je; j++) {
                 for (i = Is; i < Ie; i++) {
                     double diag = vel_jacobi_diag(i, j, k, component, grid, params,
-                                                  rho, mu,
+                                                  rho, mu, fliq, fsol,
                                                   Re, alpha_k, dt);
                     d[k][j][i] = r[k][j][i] / (diag + EPS) + beta * d[k][j][i];
                 }

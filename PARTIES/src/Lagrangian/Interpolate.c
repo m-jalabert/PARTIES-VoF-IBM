@@ -2427,3 +2427,155 @@ void Interpolate_bound_to_one( double ***vf, Cart3d_bag *data_bag) {
 
 
 }
+
+#if defined(LAG_PARTICLE_RESOLVED) && defined(VOF_IBM)
+/******************************************************************************/
+/*
+ * Interpolate_integrate_shell_liquid_fraction   (roadmap B.1.3)
+ *
+ * Accumulates, for every particle in p_list that overlaps this MPI sub-domain,
+ * the volume integral of the liquid fraction C_L over the SHELL immediately
+ * surrounding the grain, together with the shell volume itself:
+ *
+ *     num[n] += (1 - vf_cell) * C_L * dV ,   den[n] += (1 - vf_cell) * dV
+ *
+ * taken over cells within R + shell_cells*h of the centroid.  The caller
+ * reduces both arrays across ranks and forms phi_liq = num/den.
+ *
+ * Why a shell and not the centroid.  Inside the grain the ternary mixture puts
+ * C_S = 1, hence C_L = 0, so ANY sample of the particle interior reads "no
+ * liquid" forever and the grain would never be released.  The physically
+ * meaningful question is whether the grain's SURROUNDINGS have melted, which
+ * is what the (1 - vf_cell) weight isolates: it is zero in cells the particle
+ * fills and one in cells it does not, using the same level-set volume fraction
+ * the IBM itself uses, so the shell and the solid share one geometry.
+ *
+ * The non-melting shell of VOF_DIFFUSE.c:1344 (cells >= 5% sediment cannot
+ * melt) is precisely why this is an average over a shell of finite thickness
+ * rather than a single-cell probe: the first ring of cells around the grain
+ * retains ice slightly longer than the bulk front, and a one-cell probe would
+ * read that artifact rather than the melt state.
+ *
+ * [MPI] purely local; correctness comes from the caller's Allreduce.  Cells
+ * are visited only on the rank that owns them, and the (1 - vf_cell) weight is
+ * a pointwise function of geometry, so the summed result is independent of how
+ * the domain is decomposed.
+ */
+/******************************************************************************/
+void Interpolate_integrate_shell_liquid_fraction(Particle_list *p_list,
+                                                 Cart3d_bag    *data_bag,
+                                                 double        *num,
+                                                 double        *den,
+                                                 Debug_trace   *dtrace)
+{
+	Parameters *params = data_bag->params;
+	MAC_grid   *grid   = data_bag->grid;
+
+	double ***C_L = data_bag->vof->C_L;
+	if (C_L == NULL) return;
+
+	double *xc = grid->xc, *yc = grid->yc, *zc = grid->zc;
+	const double h = grid->dx_u[1];
+	const double shell = params->release_shell_cells * h;
+	const int ID_start = p_list->ID_start;
+
+	Particle *p = p_list->start;
+	while (p != NULL) {
+
+		const int n = p->ID - ID_start;
+		if (n < 0 || n >= p_list->Np) { p = p->next; continue; }
+
+		const double R = p->R;
+		const double *X = p->X;
+		const double R_out = R + shell;
+
+		int i_start = (int)floor((X[0] - R_out - xc[0]) / h) - 1;
+		int j_start = (int)floor((X[1] - R_out - yc[0]) / h) - 1;
+		int i_end   = (int)ceil ((X[0] + R_out - xc[0]) / h) + 1;
+		int j_end   = (int)ceil ((X[1] + R_out - yc[0]) / h) + 1;
+
+		i_start = max(i_start, grid->G_Is);
+		j_start = max(j_start, grid->G_Js);
+		i_end   = min(min(i_end, grid->G_Ie), grid->NX - 1);
+		j_end   = min(min(j_end, grid->G_Je), grid->NY - 1);
+
+#if defined(TWOD_MODE) || defined(TWOD_CARTESIAN) || defined(AXISYM_RZ)
+		const int k_start = grid->G_Ks;
+		const int k_end   = grid->G_Ks + 1;
+		const double dV   = h * h;
+#else
+		int k_start = (int)floor((X[2] - R_out - zc[0]) / h) - 1;
+		int k_end   = (int)ceil ((X[2] + R_out - zc[0]) / h) + 1;
+		k_start = max(k_start, grid->G_Ks);
+		k_end   = min(min(k_end, grid->G_Ke), grid->NZ - 1);
+		const double dV = h * h * h;
+#endif
+
+		for (int k = k_start; k < k_end; k++) {
+		for (int j = j_start; j < j_end; j++) {
+		for (int i = i_start; i < i_end; i++) {
+
+			const double dx = xc[i] - X[0];
+			const double dy = yc[j] - X[1];
+#if defined(TWOD_MODE) || defined(TWOD_CARTESIAN) || defined(AXISYM_RZ)
+			const double dz = 0.0;
+#else
+			const double dz = zc[k] - X[2];
+#endif
+			const double r = sqrt(dx * dx + dy * dy + dz * dz);
+			if (r > R_out) continue;
+
+			/* Particle volume fraction of this cell, from the same normalized
+			 * level set (|r|/R - 1) the IBM uses.  Linear ramp across one cell
+			 * is enough here: the criterion is an average over many cells, and
+			 * an exact corner reconstruction would not move it measurably. */
+			double vf_cell = 0.5 - (r - R) / h;
+			if (vf_cell < 0.0) vf_cell = 0.0;
+			if (vf_cell > 1.0) vf_cell = 1.0;
+
+			const double w = (1.0 - vf_cell) * dV;
+			if (w <= 0.0) continue;
+
+#if defined(VOF_DIFFUSE_SHELL_FRACTION_NONSOLID) && defined(VOF_DIFFUSE)
+			/*
+			 * Roadmap B.1.4-fix ROUND 3 -- normalise by the NON-SOLID volume
+			 * of the shell, not by its total volume:
+			 *
+			 *     phi = INT (1-vf) C_L dV  /  INT (1-vf) (1-C_S) dV
+			 *
+			 * i.e. liquid as a fraction of what could be liquid at all.
+			 *
+			 * The old denominator was the raw shell volume, which silently
+			 * charged the grain's own diffuse C_S halo against the melt state:
+			 * C_L <= 1 - C_S by admissibility, so wherever C_S > 0 the shell
+			 * reads "not yet melted" no matter what the ice is doing.  That is
+			 * the mechanism behind the recorded ceiling "phi_liq saturates at
+			 * ~0.977, never 1" and the F_release >= 0.98 silent-hang trap
+			 * (B.1.3-fn) -- both were the normalisation, not the physics.  It
+			 * matters more than it looks: C_S is a tanh with support out to
+			 * diffuse_solid_support_extra(Cn) = 0.102 against R = 0.04 in the
+			 * release deck, so the shell sits well inside the halo.
+			 *
+			 * Dividing the halo out makes phi reach 1.0 on full exposure and
+			 * 0.0 in bulk ice, so the criterion means what B.1.3 says it means.
+			 * !! F_release MUST BE RECALIBRATED against this definition; the
+			 * 0.709 of B.1.3-fn was fitted to the old one. !!
+			 */
+			double cs_cell = data_bag->vof->C_S ? data_bag->vof->C_S[k][j][i] : 0.0;
+			if (cs_cell < 0.0) cs_cell = 0.0;
+			if (cs_cell > 1.0) cs_cell = 1.0;
+
+			num[n] += w * C_L[k][j][i];
+			den[n] += w * (1.0 - cs_cell);
+#else
+			num[n] += w * C_L[k][j][i];
+			den[n] += w;
+#endif
+		}
+		}
+		}
+
+		p = p->next;
+	}
+}
+#endif /* LAG_PARTICLE_RESOLVED && VOF_IBM */

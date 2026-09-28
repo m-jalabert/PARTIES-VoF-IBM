@@ -99,7 +99,12 @@ struct volume_fraction {
 	double ***fx_IBM, ***fy_IBM, ***fz_IBM;  // IBM force density field
 	#endif
 
-
+	#if defined(VOF_DIFFUSE) && defined(PHASE_CHANGE)
+	double ***melt_src;      // Stefan source V_G*|grad F| at the current RK stage
+	double ***melt_src_old;  // previous-stage source for the ZETA history term
+	double ***yang_salt_src;     // Yang finite-interface salinity source, current RK stage
+	double ***yang_salt_src_old; // Yang finite-interface salinity source, previous RK stage
+	#endif
 
 };
 typedef struct volume_fraction VolumeFraction;
@@ -543,7 +548,18 @@ struct parameters {
 	// Particle density
 	double rho_s;
 	// rho_prImp is used only when certain pressure is to be implemented via the upper plate particles in Couette flow
-	double rho_prImp; // the density of each fixed particle on the upper plate to impose pressure 
+	double rho_prImp; // the density of each fixed particle on the upper plate to impose pressure
+
+	/*------------- Interface-triggered release (roadmap B.1.3) --------------*/
+	/* Upper bound on F_release; see the range check in ParticleInput.c.
+	 * phi_liq cannot reach 1 because the measurement shell always contains
+	 * diffuse-interface band and non-melting sediment shell -- it saturated at
+	 * 0.977 in the B.1.3-fn calibration -- so a threshold at or above this
+	 * would never fire and the grain would stay locked silently. */
+	#define F_RELEASE_MAX 0.98
+	double F_release;           // shell liquid fraction that frees a fixed grain; <=0 disables
+	double release_shell_cells; // shell thickness outside R, in cells, averaged over
+	int    release_ramp_steps;  // steps over which a freed grain's IBM constraint ramps in
 
 	// Gravitational acceleration
 	double *grav; // used only for the particle momentum balance!!
@@ -636,7 +652,43 @@ struct parameters {
 	// between the particles along X-axis: 0=no; 1=yes; Only valid when slice_axis = 0
 	double particle_position[2][3]; // if center_two_particles==1, collect position of each particle of the pair;
 	// must be stored in params to be accessible to all processors
-	
+
+	/*---------------------- EOS (Roquet 2015, EOS_NONLINEAR) ----------------*/
+	// Nondimensional density anomaly b(theta,s) = -betaT*(theta - Tmd0
+	// - Tmd_slope*s)^q + betaS*s, replacing the linear b = sum Ri*c_i.
+	double eos_q;
+	double eos_betaT;
+	double eos_betaS;
+	double eos_Tmd0;
+	double eos_Tmd_slope;
+
+	/*---------------------- PHASE CHANGE (Stefan melting) -------------------*/
+	double stefan;          // St = cp*dT/L (PARTIES convention; = 1/St_Yang)
+	double T_melt;          // nondim melting temperature at s = 0
+	double liquidus_slope;  // freezing-point depression m*Sm/dT (NOT eos_Tmd_slope)
+	double melt_band_eps;   // melt-law band scale eps (<= 0 -> Cn)
+	int meltwater_tracer;   // B.1.4: conc field 2 = meltwater tracer at the melt rate
+	int yang_salt_transport; // 1: use Yang et al. finite-interface salinity equation
+	double yang_salt_delta;  // regularization delta in 1/(1-phi+delta)
+
+	/*---------------------- ICE_PENALIZATION --------------------------------*/
+	int liquid_referenced_salinity; // A.5.5 v1: liquidus/EOS see s/(F+delta)
+	double darcy_tau;       // Darcy/Brinkman damping timescale of the ice phase
+
+	/*---------------------- Melting initial conditions ----------------------*/
+	double vof_slab_x0;     // VOF init 27: ice-water interface at x = vof_slab_x0*Lx
+	double theta_ice;       // Conc init 30: initial ice temperature (theta_inf)
+
+	/*---------------------- CONC_VOF_PHASEWEIGHTED --------------------------*/
+	// Per-field solid/liquid diffusivity ratio: kappa(F) = F + (1-F)*ratio.
+	// Temperature (field 0) uses a finite ratio; salt uses 0 (flux masked by F).
+	double *kappa_ice_ratio;
+
+	/*---------------------- ECCO sub-ice sublayer (Conc init 36-38) ---------*/
+	double sublayer_ell_T;       // erf length of the thermal sublayer
+	double sublayer_ell_S;       // erf length of the salt sublayer
+	double sublayer_s_interface; // liquid salinity at the ice interface
+
 };
 typedef struct parameters Parameters;
 
@@ -1463,6 +1515,16 @@ struct particle {
 	double Vol_L; // Volume of marker points
 
 	double t_part_release;
+
+	/*------------- Interface-triggered release (roadmap B.1.3) --------------*/
+	/* phi_liq: liquid fraction averaged over the shell just outside the grain,
+	 * globally reduced, so every rank holding this particle (local or ghost)
+	 * sees the same number and flips the list in lock-step.  t_released is the
+	 * time the grain was freed (< 0 while still locked in ice); release_ramp
+	 * counts down the steps over which its IBM constraint is ramped in.       */
+	double phi_liq;
+	double t_released;
+	int    release_ramp;
 
 
 	//--------------------------------------------------------------------------

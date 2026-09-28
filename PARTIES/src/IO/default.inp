@@ -125,9 +125,42 @@ CFG(vof, ch_iter_max, 300, atoi)  // Max iterations for implicit CH solve
 CFG(vof, ch_tol, 1e-9, atof)      // Tolerance for implicit CH solve
 CFG(vof, bridge_volume_over_r3, 0.09375, atof) // Rajesh/Sauret bridge target V/R^3
 
-// Test cases 
-// Rider & Kothe Advection testcase (1998) 
+// Test cases
+// Rider & Kothe Advection testcase (1998)
 CFG(vof, advection_test_time, 0.5, atof)     // Parameter for Time Reversal
+
+// Melting / ice additions (used only under their compile flags in Boundary.h)
+CFG(vof, darcy_tau, 1.0e-4, atof)   // ICE_PENALIZATION: Darcy damping timescale
+CFG(vof, vof_slab_x0, 0.9, atof)    // init_type 27: ice slab interface at x = vof_slab_x0*Lx
+
+
+/******************************************************************************/
+/*                                    EOS                                     */
+/*----------------------------------------------------------------------------*/
+/*    Roquet (2015) quadratic equation of state (EOS_NONLINEAR)               */
+/*    b(theta,s) = -eos_betaT*(theta - eos_Tmd0 - eos_Tmd_slope*s)^eos_q      */
+/*                 + eos_betaS*s                                              */
+/******************************************************************************/
+CFG(eos, eos_q, 2.0, atof)          // Exponent of the thermal anomaly (Roquet: 2)
+CFG(eos, eos_betaT, 1.0, atof)      // Thermal coefficient in free-fall units
+CFG(eos, eos_betaS, 0.0, atof)      // Haline coefficient = LambdaT = RaS/RaT
+CFG(eos, eos_Tmd0, 0.0, atof)       // Fresh-water density-maximum temperature
+CFG(eos, eos_Tmd_slope, 0.0, atof)  // Salinity shift of the density maximum (cS*Sm/dT)
+
+
+/******************************************************************************/
+/*                                PHASE_CHANGE                                */
+/*----------------------------------------------------------------------------*/
+/*    Stefan melting: V_G = (stefan/Pe_T)*(dtheta/dn|liq - kr*dtheta/dn|sol)  */
+/******************************************************************************/
+CFG(phase_change, stefan, 0.0, atof)          // St = cp*dT/L (= 1/St_Yang); 0 disables melting
+CFG(phase_change, T_melt, 0.0, atof)          // Melting temperature at s = 0
+CFG(phase_change, liquidus_slope, 0.0, atof)  // Freezing-point depression m*Sm/dT (NOT eos_Tmd_slope)
+CFG(phase_change, melt_band_eps, -1.0, atof)  // Melt-law band scale eps; <= 0 -> use Cn
+CFG(phase_change, meltwater_tracer, 0, atoi)  // 1: conc field 2 is a meltwater tracer injected at the melt rate (needs NConc>=3)
+CFG(phase_change, yang_salt_transport, 0, atoi) // 1: Yang finite-interface salt flux/rejection terms
+CFG(phase_change, yang_salt_delta, 1.0e-6, atof) // Yang regularization delta (authors' value: 1e-6)
+CFG(phase_change, liquid_referenced_salinity, 0, atoi) // A.5.5 v1: use s/(F+delta), the LIQUID salinity, in the liquidus and the EOS instead of the volume-averaged s
 
 
 
@@ -144,6 +177,11 @@ CFGArray(conc, richardson, "{1,0}", GVG_DOUBLE)   // Initial Maximum Volume Frac
 CFGArray(conc, V_s0, "{0,0}", GVG_DOUBLE)    // Particle Settling Velocity(ies)(in y-direction):[The 1st one is important. The others will be recalculated]
 CFGArray(conc, vol_heat_cap_s, "{1,1}", GVG_DOUBLE)  // vol heat capacity of teh particle normalized by fluid
 CFGArray(conc, conductivity_s, "{0,0}", GVG_DOUBLE)  // particle conductivity (diffusivity respectively)
+// CONC_VOF_PHASEWEIGHTED: per-field solid(ice)/liquid diffusivity ratio,
+// kappa(F) = F + (1-F)*kappa_ice_ratio.  Temperature: finite ratio (heat
+// conducts in ice); salt: 0 (no salt flux into ice).
+CFGArray(conc, kappa_ice_ratio, "{1,0}", GVG_DOUBLE)
+CFG(conc, theta_ice, 0.0, atof)  // conc_init_type 30: initial ice temperature
 CFGArray(conc, layer_height, "{0.5, 0.2}", GVG_DOUBLE)  // initial height of conc layer
 CFG(conc, sig_profile, 0.1, atof)  // erf profile for init conc
 CFG(conc, cbd0, 1.0, atof)  //
@@ -152,6 +190,15 @@ CFG(conc, cbd2, 0.5, atof)  //
 CFG(conc, cbd3, 1.0, atof)  //
 CFG(conc, cbd4, 0.0, atof)  //
 CFG(conc, cbd5, 0.5, atof)  //
+// Conc init 36/37/38 (ECCO B.3 P1b): diffusive sublayer under the horizontal
+// ice layer of VOF init 28, zeta = y_int - y (<= 0 in the ice). Used ONLY by
+// those init types; the defaults are inert.
+//   36 T:      theta_ice + (cbd0 - theta_ice)*erf(zeta/sublayer_ell_T)
+//   37 S:      F*[s_i + (cbd5 - s_i)*erf(zeta/sublayer_ell_S)], s_i = sublayer_s_interface
+//   38 tracer: F*(1 - s_liquid/cbd5), the meltwater fraction w.r.t. the far water
+CFG(conc, sublayer_ell_T, 1.0, atof)
+CFG(conc, sublayer_ell_S, 1.0, atof)
+CFG(conc, sublayer_s_interface, 1.0, atof)
 
 
 //Initialization types:
@@ -208,6 +255,24 @@ CFG(lock, lock_smooth, YES, atoi) // initial condition of the lock ??????
 
 CFG(particle, rho_s, 2.5, atof)  // Particle density (relative to fluid)
 CFG(particle, rho_prImp, 2.5, atof)  // Particle density (relative to fluid)
+
+/*    Interface-triggered release of a sediment grain locked in ice (roadmap    */
+/*    B.1.3).  A MOBILE particle is held motionless until the melt front has    */
+/*    freed it.  F_release <= 0 disables the mechanism, so the DEFAULT BELOW    */
+/*    REPRODUCES THE PRE-ECCO BEHAVIOUR EXACTLY and must stay <= 0: raising it  */
+/*    would silently start locking particles in every existing deck.            */
+/*                                                                              */
+/*    Calibrated in B.1.3-fn against how far the melt front has passed the      */
+/*    grain (0 = front at its underside, 1 = grain just fully uncovered):       */
+/*        F_release = 0.565  ->  half uncovered                                 */
+/*        F_release = 0.709  ->  JUST fully uncovered   <-- recommended         */
+/*        F_release = 0.867  ->  clear by half a diameter                       */
+/*        F_release = 0.900  ->  clear by 0.67 diameters (late/conservative)    */
+/*    phi_liq saturates at ~0.977, never 1, so F_release >= F_RELEASE_MAX       */
+/*    (0.98) can never fire; that is rejected at startup rather than hanging.   */
+CFG(particle, F_release, -1.0, atof)        // Shell liquid fraction that frees a grain; <=0 = off (pre-ECCO default)
+CFG(particle, release_shell_cells, 2.0, atof) // Shell thickness outside R, in cells, that the criterion averages over
+CFG(particle, release_ramp_steps, 10, atoi)   // Steps over which the freed grain's IBM constraint is ramped in
 CFGArray(particle, grav, "{0,-1,0}", GVG_DOUBLE)  // Gravitational acceleration
 CFG(particle, e_dry_wall, 0.97, atof)  // Coefficient of restitution of wall
 CFG(particle, e_dry_particles, 0.97, atof)  // Coeff. of restitution of particles

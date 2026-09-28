@@ -209,6 +209,9 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	// Saving the initial conditions
 	//--------------------------------------------------------------------------
 
+#ifdef ECCO_PROFILES
+    ECCO_write_profiles(data_bag);
+#endif
 	if (!params->resume) {
 		Output_h5_data(data_bag, DTRACE("Output_h5_data"));
 		Output_h5_resume(data_bag, DTRACE("Output_h5_resume"));
@@ -274,6 +277,10 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 		params -> ntime = ntime;
 		params -> time  = time;
 		params->dt = dt;
+#ifdef ECCO_PROFILES
+        if(ntime%10==0 || time>=params->output_time)
+            ECCO_write_profiles(data_bag);
+#endif
 
 
 		//----------------------------------------------------------------------
@@ -545,6 +552,10 @@ int Temporal_int_rk3(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 
 	} // main time-stepping while
 
+#ifdef ECCO_PROFILES
+    ECCO_write_profiles(data_bag);
+#endif
+
 
 	MPI_Barrier(PCW);
 	fflush(stdout);
@@ -605,6 +616,17 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	Particle_release_to_mobile(p_release_list, p_mobile_list, params, DTRACE("Particle_release_to_mobile"));
 	//printf("Turning off particles\n");
 	//Particle_mobile_turn_off(p_mobile_list, params);
+	#endif
+
+	#ifdef VOF_IBM
+	/* Roadmap B.1.3: free any grain whose surroundings have melted.  Once per
+	 * step -- flipping the lock between RK stages would leave the particle's
+	 * force history inconsistent with its state.  phi_liq was reduced during
+	 * the previous step, so the decision lags by one step; that is harmless
+	 * and keeps the criterion well defined at t = 0 (phi_liq starts at 0). */
+	if (params->which_stage == 0)
+		Particle_release_by_interface(p_mobile_list, params,
+				DTRACE("Particle_release_by_interface"));
 	#endif
 #endif
 
@@ -706,7 +728,12 @@ void Temporal_int_all_the_equations(Cart3d_bag *data_bag, Debug_trace *dtrace) {
     #elif defined VOF_DIFFUSE
 
 		#ifdef VOF_IBM
-		VOF_DIFFUSE_compute_C_S(data_bag);
+		#ifdef VOF_DIFFUSE_SEDIMENT_ICE_TRANSPORT
+        VOF_DIFFUSE_move_ice_mask(data_bag);
+
+#else
+        VOF_DIFFUSE_compute_C_S(data_bag);
+#endif
 		#endif
 		        
         VOF_DIFFUSE_step(data_bag);
@@ -1100,7 +1127,7 @@ if(which_stage == 0){
 		timer->Wtime_p_divergence += T2 - T1;
 
 		poisson_iters++;
-		if (poisson_iters > 10) {
+		if (poisson_iters > 10 && G_div_max > 1e-6) {
 			Display_throw_error("Poisson solver did not converge", params, DTRACE("Display_throw_error"));
 		}
 
@@ -1230,6 +1257,16 @@ if(which_stage == 0){
 		Interpolate_integrate_momentum(u, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
 		Interpolate_integrate_momentum(v, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
 		Interpolate_integrate_momentum(w, p_fixed_list, data_bag, DTRACE("Interpolate_integrate_momentum"));
+
+		#ifdef VOF_IBM
+		/* Roadmap B.1.3: shell liquid fraction around each grain, for the
+		 * interface-triggered release.  Placed here because the list is in
+		 * LIST_STATE_BOTH at this point, so every rank overlapping a grain
+		 * contributes its own cells to the reduction. */
+		if (params->which_stage == 0)
+			Particle_update_shell_liquid_fraction(p_mobile_list, data_bag,
+					DTRACE("Particle_update_shell_liquid_fraction"));
+		#endif
 
 		T2 = MPI_Wtime();
 		timer->Wtime_particle_int += T2 - T1;

@@ -367,6 +367,10 @@ void ParticleOutput_h5_data(Particle_list *p_list, hid_t file_id,
 	OUTPUT_ELEMENT("T_coll", 3);
 	OUTPUT_ELEMENT("Int_U_old", 3);
 	OUTPUT_ELEMENT("Int_Omega_old", 3);
+	/* Roadmap B.1.3: the release state MUST be persisted.  Without it a
+	 * resumed run re-locks a grain that is already in free fall and re-ramps
+	 * its velocity from zero -- a physics error, not just a lost diagnostic. */
+	OUTPUT_ELEMENT("t_released", 1);
 
 	#ifdef VOF_IBM
     OUTPUT_ELEMENT("F_CCF_cum", 3);
@@ -517,6 +521,12 @@ void ParticleOutput_h5_data_element(Particle_list *p_list, int Np_local,
 	else if (strcmp(element, "Omega") == 0) {
 		for (j = 0; j < Np_local; j++) {
 			FORI3 data[j][i] = p -> Omega[i];
+			p = p -> next;
+		}
+	}
+	else if (strcmp(element, "t_released") == 0) {
+		for (j = 0; j < Np_local; j++) {
+			data[j][0] = p -> t_released;
 			p = p -> next;
 		}
 	}

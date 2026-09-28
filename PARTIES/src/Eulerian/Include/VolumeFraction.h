@@ -110,6 +110,8 @@ void VoF_init_axisymmetric_droplet_on_static_sphere_theta(Cart3d_bag *data_bag);
 void VoF_init_liu17_two_sinking_cylinders_2d(Cart3d_bag *data_bag);
 void VoF_init_liu17_three_sinking_cylinders_2d(Cart3d_bag *data_bag);
 void VoF_init_liu17_self_assembly_floating_cylinders_2d(Cart3d_bag *data_bag);
+void VoF_init_vertical_ice_slab(Cart3d_bag *data_bag);
+void VoF_init_horizontal_ice_layer(Cart3d_bag *data_bag);
 void VoF_init_axisymmetric_capillary_bridge_two_spheres(Cart3d_bag *data_bag);
 void VoF_init_nguyen21_axisymmetric_static_bridge(Cart3d_bag *data_bag);
 //Below are all the low-level functions implemented from Basilisk's geometry.h file used to compute the interface normals and to reconstruct the interface (PLIC)
