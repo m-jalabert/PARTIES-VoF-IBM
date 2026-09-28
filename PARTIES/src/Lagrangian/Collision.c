@@ -62,6 +62,65 @@ void Collision_fill_bag_particle(Collision_bag *bag, double center_distance,
 		double surface_distance, Parameters *params);
 void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 		double center_distance, double surface_distance, Parameters *params);
+static double Collision_geom_dot(const double *a, const double *b);
+static double Collision_geom_dist_sq(const double *a, const double *b);
+static int Collision_wall_dim_is_active(int dim);
+static void Collision_project_twod_particle(Particle *p);
+static void Collision_zero_small_tangent(Collision_bag *bag);
+
+
+static double Collision_geom_dot(const double *a, const double *b) {
+#ifdef TWOD_CARTESIAN
+	return a[0] * b[0] + a[1] * b[1];
+#else
+	return DOT(a, b);
+#endif
+}
+
+
+static double Collision_geom_dist_sq(const double *a, const double *b) {
+#ifdef TWOD_CARTESIAN
+	return (a[0] - b[0]) * (a[0] - b[0]) +
+	       (a[1] - b[1]) * (a[1] - b[1]);
+#else
+	return PP_DIST_SQ(a, b);
+#endif
+}
+
+
+static int Collision_wall_dim_is_active(int dim) {
+#ifdef TWOD_CARTESIAN
+	return dim < 2;
+#else
+	return 1;
+#endif
+}
+
+
+static void Collision_project_twod_particle(Particle *p) {
+#ifdef TWOD_CARTESIAN
+	p->Fc[2] = 0.0;
+	p->Tc[0] = 0.0;
+	p->Tc[1] = 0.0;
+#ifdef POST_PROCESS
+	p->Fc_norm[2] = 0.0;
+	p->Fc_tan[2]  = 0.0;
+	p->Fl_norm[2] = 0.0;
+	p->Fl_tan[2]  = 0.0;
+#endif
+#else
+	(void)p;
+#endif
+}
+
+
+static void Collision_zero_small_tangent(Collision_bag *bag) {
+	if (bag->gt_cp_norm < MIN_GT_CP_NORM) {
+		bag->t[0] = 0.0;
+		bag->t[1] = 0.0;
+		bag->t[2] = 0.0;
+	}
+}
 
 
 /******************************************************************************/
@@ -181,10 +240,10 @@ Particle_list *Collision_evaluate(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	p = p_mobile_list -> start;
 	while (p != NULL) {
 
-		Collision_particle(p, p_mobile_list->start, COLL_STAGE_MOBILE, grid, params);
-		Collision_particle(p, p_fixed_list->start, COLL_STAGE_FIXED, grid, params);
-		Collision_particle(p, p_mobile_list_foreign->start, COLL_STAGE_FOREIGN, grid, params);
-		Collision_wall(p, grid, params);
+		Collision_particle(p, p_mobile_list->start, COLL_STAGE_MOBILE, data_bag);
+		Collision_particle(p, p_fixed_list->start, COLL_STAGE_FIXED, data_bag);
+		Collision_particle(p, p_mobile_list_foreign->start, COLL_STAGE_FOREIGN, data_bag);
+		Collision_wall(p, data_bag);
 		p = p -> next;
 	}
 	//--------------------------------------------------------------------------
@@ -193,8 +252,8 @@ Particle_list *Collision_evaluate(Cart3d_bag *data_bag, Debug_trace *dtrace) {
 	p = p_mobile_list_foreign->start;
 	while (p != NULL) {
 
-		Collision_particle(p, p_fixed_list->start, COLL_STAGE_FIXED, grid, params);
-		Collision_particle(p, p_mobile_list_foreign->start, COLL_STAGE_FOREIGN, grid, params);
+		Collision_particle(p, p_fixed_list->start, COLL_STAGE_FIXED, data_bag);
+		Collision_particle(p, p_mobile_list_foreign->start, COLL_STAGE_FOREIGN, data_bag);
 		p = p -> next;
 	}
 	T2 = MPI_Wtime();
@@ -216,10 +275,17 @@ Particle_list *Collision_evaluate(Cart3d_bag *data_bag, Debug_trace *dtrace) {
  */
 /******************************************************************************/
 void Collision_particle(Particle *p, Particle *p_start, int stage,
-		MAC_grid *grid, Parameters *params) {
+		Cart3d_bag *data_bag) {
 
 	int i;
 	char message[500];
+	MAC_grid *grid = data_bag->grid;
+	Parameters *params = data_bag->params;
+#ifdef VOF
+	VolumeFraction *vof = data_bag->vof;
+#else
+	VolumeFraction *vof = NULL;
+#endif
 
 	// "Other" particle for looping through stages
 	Particle *p2;
@@ -300,14 +366,19 @@ void Collision_particle(Particle *p, Particle *p_start, int stage,
 		center_cutoff_dist = p->R + p2->R + collision_offset;
 		center_cutoff_dist_sq = center_cutoff_dist * center_cutoff_dist;
 
-		center_distance_sq = PP_DIST_SQ(p->X, p2->X);
+		center_distance_sq = Collision_geom_dist_sq(p->X, p2->X);
 		if (center_distance_sq <= center_cutoff_dist_sq) { // we're in contact
 
 			center_distance = sqrt(center_distance_sq);
 
 			// Point in the middle between particle surfaces
-			temp = 0.5 * (center_distance + p->R - p2->R) / center_distance;
+			temp = 0.5;
+			if (center_distance > MIN_GT_CP_NORM)
+				temp = 0.5 * (center_distance + p->R - p2->R) / center_distance;
 			FORI3 midpoint[i] = p->X[i] + temp * (p2->X[i] - p->X[i]);
+#ifdef TWOD_CARTESIAN
+			midpoint[2] = grid->zc[grid->G_Ks];
+#endif
 
 			// Find out if this processor is supposed to own this collision
 			if (Collision_check_ownership(midpoint, stage, grid)) {
@@ -371,6 +442,8 @@ void Collision_particle(Particle *p, Particle *p_start, int stage,
 #elif defined LIN_TAN
 				lin_tan(pc, pc2, bag, params);
 #endif
+				Collision_project_twod_particle(p);
+				Collision_project_twod_particle(p2);
 
 			} // if processor owns collision
 		} // if particles in contact
@@ -397,8 +470,13 @@ void Collision_particle(Particle *p, Particle *p_start, int stage,
 				center_distance = sqrt(center_distance_sq);
 
 				// Point in the middle between particle surfaces
-				temp = 0.5 * (center_distance + p->R - p2->R) / center_distance;
+				temp = 0.5;
+				if (center_distance > MIN_GT_CP_NORM)
+					temp = 0.5 * (center_distance + p->R - p2->R) / center_distance;
 				FORI3 midpoint[i] = p->X[i] + temp * (p2->X[i] - p->X[i]);
+#ifdef TWOD_CARTESIAN
+				midpoint[2] = grid->zc[grid->G_Ks];
+#endif
 
 				// Find out if this processor is supposed to own this collision
 				if (Collision_check_ownership(midpoint, stage, grid)) {
@@ -412,7 +490,9 @@ void Collision_particle(Particle *p, Particle *p_start, int stage,
 					// Lubrication force
 					//----------------------------------------------------------
 					if (surface_distance <= params->lub_range * h) {
-						lubrication(bag, h, params);
+						lubrication(bag, h, params, grid, vof);
+						Collision_project_twod_particle(p);
+						Collision_project_twod_particle(p2);
 					}
 	#endif
 	#ifdef COHESION
@@ -451,10 +531,17 @@ void Collision_particle(Particle *p, Particle *p_start, int stage,
  * Assumes uniform square grid
  */
 /******************************************************************************/
-void Collision_wall(Particle *p, MAC_grid *grid, Parameters *params) {
+void Collision_wall(Particle *p, Cart3d_bag *data_bag) {
 
 #ifdef STORE_COLLISION
 	Collision *pc;
+#endif
+	MAC_grid *grid = data_bag->grid;
+	Parameters *params = data_bag->params;
+#ifdef VOF
+	VolumeFraction *vof = data_bag->vof;
+#else
+	VolumeFraction *vof = NULL;
 #endif
 
 	Collision_bag *bag = (Collision_bag *)malloc(sizeof(Collision_bag));
@@ -515,6 +602,9 @@ int count =0;
 
 	// 'dim': {x, y, z} = {0, 1, 2}
 	for (dim = dim_start; dim <= dim_end; dim++) {
+		if (!Collision_wall_dim_is_active(dim)) {
+			continue;
+		}
 		if (dim ==1 && count ==1){
   		  continue;
   	  }
@@ -573,6 +663,7 @@ int count =0;
 #elif defined LIN_TAN
 				lin_tan(pc, NULL, bag, params);
 #endif
+				Collision_project_twod_particle(p);
 
 			} // if particles in contact
 			else {
@@ -593,7 +684,8 @@ int count =0;
 					// Lubrication force
 					//----------------------------------------------------------
 					if (surface_distance <= params->lub_range * h) {
-						lubrication(bag, h, params);
+						lubrication(bag, h, params, grid, vof);
+						Collision_project_twod_particle(p);
 					}
 	#endif
 	#ifdef ELECTROSTATIC_REPULSION
@@ -698,13 +790,18 @@ int Collision_check_ownership(double *midpoint, int stage, MAC_grid *grid) {
 	double G_xmax = grid -> xu[min(grid -> G_Ie, grid -> NX - 1)];
 	double G_ymin = grid -> yv[grid -> G_Js];
 	double G_ymax = grid -> yv[min(grid -> G_Je, grid -> NY - 1)];
+#ifndef TWOD_CARTESIAN
 	double G_zmin = grid -> zw[grid -> G_Ks];
 	double G_zmax = grid -> zw[min(grid -> G_Ke, grid -> NZ - 1)];
+#endif
 
 	// Check if midpoint is out of bounds
 	if( midpoint[0] < G_xmin || midpoint[0] >= G_xmax ||
-	    midpoint[1] < G_ymin || midpoint[1] >= G_ymax ||
-	    midpoint[2] < G_zmin || midpoint[2] >= G_zmax ) {
+	    midpoint[1] < G_ymin || midpoint[1] >= G_ymax
+#ifndef TWOD_CARTESIAN
+	    || midpoint[2] < G_zmin || midpoint[2] >= G_zmax
+#endif
+	    ) {
 
 		return 0;
 	}
@@ -961,26 +1058,53 @@ void Collision_fill_bag_particle(Collision_bag *bag, double center_distance,
 #endif
 
 	bag -> surface_distance = surface_distance;
+	bag -> lub_liquid_fraction = 1.0;
+	bag -> lub_viscosity_ratio = 1.0;
 
 	// Calculate relative translational velocity
 	FORI3 g[i] = p->U[i] - p2->U[i];
+#ifdef TWOD_CARTESIAN
+	g[2] = 0.0;
+#endif
 #ifdef ATFM
 	FORI3 g_old[i] = p->U_old[i] - p2->U_old[i];
+#ifdef TWOD_CARTESIAN
+	g_old[2] = 0.0;
+#endif
 #endif
 
 	// Calculate normal vector from center of 'p' to center of 'p2'
-	FORI3 n[i] = (p2->X[i] - p->X[i]) / center_distance;
+	if (center_distance > MIN_GT_CP_NORM) {
+		FORI3 n[i] = (p2->X[i] - p->X[i]) / center_distance;
+	}
+	else {
+		n[0] = 1.0;
+		n[1] = 0.0;
+		n[2] = 0.0;
+	}
+#ifdef TWOD_CARTESIAN
+	n[2] = 0.0;
+#endif
 
 	// Calculate relative normal input velocity in direction 'n'
-	bag -> g_dot_n = DOT(n, g);
+	bag -> g_dot_n = Collision_geom_dot(n, g);
 
 	// Normal component of relative translational velocity
 	FORI3 gn[i] = bag->g_dot_n * n[i];
+#ifdef TWOD_CARTESIAN
+	gn[2] = 0.0;
+#endif
 
 	// Tangential component of relative translational velocity
 	FORI3 gt[i] = g[i] - gn[i];
+#ifdef TWOD_CARTESIAN
+	gt[2] = 0.0;
+#endif
 #ifdef ATFM
-	FORI3 gt_old[i] = g_old[i] - DOT(n, g_old);
+	FORI3 gt_old[i] = g_old[i] - Collision_geom_dot(n, g_old) * n[i];
+#ifdef TWOD_CARTESIAN
+	gt_old[2] = 0.0;
+#endif
 #endif
 
 	// Distance (radius) of contact point from particles 'p' and 'p2'
@@ -991,17 +1115,26 @@ void Collision_fill_bag_particle(Collision_bag *bag, double center_distance,
 	bag -> R_cp  = R_cp;
 	bag -> R2_cp = R2_cp;
 
+#ifdef TWOD_CARTESIAN
+	Om_cross_R[0] = -(R_cp * Omega[2] + R2_cp * Omega2[2]) * n[1];
+	Om_cross_R[1] =  (R_cp * Omega[2] + R2_cp * Omega2[2]) * n[0];
+	Om_cross_R[2] = 0.0;
+#else
 	Om_cross_R[0] = R_cp  * (Omega[1]  * n[2] - Omega[2]  * n[1])
 	              + R2_cp * (Omega2[1] * n[2] - Omega2[2] * n[1]);
 	Om_cross_R[1] = R_cp  * (Omega[2]  * n[0] - Omega[0]  * n[2])
 	              + R2_cp * (Omega2[2] * n[0] - Omega2[0] * n[2]);
 	Om_cross_R[2] = R_cp  * (Omega[0]  * n[1] - Omega[1]  * n[0])
 	              + R2_cp * (Omega2[0] * n[1] - Omega2[1] * n[0]);
+#endif
 
 	// Tangential component of relative velocity of contact point
 	gt_cp[0] =  gt[0] + Om_cross_R[0];
 	gt_cp[1] =  gt[1] + Om_cross_R[1];
 	gt_cp[2] =  gt[2] + Om_cross_R[2];
+#ifdef TWOD_CARTESIAN
+	gt_cp[2] = 0.0;
+#endif
 #ifdef ATFM
 	gt_cp_old[0] =  gt_old[0] + R_cp  * (Omega_old[1]  * n[2] - Omega_old[2]  * n[1])
 	                          + R2_cp * (Omega2_old[1] * n[2] - Omega2_old[2] * n[1]);
@@ -1012,13 +1145,30 @@ void Collision_fill_bag_particle(Collision_bag *bag, double center_distance,
 #endif
 
 	// Magnitude of contact point velocity
-	bag->gt_cp_norm = sqrt(DOT(gt_cp, gt_cp));
+	bag->gt_cp_norm = sqrt(Collision_geom_dot(gt_cp, gt_cp));
 #ifdef ATFM
-	bag->gt_cp_norm_old = sqrt(DOT(gt_cp_old, gt_cp_old));
+	bag->gt_cp_norm_old = sqrt(Collision_geom_dot(gt_cp_old, gt_cp_old));
 #endif
 
 	// Tangential unit normal
-	FORI3 t[i] = gt_cp[i] / bag->gt_cp_norm;
+	if (bag->gt_cp_norm >= MIN_GT_CP_NORM) {
+		FORI3 t[i] = gt_cp[i] / bag->gt_cp_norm;
+	}
+	else {
+		FORI3 t[i] = 0.0;
+	}
+#ifdef TWOD_CARTESIAN
+	t[2] = 0.0;
+#endif
+
+	double contact_scale = 0.5;
+	if (center_distance > MIN_GT_CP_NORM)
+		contact_scale = 0.5 * (center_distance + p->R - p2->R) / center_distance;
+	FORI3 bag->contact_point[i] = p->X[i] + contact_scale * (p2->X[i] - p->X[i]);
+#ifdef TWOD_CARTESIAN
+	bag->contact_point[2] = p->X[2];
+#endif
+	Collision_zero_small_tangent(bag);
 }
 
 
@@ -1055,6 +1205,8 @@ void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 #endif
 
 	bag -> surface_distance = surface_distance;
+	bag -> lub_liquid_fraction = 1.0;
+	bag -> lub_viscosity_ratio = 1.0;
 	int wall_ID = Collision_get_wall_ID(dim, side);
 
 	// Wall velocity, if enabled
@@ -1067,9 +1219,15 @@ void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 	// Normal vector from particle to wall
 	FORI3 n[i] = 0.0;
 	n[dim] = side;
+#ifdef TWOD_CARTESIAN
+	n[2] = 0.0;
+#endif
 
 	// Calculate relative translational velocity
 	FORI3 g[i] = p->U[i];
+#ifdef TWOD_CARTESIAN
+	g[2] = 0.0;
+#endif
 #ifdef DOWNWARD_MOVING_WALL
 	if (wall_ID == WALL_ID_YMAX) {
 		g[1] = p->U[1] - (params->vel_init_y0 - params->ymax) / params->time_max;
@@ -1077,11 +1235,17 @@ void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 #endif
 #ifdef ATFM
 	FORI3 g_old[i] = p->U_old[i];
+#ifdef TWOD_CARTESIAN
+	g_old[2] = 0.0;
+#endif
 #endif
 
 	// Normal component of relative translational velocity
 	FORI3 gn[i] = 0.0;
 	gn[dim] = g[dim];
+#ifdef TWOD_CARTESIAN
+	gn[2] = 0.0;
+#endif
 
 	// Calculate relative normal input velocity in direction 'n'
 	bag->g_dot_n = n[dim] * gn[dim];
@@ -1092,8 +1256,14 @@ void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 	FORI3 gt_old[i] = g_old[i];
 #endif
 	gt[dim] = 0;
+#ifdef TWOD_CARTESIAN
+	gt[2] = 0.0;
+#endif
 #ifdef ATFM
 	gt_old[dim] = 0;
+#ifdef TWOD_CARTESIAN
+	gt_old[2] = 0.0;
+#endif
 #endif
 #ifdef BOTTOM_WALL_VELOCITY
 	if (wall_ID == WALL_ID_YMIN) {
@@ -1112,9 +1282,15 @@ void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 	bag -> R_cp = R_cp;
 
 	// Relative rotational velocity of particle and wall
+#ifdef TWOD_CARTESIAN
+	Om_cross_R[0] = -R_cp * Omega[2] * n[1];
+	Om_cross_R[1] =  R_cp * Omega[2] * n[0];
+	Om_cross_R[2] = 0.0;
+#else
 	Om_cross_R[0] = R_cp * (Omega[1] * n[2] - Omega[2] * n[1]);
 	Om_cross_R[1] = R_cp * (Omega[2] * n[0] - Omega[0] * n[2]);
 	Om_cross_R[2] = R_cp * (Omega[0] * n[1] - Omega[1] * n[0]);
+#endif
 
 	// Freeslip boundary condition -> zero tangential motion
 #ifdef BOTTOM_WALL_VELOCITY_FREESLIP
@@ -1134,6 +1310,9 @@ void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 	gt_cp[0] = gt[0] + Om_cross_R[0];
 	gt_cp[1] = gt[1] + Om_cross_R[1];
 	gt_cp[2] = gt[2] + Om_cross_R[2];
+#ifdef TWOD_CARTESIAN
+	gt_cp[2] = 0.0;
+#endif
 #ifdef ATFM
 	gt_cp_old[0] = gt_old[0] + R_cp * (Omega_old[1] * n[2] - Omega_old[2] * n[1]);
 	gt_cp_old[1] = gt_old[1] + R_cp * (Omega_old[2] * n[0] - Omega_old[0] * n[2]);
@@ -1142,11 +1321,26 @@ void Collision_fill_bag_wall(Collision_bag *bag, int dim, int side,
 
 
 	// Magnitude of contact point velocity
-	bag->gt_cp_norm = sqrt(DOT(gt_cp, gt_cp));
+	bag->gt_cp_norm = sqrt(Collision_geom_dot(gt_cp, gt_cp));
 #ifdef ATFM
-	bag->gt_cp_norm_old = sqrt(DOT(gt_cp_old, gt_cp_old));
+	bag->gt_cp_norm_old = sqrt(Collision_geom_dot(gt_cp_old, gt_cp_old));
 #endif
 
 	// Tangential unit normal
-	FORI3 t[i] = gt_cp[i] / bag->gt_cp_norm;
+	if (bag->gt_cp_norm >= MIN_GT_CP_NORM) {
+		FORI3 t[i] = gt_cp[i] / bag->gt_cp_norm;
+	}
+	else {
+		FORI3 t[i] = 0.0;
+	}
+#ifdef TWOD_CARTESIAN
+	t[2] = 0.0;
+#endif
+
+	double gap_half = max(surface_distance, 0.0) * 0.5;
+	FORI3 bag->contact_point[i] = p->X[i] + (p->R + gap_half) * n[i];
+#ifdef TWOD_CARTESIAN
+	bag->contact_point[2] = p->X[2];
+#endif
+	Collision_zero_small_tangent(bag);
 }

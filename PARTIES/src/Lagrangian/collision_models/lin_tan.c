@@ -55,6 +55,106 @@ void lin_tan(Collision *pc, Collision *pc2, Collision_bag *bag, Parameters *para
 #endif
 	double temp;
 
+#ifdef TWOD_CARTESIAN
+	{
+		double tangent[3] = {-n[1], n[0], 0.0};
+		double tangent_norm = sqrt(tangent[0] * tangent[0] +
+		                           tangent[1] * tangent[1]);
+
+		if (tangent_norm < EPS || kt <= 0.0) {
+			DSET_ZERO(zeta_t, 3);
+			DSET_ZERO(zeta_t_old, 3);
+			return;
+		}
+
+		tangent[0] /= tangent_norm;
+		tangent[1] /= tangent_norm;
+
+		if (gt_cp[0] * tangent[0] + gt_cp[1] * tangent[1] < 0.0) {
+			tangent[0] = -tangent[0];
+			tangent[1] = -tangent[1];
+		}
+
+		double zeta_old_s = zeta_t_old[0] * tangent[0] +
+		                    zeta_t_old[1] * tangent[1];
+		zeta_t_old[0] = zeta_old_s * tangent[0];
+		zeta_t_old[1] = zeta_old_s * tangent[1];
+		zeta_t_old[2] = 0.0;
+
+		zeta_t[0] = zeta_t_old[0] + dt_sub * gt_cp[0];
+		zeta_t[1] = zeta_t_old[1] + dt_sub * gt_cp[1];
+		zeta_t[2] = 0.0;
+
+		double zeta_s = zeta_t[0] * tangent[0] +
+		                zeta_t[1] * tangent[1];
+		zeta_t[0] = zeta_s * tangent[0];
+		zeta_t[1] = zeta_s * tangent[1];
+
+		tan_force[0] = -kt * zeta_t[0] - dt * gt_cp[0];
+		tan_force[1] = -kt * zeta_t[1] - dt * gt_cp[1];
+		tan_force[2] = 0.0;
+
+		double mu = (pc->type == SLIDING) ? params->mu_k : params->mu_s;
+		double tan_force_norm = sqrt(tan_force[0] * tan_force[0] +
+		                             tan_force[1] * tan_force[1]);
+		double friction_force = mu * bag->normal_force_norm;
+
+		if (tan_force_norm > friction_force && tan_force_norm > EPS) {
+			pc->type = SLIDING;
+			temp = friction_force / tan_force_norm;
+			tan_force[0] *= temp;
+			tan_force[1] *= temp;
+
+			zeta_t[0] = -(tan_force[0] + dt * gt_cp[0]) / kt;
+			zeta_t[1] = -(tan_force[1] + dt * gt_cp[1]) / kt;
+			zeta_t[2] = 0.0;
+		}
+		else {
+			pc->type = ROLLING;
+		}
+
+		p->Fc[0] += tan_force[0];
+		p->Fc[1] += tan_force[1];
+		p->Fc[2] = 0.0;
+#ifdef POST_PROCESS
+		p->Fc_tan[0] += tan_force[0];
+		p->Fc_tan[1] += tan_force[1];
+		p->Fc_tan[2] = 0.0;
+#endif
+		p->Tc[2] += R_cp * (n[0] * tan_force[1] -
+		                     n[1] * tan_force[0]);
+		p->Tc[0] = 0.0;
+		p->Tc[1] = 0.0;
+
+		if (p2 != NULL) {
+			p2->Fc[0] -= tan_force[0];
+			p2->Fc[1] -= tan_force[1];
+			p2->Fc[2] = 0.0;
+#ifdef POST_PROCESS
+			p2->Fc_tan[0] -= tan_force[0];
+			p2->Fc_tan[1] -= tan_force[1];
+			p2->Fc_tan[2] = 0.0;
+#endif
+			p2->Tc[2] += R2_cp * (n[0] * tan_force[1] -
+			                       n[1] * tan_force[0]);
+			p2->Tc[0] = 0.0;
+			p2->Tc[1] = 0.0;
+		}
+
+		if (pc2 != NULL) {
+			pc2->type = pc->type;
+			pc2->zeta_t[0] = -zeta_t[0];
+			pc2->zeta_t[1] = -zeta_t[1];
+			pc2->zeta_t[2] = 0.0;
+			pc2->zeta_t_old[0] = -zeta_t_old[0];
+			pc2->zeta_t_old[1] = -zeta_t_old[1];
+			pc2->zeta_t_old[2] = 0.0;
+		}
+
+		return;
+	}
+#endif
+
 // 	//--------------------------------------------------------------------------
 // 	// The stiffness coefficient 'kt' is chosen to relate the half period of
 //     // oscillation to the collision time 'Tc' [Shäfer, Dippel, and Wolf,
