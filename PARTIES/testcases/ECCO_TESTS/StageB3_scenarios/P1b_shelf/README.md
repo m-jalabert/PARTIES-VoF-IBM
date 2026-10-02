@@ -13,6 +13,9 @@ The full design, pre-flight criteria and run record are in
 | `gate/` | 1-D kernel-gate variants and `reference.json` (exact binary-Stefan solution) |
 | `job_gate_smoke.sh`, `analyze_gate.py`, `check_smoke.py` | Pre-flight job and its checks |
 | `job.sh` | Production job (`CASE=ctrl` for the control) |
+| `analyze_p1b.py` | Post-run analysis of P1b against both controls (figures F1–F5, CSVs, `summary.json`) |
+| `make_videos_p1b.py`, `results_20977443/videos/` | 2-D and 3-D MP4 videos of P1b |
+| `RESULTS_20977443.md`, `results_20977443/` | **Results of the completed production segment** (jobs 20977443/44 and 20973341) |
 
 Stage a copy under `/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/`
 and submit from there; each job writes a job-unique run directory.

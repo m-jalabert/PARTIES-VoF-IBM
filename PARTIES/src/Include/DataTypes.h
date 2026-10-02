@@ -688,6 +688,7 @@ struct parameters {
 	double sublayer_ell_T;       // erf length of the thermal sublayer
 	double sublayer_ell_S;       // erf length of the salt sublayer
 	double sublayer_s_interface; // liquid salinity at the ice interface
+	double sublayer_y0;          // optional sublayer anchor (default: VOF interface)
 
 };
 typedef struct parameters Parameters;

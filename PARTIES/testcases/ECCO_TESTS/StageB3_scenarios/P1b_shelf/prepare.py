@@ -46,6 +46,18 @@ LX, LY, LZ = 8.0, 22.0, 8.0
 Y_INT = 20.0                 # ice occupies y in [20, 22]
 GAP = 0.35                   # grain top below y_int, clear of the tanh band
 T_END, DT_FIELD, DT_MAX, DT_START = 30.0, 0.1, 0.005, 0.0005
+# Band salt treatment for the production decks.
+#  * Gate round 1 (job 20950025): default operator, lambda +94% with liquid-
+#    referenced salinity, -9% without.  Liquid referencing ALSO stalls the
+#    Poisson loop with a resolved grain (divides by C_L ~ 0 in the sediment).
+#  * Gate round 2 (job 20971700): Yang operator exact to 0.2% in 1-D, but P1b
+#    job 20973340 showed it is UNSTABLE with a moving resolved grain: at the
+#    support cells (C_L = 0 beside water) its 1/(F+delta) factor is ~1e6 and the
+#    Crank-Nicolson split does not damp it; S blew up from t~0.3, abort t=0.738.
+#  * P1b therefore uses the default operator without liquid referencing (B.2-
+#    validated for moving grains; the tracer, which uses it, stayed bounded in
+#    20973340).  Known cost: band kernel lambda -9%, interface salinity wrong.
+BAND = dict(yang_salt_transport=0, liquid_referenced_salinity=0)
 
 
 def rho(sa, ct):
@@ -195,7 +207,8 @@ def main():
 
     gate = dict()
     for name, n in [('G1_sliq1_n24', 24), ('G0_sliq0_n24', 24),
-                    ('G1_sliq1_n24_halfdt', 24), ('G1_sliq1_n32', 32)]:
+                    ('G1_sliq1_n24_halfdt', 24), ('G1_sliq1_n32', 32),
+                    ('G2_yang_n24', 24), ('G2_yang_n32', 32)]:
         gate[name] = n
     ref = stefan_similarity(pe_t, pe_s, st, t_melt, lam_liq)
 
@@ -238,8 +251,7 @@ def main():
         numerics=dict(Cn=cn, melt_band_eps=2 * cn, Pe_CH=0.9 / cn, darcy_tau=1e-3,
                       max_dt=DT_MAX, default_dt=DT_START, cfl=0.3, T_END=T_END, T_END_s=T_END * tref,
                       field_interval=DT_FIELD, melt_relaxation_time=relax,
-                      ch_explicit_dt_limit=ch_dt_limit, liquid_referenced_salinity=1,
-                      yang_salt_transport=0, F_release=-1.0),
+                      ch_explicit_dt_limit=ch_dt_limit, **BAND, F_release=-1.0),
         cost=dict(su_per_cell_step_P1a=su_step_p1a, nominal_steps=steps, nominal_SU=su,
                   SU_with_30pct=1.3 * su, storage_GB_per_frame=cells * (526102296 + 235839912) / 2211840 / 1e9,
                   frames=int(T_END / DT_FIELD) + 1),
@@ -254,7 +266,7 @@ def main():
     base = BASE.read_text()
     phys = dict(Re=re_, stefan=st, T_melt=t_melt, liquidus_slope=lam_liq,
                 melt_band_eps=2 * cn, Cn=cn, Pe_CH=0.9 / cn,
-                meltwater_tracer=1, yang_salt_transport=0, liquid_referenced_salinity=1,
+                meltwater_tracer=1, **BAND,
                 Pe='{' + ', '.join(map(repr, [pe_t, pe_s, pe_s])) + '}',
                 rho_s=rho_s, rho_prImp=rho_s, grav='{0.0, ' + repr(-gstar) + ', 0.0}',
                 F_release=-1.0, darcy_tau=1e-3, cfl=0.3,
@@ -272,6 +284,88 @@ def main():
     (HERE / 'p_fixed.inp').write_text('0\n')
     (HERE / 'stop.inp').write_text('0\n')
     (HERE / 'Boundary.scenario.h').write_bytes((B2 / 'Boundary.validation.h').read_bytes())
+
+    # ---------------- dev3 (2026-10-01): Yang repair at resolved sediment --------
+    # Small 4 x 13 x 4 d box with the P1b sublayer and a falling grain:
+    #   yang:  Yang operator to t=1.2 (build_v2 reproduces the blow-up, build_v3 must stay bounded)
+    #   noninv: default operator, 0.02 t.u., build_v2 vs build_v3 must be bit-identical
+    dev = dict(phys, xmax=4.0, ymax=13.0, zmax=4.0, NXM=96, NYM=312, NZM=96,
+               default_dt=DT_START, max_dt=DT_MAX, vof_slab_x0=repr(11.0 / 13.0),
+               conc_init_type='{36, 37, 38}', theta_ice=0.0, cbd0=1.0, cbd5=1.0, cbd2=1.0)
+    write_deck(HERE / 'dev3/yang/parties.inp', base,
+               dict(dev, yang_salt_transport=1, liquid_referenced_salinity=0, time_max=1.2,
+                    output_time_interval=0.2, output_time_interval_2d=0.2), sub,
+               '# dev3: Yang operator with a falling grain (repair test).\n')
+    write_deck(HERE / 'dev3/noninv/parties.inp', base,
+               dict(dev, yang_salt_transport=0, liquid_referenced_salinity=0, time_max=0.02,
+                    output_time_interval=0.01, output_time_interval_2d=0.01), sub,
+               '# dev3: default operator, build_v2 vs build_v3 bit-identity check.\n')
+    for v in ('yang', 'noninv'):
+        (HERE / 'dev3' / v / 'p_mobile.inp').write_text(f'1\n2.0 {11.0 - GAP - 0.5} 2.0 0.5\n')
+
+    # ---------------- follow-up variants (2026-10-01, after the P1b results) ----
+    # conc4: concentration study, lateral period 4 d (one grain per 4x4 d), same
+    #        physics/operator as P1b; per-area comparison with the 8 d control.
+    conc4 = dict(prod, xmax=4.0, zmax=4.0, NXM=96, NZM=96, time_max=18.5,
+                 output_time_interval=0.5, output_time_interval_2d=0.5)
+    write_deck(HERE / 'variants/conc4/parties.inp', base, conc4, sub,
+               '# P1b concentration variant: lateral period 4 d. See RESULTS_20977443.md sec. 6.\n')
+    (HERE / 'variants/conc4/p_mobile.inp').write_text(f'1\n2.0 {y_grain} 2.0 0.5\n')
+    # twin_lid_strat / twin_lid_uniform: no ice (vof_slab_x0=2 puts the VOF
+    #        interface above the box, F=1), no-slip lid at y=12; the sublayer
+    #        profiles are anchored at the lid via sublayer_y0 (build_v3 key).
+    #        uniform: T and S uniform (no buoyancy contrast), same passive
+    #        meltwater-tracer profile.  Separates ceiling hindrance from
+    #        stratification drag (RESULTS_20977443.md sec. 1).
+    lid = 12.0
+    twin = dict(prod, ymax=lid, NYM=int(lid * N_PER_D), vof_slab_x0=2.0, time_max=4.5,
+                output_time_interval=0.25, output_time_interval_2d=0.25)
+    tsub = dict(sub, sublayer_y0=repr(lid))
+    write_deck(HERE / 'variants/twin_lid_strat/parties.inp', base, twin, tsub,
+               '# No-ice twin: no-slip lid + P1b sublayer stratification. See RESULTS_20977443.md.\n')
+    uni = dict(twin, conc_init_type='{34, 35, 38}', theta_ice=1.0, cbd0=1.0, cbd2=1.0, cbd5=1.0)
+    write_deck(HERE / 'variants/twin_lid_uniform/parties.inp', base, uni, tsub,
+               '# No-ice twin: no-slip lid, uniform T and S, same passive tracer. See RESULTS_20977443.md.\n')
+    for v in ('twin_lid_strat', 'twin_lid_uniform'):
+        (HERE / 'variants' / v / 'p_mobile.inp').write_text(f'1\n{LX/2} {lid - GAP - 0.5} {LZ/2} 0.5\n')
+
+    # p2: refined precursor, 32 cells/d, default operator (pairs with P1b),
+    #     timestep cap halved (B.3.5), to t=12 (settling + landing + trail).
+    n2 = 32
+    cn2 = 0.75 / n2
+    p2 = dict(prod, NXM=int(LX * n2), NYM=int(LY * n2), NZM=int(LZ * n2), Cn=repr(cn2),
+              melt_band_eps=repr(2 * cn2), Pe_CH=repr(0.9 / cn2), max_dt=DT_MAX / 2,
+              default_dt=DT_START / 2, time_max=12.0, output_time_interval=0.2,
+              output_time_interval_2d=0.2)
+    write_deck(HERE / 'variants/p2/parties.inp', base, p2, sub,
+               '# P2: 32 cells/d refined precursor of P1b (default operator). See RESULTS_20977443.md.\n')
+    (HERE / 'variants/p2/p_mobile.inp').write_text(f'1\n{LX/2} {y_grain} {LZ/2} 0.5\n')
+
+    # Thin-strip controls (no grain => horizontally uniform; 4 cells wide):
+    # strip24_def validates the method against the full 8 x 8 d control 20977444;
+    # strip32_def is P2's control; strip24_yang is the control for P1b-Yang.
+    for name, n, band, tmax in [('strip24_def', 24, dict(yang_salt_transport=0), 18.5),
+                                ('strip32_def', 32, dict(yang_salt_transport=0), 12.0),
+                                ('strip24_yang', 24, dict(yang_salt_transport=1), 20.5)]:
+        cns = 0.75 / n
+        w = 4.0 / n
+        sd = dict(prod, xmax=repr(w), zmax=repr(w), NXM=4, NYM=int(LY * n), NZM=4, Cn=repr(cns),
+                  melt_band_eps=repr(2 * cns), Pe_CH=repr(0.9 / cns),
+                  max_dt=DT_MAX / (2 if n == 32 else 1), default_dt=DT_START / (2 if n == 32 else 1), time_max=tmax,
+                  output_time_interval=2.0, output_time_interval_2d=2.0, liquid_referenced_salinity=0,
+                  # The full no-grain control is quiescent (dissipation ~1e-14), so its buoyancy is pure
+                  # hydrostatics that never moves fluid; switching it off leaves the scalars unchanged
+                  # and avoids a pressure solve HYPRE cannot do on a 4-cell strip (jobs 21006078/79).
+                  eos_betaT=0.0, eos_betaS=0.0, **band)
+        write_deck(HERE / 'variants' / name / 'parties.inp', base, sd, sub,
+                   f'# Thin-strip no-grain control {name}. See RESULTS_20977443.md.\n')
+        (HERE / 'variants' / name / 'p_mobile.inp').write_text('0\n')
+
+    # p1b_yang: P1b with the Yang operator repaired at resolved sediment (build_v3).
+    write_deck(HERE / 'variants/p1b_yang/parties.inp', base,
+               dict(prod, yang_salt_transport=1, liquid_referenced_salinity=0), sub,
+               '# P1b with the repaired Yang operator (build_v3). See RESULTS_20977443.md.\n')
+    (HERE / 'variants/p1b_yang/p_mobile.inp').write_text(f'1\n{LX/2} {y_grain} {LZ/2} 0.5\n')
 
     # Matched ice-only control (no grain): same deck, coarser field cadence.
     # Difference fields P1b - control isolate what the grain does to the layer.
@@ -294,10 +388,32 @@ def main():
                  max_dt=DT_MAX / (2 if 'halfdt' in name else 1),
                  vof_slab_x0=0.5, Cn=repr(cng), melt_band_eps=repr(2 * cng), Pe_CH=repr(0.9 / cng),
                  conc_init_type='{34, 35, 0}', theta_ice=0.0, cbd0=1.0, cbd2=1.0, cbd5=1.0,
-                 eos_betaT=0.0, eos_betaS=0.0,
+                 eos_betaT=0.0, eos_betaS=0.0, yang_salt_transport=0,
                  liquid_referenced_salinity=0 if 'sliq0' in name else 1)
-        write_deck(HERE / 'gate' / name / 'parties.inp', base, g, None,
+        gsub = None
+        if 'yang' in name:
+            # Yang operator: S is the liquid salinity, S = 1 everywhere (init 37, unmasked)
+            g.update(yang_salt_transport=1, liquid_referenced_salinity=0, conc_init_type='{34, 37, 0}')
+            gsub = dict(sublayer_ell_T=1.0, sublayer_ell_S=1.0, sublayer_s_interface=1.0)
+        write_deck(HERE / 'gate' / name / 'parties.inp', base, g, gsub,
                    f'# P1b 1-D kernel gate {name}. See case.json gate block.\n')
+    # Poisson-stall diagnostics (smoke job 20950025 failed at step 1, stage 2):
+    # small 4 x 13 x 4 d box, first ~15 steps, one factor changed per run.
+    dl = dict(phys, xmax=4.0, ymax=13.0, zmax=4.0, NXM=96, NYM=312, NZM=96,
+              time_max=0.01, output_time_interval=1.0, output_time_interval_2d=1.0,
+              default_dt=DT_START, max_dt=DT_MAX, vof_slab_x0=repr(11.0 / 13.0),
+              conc_init_type='{36, 37, 38}', theta_ice=0.0, cbd0=1.0, cbd5=1.0, cbd2=1.0,
+              yang_salt_transport=0, liquid_referenced_salinity=1)
+    diag = {'D1_base': ({}, GAP), 'D2_gap3': ({}, 3.0), 'D3_nograin': ({}, None),
+            'D4_nobuoy': (dict(eos_betaT=0.0, eos_betaS=0.0), GAP), 'D5_Re81': (dict(Re=100 * re_), GAP),
+            'D6_yang': (dict(yang_salt_transport=1, liquid_referenced_salinity=0), GAP),
+            'D7_nomelt': (dict(stefan=0.0), GAP)}
+    for name, (extra, gap) in diag.items():
+        write_deck(HERE / 'diag' / name / 'parties.inp', base, dict(dl, **extra), sub,
+                   f'# P1b Poisson-stall diagnostic {name} (smoke 20950025 failure).\n')
+        (HERE / 'diag' / name / 'p_mobile.inp').write_text(
+            '0\n' if gap is None else f'1\n2.0 {11.0 - gap - 0.5} 2.0 0.5\n')
+
     (HERE / 'gate' / 'reference.json').write_text(json.dumps(dict(ref, Pe_T=pe_t, Pe_S=pe_s, St=st,
                                                                   T_melt=t_melt, liquidus_slope=lam_liq,
                                                                   y_interface=10.0), indent=2) + '\n')

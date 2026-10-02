@@ -30,8 +30,11 @@ def main():
     zeta = np.maximum(y_int - y, 0.0)
     fl = 0.5 * (1 - np.tanh((y - y_int) / (2 * np.sqrt(2) * cn)))
     s_liq = ini['s_interface'] + (1 - ini['s_interface']) * erf(zeta / ini['ell_S_d'])
+    yang = int(case['numerics'].get('yang_salt_transport', 0)) == 1
+    s_expected = s_liq if yang else fl * s_liq     # Yang: salt field is the liquid salinity
+    out['yang_salt_transport'] = yang
     out['ic_max_error'] = dict(theta=float(np.abs(th - erf(zeta / ini['ell_T_d'])).max()),
-                               salinity=float(np.abs(s - fl * s_liq).max()),
+                               salinity=float(np.abs(s - s_expected).max()),
                                tracer=float(np.abs(c - fl * (1 - s_liq)).max()),
                                liquid_fraction_vs_tanh=float(np.abs(F - fl).max()))
     out['tracer_min'] = float(c.min())

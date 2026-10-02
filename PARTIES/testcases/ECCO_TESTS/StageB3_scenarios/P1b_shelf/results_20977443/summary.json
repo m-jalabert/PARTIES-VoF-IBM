@@ -1,0 +1,189 @@
+{
+  "runs": {
+    "P1b": "/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/run_prod_20977443",
+    "ctrl": "/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/run_ctrl_20977444",
+    "ctrl_yang": "/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/run_ctrl_20973341"
+  },
+  "w_s_SN": 2.1356825051447843,
+  "t_ref_s": 0.02738200290972702,
+  "grain": {
+    "terminal_velocity": -1.965117658934047,
+    "terminal_over_ws_SN": 0.9201356728821571,
+    "terminal_m_s": 0.014353352202997324,
+    "lateral_drift_max": 5.502018848538324e-05,
+    "time_to_0p9_terminal": 1.304012696,
+    "depth_at_0p9_terminal": 2.6485657119937507,
+    "contact_time": 10.3540127,
+    "final": {
+      "t": 20.4990127,
+      "y": 0.5039223683512245,
+      "v": -0.008508463565134392
+    },
+    "min_bottom_gap": 0.003673977411477458,
+    "speed_at_depth": {
+      "1d": 0.5302975893534192,
+      "2d": 0.834064863534692,
+      "3d": 0.9226211565231818,
+      "4d": 0.9601193841918972,
+      "6d": 0.9865753030000554,
+      "8d": 0.995314027179671
+    },
+    "start_depth": 0.8500000000000014,
+    "decel_onset_bottom_gap": 1.379164936344353,
+    "gap_at_max_deceleration": 0.08122087018335133,
+    "note": "Approach to terminal mixes ceiling (no-slip ice) hindrance and stratification; not separable without a no-ice control."
+  },
+  "meltwater": {
+    "common_final_time": 18.299012696470076,
+    "excess_below_depth_d3": {
+      "2d": 0.297602638039075,
+      "4d": 0.519437985063742,
+      "6d": 0.4063247606565508,
+      "8d": 0.2454875534329929,
+      "12d": 0.11562035375483827
+    },
+    "excess_below_depth_grain_volumes": {
+      "2d": 0.568379171053283,
+      "4d": 0.9920534754310637,
+      "6d": 0.7760231299094561,
+      "8d": 0.46884669115675925,
+      "12d": 0.22081860986539312
+    },
+    "peak_excess_below_depth_grain_volumes": {
+      "2d": 0.7250479466493503,
+      "4d": 1.2563049954565606,
+      "6d": 0.8473625145007684,
+      "8d": 0.47393970433524457,
+      "12d": 0.22081860986539312
+    },
+    "deficit_top_2d_d3": -0.2892637264362062,
+    "total_change_d3": 0.008338911602868898,
+    "centroid_depth_of_excess_d": 9.371103224573309
+  },
+  "stratification_change_final": {
+    "max_abs_dS_mean": 0.002930547914447912,
+    "depth_of_max_dS": 1.8541666666666679,
+    "max_abs_dT_mean": 0.0023279856330377102,
+    "depth_of_max_dT": 3.8125
+  },
+  "dissipation": {
+    "time_integral_P1b": 532.3073665346536,
+    "time_integral_ctrl": 1.4824869792516513e-14,
+    "peak_rate_P1b": 58.25370720772125,
+    "t_peak": 9.299012696469486
+  },
+  "melt": {
+    "P1b": {
+      "final_t": 20.504012696469637,
+      "net_melt_d3": -0.33720123435466576,
+      "ice_more_than_0p5d_below_interface_max_d3": 0.004071328998121992
+    },
+    "ctrl": {
+      "final_t": 18.32401269647007,
+      "net_melt_d3": -0.37273982231707237,
+      "ice_more_than_0p5d_below_interface_max_d3": 3.790802666463861e-05
+    },
+    "ctrl_yang": {
+      "final_t": 15.434012696470445,
+      "net_melt_d3": 0.3373480970868883,
+      "ice_more_than_0p5d_below_interface_max_d3": 0.0005285760333767335
+    }
+  },
+  "operator_comparison": {
+    "t1": {
+      "deepest_depth_dtheta_gt_0p01_d": 0.8125,
+      "deepest_depth_dS_gt_0p01_d": 0.3958333333333357,
+      "dtheta_at_0p5d": 0.05314639491859379,
+      "dS_at_0p5d": -0.003886180215188913
+    },
+    "t3": {
+      "deepest_depth_dtheta_gt_0p01_d": 1.4791666666666679,
+      "deepest_depth_dS_gt_0p01_d": 0.6458333333333357,
+      "dtheta_at_0p5d": 0.11435941931341281,
+      "dS_at_0p5d": -0.028536970579745358
+    },
+    "t7": {
+      "deepest_depth_dtheta_gt_0p01_d": 2.3125,
+      "deepest_depth_dS_gt_0p01_d": 0.9791666666666679,
+      "dtheta_at_0p5d": 0.13722038749340426,
+      "dS_at_0p5d": -0.058804843709782686
+    },
+    "t12": {
+      "deepest_depth_dtheta_gt_0p01_d": 2.979166666666668,
+      "deepest_depth_dS_gt_0p01_d": 1.2291666666666679,
+      "dtheta_at_0p5d": 0.13941448891081237,
+      "dS_at_0p5d": -0.073729626873232
+    },
+    "t15": {
+      "deepest_depth_dtheta_gt_0p01_d": 3.354166666666668,
+      "deepest_depth_dS_gt_0p01_d": 1.3958333333333357,
+      "dtheta_at_0p5d": 0.138191989408158,
+      "dS_at_0p5d": -0.07800810843956817
+    }
+  },
+  "budgets": {
+    "P1b": {
+      "analyze_profiles": {
+        "start_time": 0.0,
+        "end_time": 20.504012696469637,
+        "profile_times": 415,
+        "max_time_gap": 0.050000000000008704,
+        "tracer_max_relative": 1.0131010978379917e-06,
+        "tracer_max_absolute": 1.912344771426433e-07,
+        "heat_max_relative": 1.1128573931607202e-09,
+        "salt_nonzero_tested": true,
+        "salt_max_relative": 2.368291152030238e-14,
+        "salt_max_absolute": 2.9103830456733704e-11,
+        "dissipation_integrated": 532.3685832324569,
+        "minimum_dissipation": 0.0
+      },
+      "salt_int_s_rel_drift_max": 2.375877272697835e-14,
+      "salt_int_FS_rel_drift_final": -0.004385213157303336,
+      "conserved_salt": "int s (default operator)",
+      "heat_drift_max_abs": 6.264841431402601e-06,
+      "tracer_minus_melt_max_abs": 1.912344771426433e-07
+    },
+    "ctrl": {
+      "analyze_profiles": {
+        "start_time": 0.0,
+        "end_time": 18.32401269647007,
+        "profile_times": 371,
+        "max_time_gap": 0.050000000000008704,
+        "tracer_max_relative": 7.740874769023511e-06,
+        "tracer_max_absolute": 2.885332285984532e-06,
+        "heat_max_relative": 6.537400172283217e-10,
+        "salt_nonzero_tested": true,
+        "salt_max_relative": 1.2211501252655915e-14,
+        "salt_max_absolute": 1.5006662579253316e-11,
+        "dissipation_integrated": 1.4857466733699192e-14,
+        "minimum_dissipation": 0.0
+      },
+      "salt_int_s_rel_drift_max": 1.2212453270876722e-14,
+      "salt_int_FS_rel_drift_final": -0.004070702671271631,
+      "conserved_salt": "int s (default operator)",
+      "heat_drift_max_abs": 3.6802402973989956e-06,
+      "tracer_minus_melt_max_abs": 2.885332285984532e-06
+    },
+    "ctrl_yang": {
+      "analyze_profiles": {
+        "start_time": 0.0,
+        "end_time": 15.434012696470445,
+        "profile_times": 313,
+        "max_time_gap": 0.050000000000008704,
+        "tracer_max_relative": 2.0103693998505846e-05,
+        "tracer_max_absolute": 6.781942914813044e-06,
+        "heat_max_relative": 5.794915577025818e-09,
+        "salt_nonzero_tested": true,
+        "salt_max_relative": 0.0027957027489071543,
+        "salt_max_absolute": 3.6544033821317043,
+        "dissipation_integrated": 1.4150013834153909e-14,
+        "minimum_dissipation": 0.0
+      },
+      "salt_int_s_rel_drift_max": 0.0027957027489071695,
+      "salt_int_FS_rel_drift_final": -1.354597477520869e-07,
+      "conserved_salt": "int (F+delta) S (Yang)",
+      "heat_drift_max_abs": 3.2622573598928284e-05,
+      "tracer_minus_melt_max_abs": 6.781942914813044e-06
+    }
+  }
+}

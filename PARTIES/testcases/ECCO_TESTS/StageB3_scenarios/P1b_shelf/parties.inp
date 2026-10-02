@@ -52,7 +52,7 @@ contact_angle_deg = 90.0
 
 [phase_change]
 yang_salt_transport = 0
-liquid_referenced_salinity = 1
+liquid_referenced_salinity = 0
 stefan = 0.019990838338197828
 T_melt = 0.7276761984583564
 liquidus_slope = 1.1904460049987977

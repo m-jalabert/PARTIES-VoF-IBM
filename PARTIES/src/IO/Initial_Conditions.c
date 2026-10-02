@@ -1681,6 +1681,8 @@ void Conc_init_ice_layer_S_ylinear(Concentration *c, Cart3d_bag *data_bag) {
  including the ice side of the band.  The tracer is the meltwater fraction of
  the liquid relative to the far water: with equal salt/tracer diffusivity,
  c + Flayer*s_liq/cbd5 = Flayer holds initially and c stays non-negative.
+ With yang_salt_transport = 1 the salt field is the LIQUID salinity (conserved
+ as (F+delta)*S), so kind 37 writes s_liq unmasked, also inside the ice.
  */
 /******************************************************************************/
 void Conc_init_ice_sublayer(int kind, Concentration *c, Cart3d_bag *data_bag) {
@@ -1699,6 +1701,10 @@ void Conc_init_ice_sublayer(int kind, Concentration *c, Cart3d_bag *data_bag) {
 	                                : params -> sublayer_ell_S;
 	const double s_i = params -> sublayer_s_interface;
 	const double s_far = params -> cbd5;
+	/* Sublayer anchor: the VOF ice interface, or sublayer_y0 when set (no-ice
+	 * twins put the interface above the box and anchor at the lid). */
+	const double y_ref = (params -> sublayer_y0 > params -> ymin)
+	                   ? params -> sublayer_y0 : y_int;
 
 	if (!(ell > 0.0) || (kind != 36 && !(s_far > 0.0)))
 		Display_error("Conc init 36/37/38 needs sublayer_ell_T/S > 0 and cbd5 > 0");
@@ -1710,7 +1716,7 @@ void Conc_init_ice_sublayer(int kind, Concentration *c, Cart3d_bag *data_bag) {
 	for (k = Ks; k < Ke; k++) {
 		for (j = Js; j < Je; j++) {
 
-			double zeta = fmax(y_int - yc[j], 0.0);
+			double zeta = fmax(y_ref - yc[j], 0.0);
 			double profile = erf(zeta / ell);
 			double flayer = 0.5 * (1.0 - tanh((yc[j] - y_int)
 			                                  / (denom + 1.0e-30)));
@@ -1721,7 +1727,12 @@ void Conc_init_ice_sublayer(int kind, Concentration *c, Cart3d_bag *data_bag) {
 				    + (params -> cbd0 - params -> theta_ice) * profile;
 			} else {
 				double s_liq = s_i + (s_far - s_i) * profile;
-				val = (kind == 37) ? flayer * s_liq
+				/* With yang_salt_transport the salt field IS the liquid
+				 * salinity (conserved as (F+delta)*S), so it is not masked;
+				 * the tracer keeps the volume-averaged convention. */
+				double mask = (kind == 37 && params -> yang_salt_transport)
+				            ? 1.0 : flayer;
+				val = (kind == 37) ? mask * s_liq
 				                   : flayer * (1.0 - s_liq / s_far);
 			}
 

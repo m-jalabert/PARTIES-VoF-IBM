@@ -195,10 +195,12 @@ CFG(conc, cbd5, 0.5, atof)  //
 // those init types; the defaults are inert.
 //   36 T:      theta_ice + (cbd0 - theta_ice)*erf(zeta/sublayer_ell_T)
 //   37 S:      F*[s_i + (cbd5 - s_i)*erf(zeta/sublayer_ell_S)], s_i = sublayer_s_interface
+//              (without the F mask when yang_salt_transport = 1: S is then the liquid salinity)
 //   38 tracer: F*(1 - s_liquid/cbd5), the meltwater fraction w.r.t. the far water
 CFG(conc, sublayer_ell_T, 1.0, atof)
 CFG(conc, sublayer_ell_S, 1.0, atof)
 CFG(conc, sublayer_s_interface, 1.0, atof)
+CFG(conc, sublayer_y0, -1.0e30, atof)  // > ymin: anchor zeta = sublayer_y0 - y here instead of the VOF interface (no-ice twins)
 
 
 //Initialization types:

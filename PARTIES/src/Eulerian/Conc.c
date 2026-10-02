@@ -58,6 +58,34 @@ static inline double Conc_yang_salt_face_capacity(double f1, double f2,
 		double delta) {
 	return delta + 0.5 * (Conc_clamped_liquid(f1) + Conc_clamped_liquid(f2));
 }
+
+/* Liquid fraction used as the Yang salt capacity.
+ *
+ * Without resolved sediment this is C_L.  With VOF_IBM the sediment-support
+ * cells carry C_L = 0 next to water, so 1/(F+delta) reaches ~1e6 there; the
+ * Crank-Nicolson split does not damp that and the salt field diverged at a
+ * moving grain (B.3 P1b, job 20973340).  Sediment is not ice: only ice
+ * excludes salt, so the capacity is 1 - ice = C_L + C_S, which keeps the
+ * grain an ordinary (extension) region of the salt operator.  Filled over the
+ * ghosted range on every call (C_S ghosts are computed directly, C_L halos are
+ * fresh from the VOF step); identical to C_L when no grain is present. */
+static double ***Conc_yang_capacity_field(Cart3d_bag *data_bag) {
+#ifdef VOF_IBM
+	static double ***buf = NULL;
+	MAC_grid *grid = data_bag->grid;
+	double ***cl = data_bag->vof->C_L;
+	double ***cs = data_bag->vof->C_S;
+	if (buf == NULL)
+		buf = Memory_allocate_flow_variable(grid, data_bag->params);
+	for (int k = grid->L_Ks; k < grid->L_Ke; k++)
+		for (int j = grid->L_Js; j < grid->L_Je; j++)
+			for (int i = grid->L_Is; i < grid->L_Ie; i++)
+				buf[k][j][i] = cl[k][j][i] + cs[k][j][i];
+	return buf;
+#else
+	return data_bag->vof->C_L;
+#endif
+}
 #endif
 
 
@@ -2371,7 +2399,11 @@ void Conc_compute_yang_salt_source(Cart3d_bag *data_bag) {
 	const double delta = params->yang_salt_delta;
 
 	double ***S = data_bag->c[1]->data;
+#ifdef CONC_VOF_PHASEWEIGHTED
+	double ***F = Conc_yang_capacity_field(data_bag);
+#else
 	double ***F = vof->C_L;
+#endif
 	double ***melt = vof->melt_src;
 	double ***src = vof->yang_salt_src;
 	double ***src_old = vof->yang_salt_src_old;
@@ -3820,7 +3852,8 @@ int Conc_solve_cg(int iconc, Cart3d_bag *data_bag) {
 #endif
 
 #ifdef CONC_VOF_PHASEWEIGHTED
-	double ***fliq = data_bag->vof->C_L;
+	double ***fliq = (params->yang_salt_transport && iconc == 1)
+	                ? Conc_yang_capacity_field(data_bag) : data_bag->vof->C_L;
 #else
 	double ***fliq = NULL;
 #endif
@@ -4492,9 +4525,9 @@ void Conc_set_conv_viscous_central_mixed(int iconc, Cart3d_bag *data_bag) {
 #ifdef CONC_VOF_PHASEWEIGHTED
 	// Liquid fraction (fresh halos from the VOF_DIFFUSE step) and the
 	// per-field ice/liquid diffusivity ratio for the face-weighted kappa(F).
-	double ***fliq = data_bag->vof->C_L;
-	const double kr_phase = Conc_phase_kappa_ratio(params, iconc);
 	const int yang_salt = params->yang_salt_transport && iconc == 1;
+	double ***fliq = yang_salt ? Conc_yang_capacity_field(data_bag) : data_bag->vof->C_L;
+	const double kr_phase = Conc_phase_kappa_ratio(params, iconc);
 	const double yang_delta = params->yang_salt_delta;
 #endif
 

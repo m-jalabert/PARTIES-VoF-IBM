@@ -1,0 +1,16 @@
+{
+  "captured_utc": "2026-09-30T16:54:15.122710+00:00",
+  "runs": {
+    "grain": "run_prod_20977443",
+    "default": "run_ctrl_20977444",
+    "yang": "run_ctrl_20973341"
+  },
+  "grain_field_source": "/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/run_prod_20977443/Data_0.h5",
+  "grain_field_time": 0.0,
+  "particle_source": "/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/run_prod_20977443/mobile.dat",
+  "particle_last_time": 0.05704751154,
+  "default_control_source": "/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/run_ctrl_20977444/Data_1.h5",
+  "yang_control_source": "/anvil/scratch/x-mjalabert/ECCO_StageB3/P1_Attempts/P1b_shelf/run_ctrl_20973341/Data_1.h5",
+  "control_time": 0.4990126964694195,
+  "note": "Read-only mid-run snapshot; times are nondimensional. No acceptance verdict."
+}

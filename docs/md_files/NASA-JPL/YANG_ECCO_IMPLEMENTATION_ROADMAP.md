@@ -45,9 +45,41 @@
 > realistic polar forcing. **Release is now the initial condition.** P1b places a
 > free 0.2 mm quartz grain beneath an Antarctic ice-shelf base (700 dbar, mixed layer
 > 0 °C / 34.85 g/kg, u* = 0.5 cm/s), inside the three-equation diffusive meltwater
-> sublayer (interface 21.30 g/kg, −1.670 °C, 35 m/yr). Melting is ON, with
-> `liquid_referenced_salinity = 1` conditional on a new 1-D kernel gate, and there is
-> a matched ice-only control. The dedicated record is
+> sublayer (interface 21.30 g/kg, −1.670 °C, 35 m/yr). Melting is ON, with a matched
+> ice-only control.
+>
+> **Update 2026-09-30.** Two pre-flight rounds replaced the band treatment with the
+> **Yang finite-interface salt operator**, and P1b (**job 20973340**) plus its control
+> (**job 20973341**) were submitted.
+> - The 1-D gate rejected both default-operator variants (λ +94% and −9%). The Yang
+>   operator is within 0.2%, but its salt drift is 1.8×10⁻⁵ against a pre-declared 10⁻⁸;
+>   that deviation is recorded.
+> - `liquid_referenced_salinity = 1` also stalls the pressure solve with a resolved grain,
+>   because it divides by C_L ≈ 0 inside the sediment.
+>
+> **Update 2026-09-30, 11:30.** P1b-Yang (20973340) **failed at t = 0.738**: the Yang salt
+> field diverges at a moving resolved grain, because its 1/(F+δ) factor reaches ~5×10⁵ at the
+> C_L = 0 support cells and Crank–Nicolson does not damp it.
+> - P1b was resubmitted with the **default operator**, which is B.2-validated for moving
+>   grains; its known cost is band-local (λ −9%, wrong interface salinity). New jobs:
+>   **20977443** plus control **20977444**.
+> - The Yang control 20973341 continues, to measure how much the band-kernel choice changes
+>   the sublayer.
+>
+> **P1b RESULT, 2026-10-01.** The production segment completed: P1b reached t = 20.5 and the
+> controls t = 18.3 (default) and 15.4 (Yang), for about 9.0k SU in total; 62,279 SU remain.
+> - **Settling:** terminal 14.35 mm/s (0.92 × Schiller–Naumann, box-hindered), landing at
+>   0.28 s.
+> - **Meltwater transport:** the grain drags **about one grain volume of meltwater** below
+>   4 d, and a persistent trail of 0.22 grain volumes below 12 d.
+> - **Budgets:** roundoff-level.
+> - **Limitations:** near-ice results (≲ 3.4 d), the melt rate and its sign are
+>   band-kernel-biased.
+>
+> See [RESULTS_20977443.md](../../../PARTIES/testcases/ECCO_TESTS/StageB3_scenarios/P1b_shelf/RESULTS_20977443.md).
+> P2 and the Yang-at-sediment repair are proposed, not submitted.
+>
+> The dedicated record is
 > [YANG_ECCO_B3_P1b_SHELF.md](YANG_ECCO_B3_P1b_SHELF.md). `testcases/ECCO_TESTS/`
 > was reorganized by stage the same day (see its `README.md`).
 
@@ -3720,12 +3752,19 @@ maximum was 2 µm/s.
 - **Sublayers:** δ_T = 12.7 d, δ_S = 3.2 d, initialized as erf profiles (new Conc
   init 36/37/38) with the tracer equal to the meltwater fraction.
 - **Ice:** 2 d, isothermal at the interface temperature, insulated top.
-- **Melting ON:**
-  - the band is in equilibrium at t = 0;
-  - `liquid_referenced_salinity = 1` in both the liquidus and the EOS;
-  - this is conditional on a new 1-D kernel gate against the exact solution at P1b's
-    parameters (λ = 0.019382);
-  - the criteria were declared before the result.
+- **Melting ON:** with the band in equilibrium at t = 0. The band treatment was decided
+  by two pre-flight rounds against the exact solution at P1b's parameters
+  (λ = 0.019382):
+  - **Round 1 (job 20950025):** the default operator ∇·(F∇s) piles salt into the band.
+    With liquid referencing λ is +94%; without it, −9% with the wrong interface state.
+    Both fail.
+  - **Round 2 (job 20971700):** the **Yang operator** (`yang_salt_transport = 1`, salt
+    field = liquid salinity) gives λ within 0.2% and the correct interface state. Its
+    ∫(F+δ)S drift is 1.8×10⁻⁵, which misses the pre-declared 10⁻⁸. It was adopted as a
+    recorded deviation; see the dedicated file §8.2.
+  - **Separate finding:** `liquid_referenced_salinity = 1` divides by C_L inside resolved
+    grains, where C_L → 0 (s/F ≈ 1,564). The buoyancy there is then about 10³× too large,
+    and the pressure loop stalls. Never combine it with `LAG_PARTICLE_RESOLVED`.
 - **Scaling:** Re = 0.812, Pe_T = 10.43, Pe_S = 56.81, St = 0.0200, G* = 36.78.
 - **EOS:** `EOS_NONLINEAR` refitted at 700 dbar. The interface water sits near its
   density maximum, so a linear EOS is inadequate here.
@@ -3734,6 +3773,18 @@ maximum was 2 µm/s.
 
 **Cost:** about 1.9k SU each for P1b and the control (2.5k each with 30% margin).
 P2 at 32/d is about 6k SU after analysis.
+
+**Result 2026-10-01:** the segment is complete. Highlights are in the header block; full
+results are in `StageB3_scenarios/P1b_shelf/RESULTS_20977443.md`.
+
+**Submitted 2026-09-30:**
+- P1b-Yang **20973340** failed at t = 0.738 (Yang salt field unstable at the moving grain).
+  It was resubmitted with the default operator as **20977443**, with control **20977444**.
+  The Yang control 20973341 is kept as an operator reference.
+- Original submission: P1b **20973340** and control **20973341**;
+- each 1 node, 128 ranks, `shared`, 24 h;
+- binary `build_v2`;
+- pre-flights cost about 62 SU in total.
 
 #### B.3 P1a result — 2026-09-27 audit (superseded by P1b on 2026-09-28)
 
@@ -4485,6 +4536,14 @@ parameters, including passive nonzero salt for conservation checks.
 7. **A kernel validated at one liquidus slope is not validated at another** — the band's
    volume-averaged salinity costs ~0.5×`liquidus_slope` in interface temperature: harmless at 0.014
    (Yang, B.2), sign-flipping at ~1 (P1a). Re-gate the melt kernel whenever the regime changes.
+9. **The Yang salt operator needs sediment treated as non-ice.** Its capacity 1/(F+δ) is
+   about 10⁶ at C_L = 0 support cells beside water, and the moving grain made it diverge (P1b
+   job 20973340). build_v3 uses C_L + C_S under `VOF_IBM`; it is under test in dev3 (21006068).
+8. **Check that every division by a phase fraction is safe inside the resolved solid.**
+   In B.3 P1b, liquid-referenced salinity s/(C_L+δ) was validated in fluid-only gates but
+   reaches ~10³ inside a resolved grain. The symptom was a pressure loop stuck at a
+   round-off-quantized divergence. A build that prints the divergence location found it
+   in one short job.
 
 ---
 
@@ -4597,7 +4656,7 @@ horizontal solid layer. Using 28 for ECCO would have silently redefined a valida
 testcase.** |
 | Conc 30 / 31 | T / S | Yang: T step ; S linear-in-y, 0 in ice (A.3b: `cbd2 = cbd5` ⇒ uniform s) |
 | Conc 32 / 33 / 34 | T / S / tracer | ECCO: two-layer T ; stratified S ; meltwater tracer = 0 |
-| Conc 36 / 37 / 38 | T / S / tracer | ECCO B.3 P1b: erf diffusive sublayer below the VOF-28 ice (keys `sublayer_ell_T`, `sublayer_ell_S`, `sublayer_s_interface`; far values `cbd0`/`cbd5`, interface T `theta_ice`); tracer = meltwater fraction |
+| Conc 36 / 37 / 38 | T / S / tracer | ECCO B.3 P1b: erf diffusive sublayer below the VOF-28 ice (keys `sublayer_ell_T`, `sublayer_ell_S`, `sublayer_s_interface`; far values `cbd0`/`cbd5`, interface T `theta_ice`); tracer = meltwater fraction  Optional `sublayer_y0` anchors the profiles independently of the ice (no-ice twins). With `yang_salt_transport = 1`, init 37 writes the liquid salinity unmasked. |
 
 **Two slopes that look alike but are not:** `eos_Tmd_slope` (EOS density-maximum shift, from `cS`)
 ≠ `liquidus_slope` (freezing-point depression, from the seawater freezing slope `m`). Keep them
